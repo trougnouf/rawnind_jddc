@@ -1,0 +1,23 @@
+init_lr: 0.0003
+tot_steps: 6000000
+val_interval: 15000
+test_interval: 1500000
+loss: mse
+metrics:
+  - msssim_loss
+  - mse
+patience: 100000
+lr_multiplier: 0.85
+transfer_function_valtest: pq
+clean_dataset_yamlfpaths:
+  - ../../datasets/extraraw/trougnouf/crops_metadata.yaml
+#  - ../../datasets/extraraw/SID/crops_metadata.yaml  # could be useful in testing
+  - ../../datasets/extraraw/raw-pixls/crops_metadata.yaml
+noise_dataset_yamlfpaths:
+  - ../../datasets/RawNIND/RawNIND_masks_and_alignments.yaml
+funit: 32
+bayer_only: true
+#exposure_diff_penalty: 0.0001
+match_gain: output  # input, output, never
+data_pairing: x_y
+warmup_nsteps: 0

@@ -1,0 +1,241 @@
+Input:
+  - method: "Bayer input"
+    images:
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/MuseeL-bluebirds-A7C/gt/darktable_exported/ISO50_capt0015.png"
+        caption: "MS-SSIM: 1.00, s.s.: 8 s, ISO50"
+        parameters: "s.s.: 8 s, ISO50"
+        msssim: 1.00
+        bpp: 5.27
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/MuseeL-bluebirds-A7C/darktable_exported/ISO16000_capt0002.png"
+        caption: "MS-SSIM: 0.859, s.s.: 1/40 s, ISO16000"
+        msssim: 0.859
+        bpp: 8.57
+        parameters: "s.s.: 1/40 s, ISO16000"
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/MuseeL-bluebirds-A7C/darktable_exported/ISO64000_capt0007.png"
+        caption: "MS-SSIM: 0.577, s.s.: 1/160 s, ISO64000"
+        msssim: 0.577
+        parameters: "s.s.: 1/160 s, ISO64000"
+        bpp: 9.62
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/MuseeL-bluebirds-A7C/darktable_exported/ISO204800_capt0010.png"
+        caption: "MS-SSIM: 0.237, s.s.: 1/500 s, ISO204800"
+        msssim: 0.237
+        parameters: "s.s.: 1/500 s, ISO204800"
+        bpp: 9.86
+  - method: "Linear RGB input"
+    images:
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/proc/lin_rec2020/MuseeL-bluebirds-A7C/gt/ISO50_capt0015.arw.tif"
+        caption: "MS-SSIM: 1.00, s.s.: 8 s, ISO50"
+        parameters: "s.s.: 8 s, ISO50"
+        msssim: 1.00
+        bpp: 5.27
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/proc/lin_rec2020/MuseeL-bluebirds-A7C/ISO16000_capt0002.arw.tif"
+        caption: "MS-SSIM: 0.859, s.s.: 1/40 s, ISO16000"
+        msssim: 0.859
+        bpp: 8.57
+        parameters: "s.s.: 1/40 s, ISO16000"
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/proc/lin_rec2020/MuseeL-bluebirds-A7C/ISO64000_capt0007.arw.tif"
+        caption: "MS-SSIM: 0.577, s.s.: 1/160 s, ISO64000"
+        msssim: 0.577
+        parameters: "s.s.: 1/160 s, ISO64000"
+        bpp: 9.62
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/proc/lin_rec2020/MuseeL-bluebirds-A7C/ISO204800_capt0010.arw.tif"
+        caption: "MS-SSIM: 0.237, s.s.: 1/500 s, ISO204800"
+        msssim: 0.237
+        parameters: "s.s.: 1/500 s, ISO204800"
+        bpp: 9.86
+  - method: "Developed input"
+    images:
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/proc/dt/MuseeL-bluebirds-A7C/MuseeL-bluebirds-A7C_ISO50_capt0015.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 1.00, s.s.: 8 s, ISO50"
+        parameters: "s.s.: 8 s, ISO50"
+        msssim: 1.00
+        bpp: 5.27
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/proc/dt/MuseeL-bluebirds-A7C/MuseeL-bluebirds-A7C_ISO16000_capt0002.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.859, s.s.: 1/40 s, ISO16000"
+        msssim: 0.859
+        bpp: 8.57
+        parameters: "s.s.: 1/40 s, ISO16000"
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/proc/dt/MuseeL-bluebirds-A7C/MuseeL-bluebirds-A7C_ISO64000_capt0007.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.577, s.s.: 1/160 s, ISO64000"
+        msssim: 0.577
+        parameters: "s.s.: 1/160 s, ISO64000"
+        bpp: 9.62
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/proc/dt/MuseeL-bluebirds-A7C/MuseeL-bluebirds-A7C_ISO204800_capt0010.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.237, s.s.: 1/500 s, ISO204800"
+        msssim: 0.237
+        parameters: "s.s.: 1/500 s, ISO204800"
+        bpp: 9.86
+
+Denoising:
+  - method: "BM3D [BM3D]\n(from developed input)"
+    images:
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/bm3d_sRGB_10/manproc/iter_1/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO50_capt0015.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.996, σ=10"
+        msssim: 0.996
+        parameters: "σ=10"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/bm3d_sRGB_50/manproc/iter_1/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO16000_capt0002.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.964, σ=50"
+        msssim: 0.964
+        parameters: "σ=50"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/bm3d_sRGB_99/manproc/iter_1/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO64000_capt0007.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.940, σ=99"
+        msssim: 0.940
+        parameters: "σ=99"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/bm3d_sRGB_99/manproc/iter_1/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO204800_capt0010.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.761, σ=99"
+        msssim: 0.761
+        parameters: "σ=99"
+
+  - method: "U-Net [NIND]\n(from developed input)"
+    images:
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/train_denoise_proc2proc_2024-05-17-proc2proc_ocv3_notrans_valeither_msssim_-4/manproc/iter_3195000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO50_capt0015.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.990"
+        msssim: 0.990
+        parameters: ""
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/train_denoise_proc2proc_2024-05-17-proc2proc_ocv3_notrans_valeither_msssim_-4/manproc/iter_3195000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO16000_capt0002.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.959"
+        msssim: 0.959
+        parameters: ""
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/train_denoise_proc2proc_2024-05-17-proc2proc_ocv3_notrans_valeither_msssim_-4/manproc/iter_3195000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO64000_capt0007.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.924"
+        msssim: 0.924
+        parameters: ""
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/train_denoise_proc2proc_2024-05-17-proc2proc_ocv3_notrans_valeither_msssim_-4/manproc/iter_3195000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO204800_capt0010.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.842"
+        msssim: 0.842
+        parameters: ""
+
+  - method: "U-Net + development [OURS]\n(from Bayer input)"
+    images:
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-02-21-bayer_ms-ssim_mgout_notrans_valeither_-4/manproc/iter_4350000/MuseeL-bluebirds-A7C_ISO50_capt0015.arw_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.989"
+        msssim: 0.989
+        parameters: ""
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-02-21-bayer_ms-ssim_mgout_notrans_valeither_-4/manproc/iter_4350000/MuseeL-bluebirds-A7C_ISO16000_capt0002.arw_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.975"
+        msssim: 0.975
+        parameters: ""
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-02-21-bayer_ms-ssim_mgout_notrans_valeither_-4/manproc/iter_4350000/MuseeL-bluebirds-A7C_ISO64000_capt0007.arw_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.964"
+        msssim: 0.964
+        parameters: ""
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-02-21-bayer_ms-ssim_mgout_notrans_valeither_-4/manproc/iter_4350000/MuseeL-bluebirds-A7C_ISO204800_capt0010.arw_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.945"
+        msssim: 0.945
+        parameters: ""
+
+Compression:
+  - method: "JPEG XL [JPEGXL]\n(from developed input)"
+    images:
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/JPEGXL_sRGB_12/manproc/iter_1/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO50_capt0015.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.973, 0.045 bpp, -q 12"
+        msssim: 0.973
+        bpp: 0.045
+        parameters: "-q 12"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/JPEGXL_sRGB_1/manproc/iter_1/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO16000_capt0002.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.929, 0.046 bpp, -q 1"
+        msssim: 0.929
+        bpp: 0.046
+        parameters: "-q 1"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/JPEGXL_sRGB_1/manproc/iter_1/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO64000_capt0007.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.779, 0.090 bpp, -q 1"
+        msssim: 0.779
+        bpp: 0.090
+        parameters: "-q 1"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/JPEGXL_sRGB_1/manproc/iter_1/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO204800_capt0010.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.355, 0.301 bpp, -q 1"
+        msssim: 0.355
+        bpp: 0.301
+        parameters: "-q 1"
+
+  - method: "Learned compression\n[MANYPRIORS] + development\n(from linear RGB input)"
+    images:
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L32.0_Balle_Balle_2024-06-14-dc_msssim_mgout_prgb_x_x_notrans_valeither_32from64_-2/manproc/iter_5880000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO50_capt0015.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.982, 0.055 bpp, λ=32"
+        msssim: 0.982
+        bpp: 0.055
+        parameters: "λ=32"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L8.0_Balle_Balle_2024-06-14-dc_msssim_mgout_prgb_x_x_notrans_valeither_8from16_-2/manproc/iter_4980000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO16000_capt0002.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.950, 0.081 bpp, λ=8"
+        msssim: 0.950
+        bpp: 0.081
+        parameters: "λ=8"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L4.0_Balle_Balle_2024-06-14-dc_msssim_mgout_prgb_x_x_notrans_valeither_4from8_-2/manproc/iter_5550000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO64000_capt0007.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.822, 0.134 bpp, λ=4"
+        msssim: 0.822
+        bpp: 0.134
+        parameters: "λ=4"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L4.0_Balle_Balle_2024-06-14-dc_msssim_mgout_prgb_x_x_notrans_valeither_4from8_-2/manproc/iter_5550000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO204800_capt0010.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.403, 0.638 bpp, λ=4"
+        msssim: 0.403
+        bpp: 0.638
+        parameters: "λ=4"
+
+  - method: "Joint Denoising and\nCompression [COMPDENOISE]\n(from Developed input)"
+    images:
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/train_dc_proc2proc_2024-05-23-dc_msssim_mgout_proc2proc_ocv3_notrans_valeither_4from8_-2/manproc/iter_1800000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO50_capt0015.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.973, 0.048 bpp, λ=4"
+        msssim: 0.973
+        bpp: 0.048
+        parameters: "λ=4"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/train_dc_proc2proc_2024-05-23-dc_msssim_mgout_proc2proc_ocv3_notrans_valeither_4from8_-2/manproc/iter_1800000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO16000_capt0002.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.942, 0.080 bpp, λ=4"
+        msssim: 0.942
+        bpp: 0.080
+        parameters: "λ=4"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/train_dc_proc2proc_2024-05-23-dc_msssim_mgout_proc2proc_ocv3_notrans_valeither_2from4_-6/manproc/iter_5490000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO64000_capt0007.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.868, 0.050 bpp, λ=2"
+        msssim: 0.868
+        bpp: 0.050
+        parameters: "λ=2"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/train_dc_proc2proc_2024-05-23-dc_msssim_mgout_proc2proc_ocv3_notrans_valeither_2from4_-6/manproc/iter_5490000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO204800_capt0010.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.829, 0.058 bpp, λ=2"
+        msssim: 0.829
+        bpp: 0.058
+        parameters: "λ=2"
+
+  - method: "Joint Denoising and\nCompression\n+ Development [OURS]\n(from linear RGB input)"
+    images:
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L32.0_Balle_Balle_2024-06-07-dc_msssim_mgout_prgb_notrans_valeither_32from64_-4/manproc/iter_5670000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO50_capt0015.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.980, 0.051 bpp, λ=32"
+        msssim: 0.980
+        bpp: 0.051
+        parameters: λ=32
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L32.0_Balle_Balle_2024-06-07-dc_msssim_mgout_prgb_notrans_valeither_32from64_-4/manproc/iter_5670000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO16000_capt0002.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.970, 0.049 bpp, λ=32"
+        msssim: 0.970
+        bpp: 0.049
+        parameters: λ=32
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L32.0_Balle_Balle_2024-06-07-dc_msssim_mgout_prgb_notrans_valeither_32from64_-4/manproc/iter_5670000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO64000_capt0007.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.959, 0.052 bpp, λ=32"
+        msssim: 0.959
+        bpp: 0.052
+        parameters: "λ=32"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L32.0_Balle_Balle_2024-06-07-dc_msssim_mgout_prgb_notrans_valeither_32from64_-4/manproc/iter_5670000/MuseeL-bluebirds-A7C_MuseeL-bluebirds-A7C_ISO204800_capt0010.arw.tif_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.939, 0.092 bpp, λ=32"
+        msssim: 0.939
+        bpp: 0.092
+        parameters: "λ=32"
+  - method: "Joint Denoising,\nDemosaicing and Compression\n+ development [OURS]\n(from Bayer input)"
+    images:
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingBayerToProfiledRGB_4ch_L32.0_Balle_BayerPS_2024-06-07-dc_msssim_mgout_bayer_notrans_valeither_32from64_-4/manproc/iter_5325000/MuseeL-bluebirds-A7C_ISO50_capt0015.arw_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.980, 0.044 bpp, λ=32"
+        msssim: 0.980
+        bpp: 0.044
+        parameters: "λ=32"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingBayerToProfiledRGB_4ch_L32.0_Balle_BayerPS_2024-06-07-dc_msssim_mgout_bayer_notrans_valeither_32from64_-4/manproc/iter_5325000/MuseeL-bluebirds-A7C_ISO16000_capt0002.arw_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.970, 0.042 bpp, λ=32"
+        msssim: 0.970
+        bpp: 0.042
+        parameters: "λ=32"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingBayerToProfiledRGB_4ch_L32.0_Balle_BayerPS_2024-06-07-dc_msssim_mgout_bayer_notrans_valeither_32from64_-4/manproc/iter_5325000/MuseeL-bluebirds-A7C_ISO64000_capt0007.arw_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.959, 0.041 bpp, λ=32"
+        msssim: 0.959
+        bpp: 0.041
+        parameters: "λ=32"
+      - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingBayerToProfiledRGB_4ch_L32.0_Balle_BayerPS_2024-06-07-dc_msssim_mgout_bayer_notrans_valeither_32from64_-4/manproc/iter_5325000/MuseeL-bluebirds-A7C_ISO204800_capt0010.arw_aligned_to_ISO50_capt0015.arw.tif.jpg"
+        caption: "MS-SSIM: 0.940, 0.056 bpp, λ=32"
+        msssim: 0.940
+        bpp: 0.056
+        parameters: "λ=32"
+

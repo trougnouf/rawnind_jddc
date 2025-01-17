@@ -1,0 +1,11 @@
+crop_size: 256
+test_crop_size: 1024
+val_crop_size: 1024
+num_crops_per_image: 2
+batch_size_clean: 1
+batch_size_noisy: 4
+arch: unet
+transfer_function: None
+transfer_function_valtest: None
+arbitrary_proc_method: naive
+match_gain: input

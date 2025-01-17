@@ -1,0 +1,81 @@
+Bayer:
+  in_channels: 4
+Bayer (extra pairs):
+  extrapairs_B: true
+  in_channels: 4
+Bayer (more channels):
+  in_channels: 4
+  morechans: true
+Bayer (no unpaired data):
+  in_channels: 4
+  incl_cc: false
+# bayer (naive reconstruction):
+#   data_pairing: x_x
+#   in_channels: 4
+# bayer_notrans:
+#   in_channels: 4
+#   transfer_fun: None
+# bayer_notrans_nocc:
+#   in_channels: 4
+#   incl_cc: false
+#   transfer_fun: None
+# bayer_notrans_extrapairs:
+#   extrapairs: true
+#   in_channels: 4
+#   transfer_fun: None
+Bayer (pre-upsampled):
+  in_channels: 4
+  preupsample: true
+Linear RGB:
+  in_channels: 3
+LinRGB (extra pairs):
+  extrapairs_B: true
+  in_channels: 3
+# prgb_morechans:
+#   in_channels: 3
+#   morechans: true
+LinRGB (no unpaired data):
+  in_channels: 3
+  incl_cc: false
+# prgb_nopair:
+#   data_pairing: x_x
+#   in_channels: 3
+# prgb_notrans:
+#   in_channels: 3
+#   transfer_fun: None
+# prgb_notrans_nocc:
+#   in_channels: 3
+#   incl_cc: false
+#   transfer_fun: None
+# prgb_notrans_extrapairs:
+#   extrapairs: true
+#   in_channels: 3
+#   transfer_fun: None
+sRGB:
+  in_channels: 3
+  processed_input: true
+# passthrough_prgb:
+#   in_channels: 3
+#   passthrough: true
+passthrough:
+  in_channels: 4
+  passthrough: true
+BM3D (LinRGB):
+  in_channels: 3
+  bm3d: true
+BM3D (sRGB):
+  in_channels: 3
+  bm3d: true
+  processed_input: true
+LinRGB (w/gamma):
+  in_channels: 3
+  transfer_fun: gamma22
+Bayer (w/gamma):
+  in_channels: 4
+  transfer_fun: gamma22
+Bayer (noownpics):
+  in_channels: 4
+  noownpics: true
+LinRGB (noownpics):
+  in_channels: 3
+  noownpics: true

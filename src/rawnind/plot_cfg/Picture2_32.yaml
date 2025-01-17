@@ -1,0 +1,135 @@
+
+Input:
+  - method: "Bayer input"
+    images:
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/LucieB_bw_drawing1/gt/darktable_exported/IMG_7692.png"
+        parameters: "s.s.: 1 s, ISO100"
+        msssim: 1.00
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/LucieB_bw_drawing1/darktable_exported/IMG_7688.png"
+        parameters: "s.s.: 1/10 s, ISO800"
+        msssim: 0.739
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/LucieB_bw_drawing1/darktable_exported/IMG_7689.png"
+        parameters: "s.s.: 1/50 s, ISO4000"
+        msssim: 0.560
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/LucieB_bw_drawing1/darktable_exported/IMG_7691.png"
+        parameters: "s.s.: 1/320 s, ISO25600"
+        msssim: 0.330
+  # - method: "Linear RGB input"
+  #   images:
+  #     - src_fpath: "/orb/benoit_phd/datasets/RawNIND_Bostitch/proc/lin_rec2020/LucieB_bw_drawing1/gt/IMG_7692.CR2.tif"
+  #       parameters: "s.s.: 1 s, ISO100"
+  #       msssim: 1.00
+  #     - src_fpath: "/orb/benoit_phd/datasets/RawNIND_Bostitch/proc/lin_rec2020/LucieB_bw_drawing1/IMG_7689.CR2.tif"
+  #       parameters: "s.s.: 1/50 s, ISO4000"
+  #       msssim: 0.560
+  #     - src_fpath: "/orb/benoit_phd/datasets/RawNIND_Bostitch/proc/lin_rec2020/LucieB_bw_drawing1/IMG_7691.CR2.tif"
+  #       parameters: "s.s.: 1/320 s, ISO25600"
+  #       msssim: 0.330
+  - method: "Developed input"
+    images:
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND_Bostitch/proc/dt/LucieB_bw_drawing1/gt/LucieB_bw_drawing1_IMG_7692.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: "s.s.: 1 s, ISO100"
+        msssim: 1.00
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND_Bostitch/proc/dt/LucieB_bw_drawing1/LucieB_bw_drawing1_IMG_7688.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: "s.s.: 1/10 s, ISO800"
+        msssim: 0.739
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND_Bostitch/proc/dt/LucieB_bw_drawing1/LucieB_bw_drawing1_IMG_7689.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: "s.s.: 1/50 s, ISO4000"
+        msssim: 0.560
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND_Bostitch/proc/dt/LucieB_bw_drawing1/LucieB_bw_drawing1_IMG_7691.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: "s.s.: 1/320 s, ISO25600"
+        msssim: 0.330
+Denoising:
+  - method: "BM3D [BM3D]\n(from developed input)"
+    images:
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/bm3d_sRGB_10/progressive_test_manproc_bostitch_rawnind_msssim/iter_1/LucieB_bw_drawing1_LucieB_bw_drawing1_IMG_7692.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: "σ=10"
+        msssim: 0.980
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/bm3d_sRGB_10/progressive_test_manproc_bostitch_rawnind_msssim/iter_1/LucieB_bw_drawing1_LucieB_bw_drawing1_IMG_7688.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: "σ=50"
+        msssim: 0.861
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/bm3d_sRGB_99/progressive_test_manproc_bostitch_rawnind_msssim/iter_1/LucieB_bw_drawing1_LucieB_bw_drawing1_IMG_7689.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: "σ=99"
+        msssim: 0.795
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/bm3d_sRGB_99/progressive_test_manproc_bostitch_rawnind_msssim/iter_1/LucieB_bw_drawing1_LucieB_bw_drawing1_IMG_7691.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: "σ=99"
+        msssim: 0.479
+
+  - method: "U-Net [NIND]\n(from developed input)"
+    images:
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/train_denoise_proc2proc_2024-05-17-proc2proc_ocv3_notrans_valeither_msssim_-4/manproc_bostitch/iter_3195000/LucieB_bw_drawing1_LucieB_bw_drawing1_IMG_7692.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: ""
+        msssim: 0.911
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/train_denoise_proc2proc_2024-05-17-proc2proc_ocv3_notrans_valeither_msssim_-4/manproc_bostitch/iter_3195000/LucieB_bw_drawing1_LucieB_bw_drawing1_IMG_7688.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: ""
+        msssim: 0.817
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/train_denoise_proc2proc_2024-05-17-proc2proc_ocv3_notrans_valeither_msssim_-4/manproc_bostitch/iter_3195000/LucieB_bw_drawing1_LucieB_bw_drawing1_IMG_7689.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: ""
+        msssim: 0.756
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/train_denoise_proc2proc_2024-05-17-proc2proc_ocv3_notrans_valeither_msssim_-4/manproc_bostitch/iter_3195000/LucieB_bw_drawing1_LucieB_bw_drawing1_IMG_7691.CR2.tif_aligned_to_IMG_7692.CR2.tif"
+        parameters: ""
+        msssim: 0.638
+
+  - method: "U-Net + development [OURS]\n(from Bayer input)"
+    images:
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-02-21-bayer_ms-ssim_mgout_notrans_valeither_-4/manproc_bostitch/iter_4350000/LucieB_bw_drawing1_IMG_7692.CR2_aligned_to_IMG_7692.CR2.tif"
+        parameters: ""
+        msssim: 0.931
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-02-21-bayer_ms-ssim_mgout_notrans_valeither_-4/manproc_bostitch/iter_4350000/LucieB_bw_drawing1_IMG_7688.CR2_aligned_to_IMG_7692.CR2.tif"
+        parameters: ""
+        msssim: 0.871
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-02-21-bayer_ms-ssim_mgout_notrans_valeither_-4/manproc_bostitch/iter_4350000/LucieB_bw_drawing1_IMG_7689.CR2_aligned_to_IMG_7692.CR2.tif"
+        parameters: ""
+        msssim: 0.831
+      - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-02-21-bayer_ms-ssim_mgout_notrans_valeither_-4/manproc_bostitch/iter_4350000/LucieB_bw_drawing1_IMG_7691.CR2_aligned_to_IMG_7692.CR2.tif"
+        parameters: ""
+        msssim: 0.724
+
+# - method: "JPEG XL [JPEGXL]\n(from developed input)"
+#   images:
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/JPEGXL_sRGB_12/manproc_bostitch/iter_1/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO50_capt0015.arw.tif_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "-q "
+#       msssim: 0.
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/JPEGXL_sRGB_1/manproc_bostitch/iter_1/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO16000_capt0002.arw.tif_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "-q "
+#       msssim: 0.
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/JPEGXL_sRGB_1/manproc_bostitch/iter_1/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO64000_capt0007.arw.tif_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "-q "
+#       msssim: 0.
+
+# - method: "Learned compression\n[MANYPRIORS] + development\n(from linear RGB input)"
+#   images:
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L32.0_Balle_Balle_2024-06-14-dc_msssim_mgout_prgb_x_x_notrans_valeither_32from64_-2/manproc_bostitch/iter_5880000/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO50_capt0015.arw.tif_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "λ="
+#       msssim: 0.
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L8.0_Balle_Balle_2024-06-14-dc_msssim_mgout_prgb_x_x_notrans_valeither_8from16_-2/manproc_bostitch/iter_4980000/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO16000_capt0002.arw.tif_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "λ="
+#       msssim: 0.
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L4.0_Balle_Balle_2024-06-14-dc_msssim_mgout_prgb_x_x_notrans_valeither_4from8_-2/manproc_bostitch/iter_5550000/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO64000_capt0007.arw.tif_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "λ="
+#       msssim: 0.
+
+# - method: "Joint Denoising and\nCompression [COMPDENOISE]\n(from Developed input)"
+#   images:
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/train_dc_proc2proc_2024-05-23-dc_msssim_mgout_proc2proc_ocv3_notrans_valeither_4from8_-2/manproc_bostitch/iter_1800000/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO50_capt0015.arw.tif_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "λ="
+#       msssim: 0.
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/train_dc_proc2proc_2024-05-23-dc_msssim_mgout_proc2proc_ocv3_notrans_valeither_4from8_-2/manproc_bostitch/iter_1800000/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO16000_capt0002.arw.tif_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "λ="
+#       msssim: 0.
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/train_dc_proc2proc_2024-05-23-dc_msssim_mgout_proc2proc_ocv3_notrans_valeither_2from4_-6/manproc_bostitch/iter_5490000/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO64000_capt0007.arw.tif_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "λ="
+#       msssim: 0.
+
+# - method: "Joint Denoising,\nDemosaicing and Compression\n+ development [OURS]\n(from Bayer input)"
+#   images:
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingBayerToProfiledRGB_4ch_L32.0_Balle_BayerPS_2024-06-07-dc_msssim_mgout_bayer_notrans_valeither_32from64_-4/manproc_bostitch/iter_5325000/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO50_capt0015.arw_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "λ="
+#       msssim: 0.
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingBayerToProfiledRGB_4ch_L32.0_Balle_BayerPS_2024-06-07-dc_msssim_mgout_bayer_notrans_valeither_32from64_-4/manproc_bostitch/iter_5325000/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO16000_capt0002.arw_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "λ="
+#       msssim: 0.
+#     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingBayerToProfiledRGB_4ch_L32.0_Balle_BayerPS_2024-06-07-dc_msssim_mgout_bayer_notrans_valeither_32from64_-4/manproc_bostitch/iter_5325000/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO64000_capt0007.arw_aligned_to_ISO50_capt0015.arw.tif/"
+#       parameters: "λ="
+#       msssim: 0.
+

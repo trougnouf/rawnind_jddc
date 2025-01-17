@@ -1,0 +1,42 @@
+JDDC (Bayer input) + dev.:
+  in_channels: 4
+Compression AE (Bayer input) + dev.:
+  data_pairing: x_x
+  in_channels: 4
+JDDC (upsampled Bayer input) + dev.:
+  in_channels: 4
+  preupsample: true
+JDC (Linear RGB input) + dev.:
+  in_channels: 3
+Compression AE (Linear RGB input) + dev.:
+  data_pairing: x_x
+  in_channels: 3
+JDC (no clean data, LinRGB input) + dev.:
+  in_channels: 3
+  incl_cc: false
+JDDC (no clean data, Bayer input) + dev.:
+  in_channels: 4
+  incl_cc: false
+JDC (developed input) [COMPDENOISE]:
+  in_channels: 3
+  processed_input: true
+JDDC (more channels, Bayer input) + dev.:
+  in_channels: 4
+  morechans: true
+Denoise then compress (LinRGB input) + dev.:
+  denoise_then_compress: true
+  data_pairing: x_x
+JDC Bayer (w/gamma):
+  in_channels: 4
+  transfer_fun: gamma22
+JDC LinRGB (w/gamma):
+  in_channels: 3
+  transfer_fun: gamma22
+JPEG XL (developed input) [JPEGXL]:
+  in_channels: 3
+  JPEGXL: true
+  processed_input: true
+JPEG XL (Linear RGB input) [JPEGXL] + dev.:
+  in_channels: 3
+  JPEGXL: true
+  processed_input: false
