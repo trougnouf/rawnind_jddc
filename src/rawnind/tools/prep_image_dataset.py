@@ -140,7 +140,7 @@ if __name__ == "__main__":
     )
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     args = get_args()
-    logging.info(f'# python {" ".join(sys.argv)}')
+    logging.info(f"# python {' '.join(sys.argv)}")
     logging.info(f"# {args=}")
     if args.dataset == DS_DN:
         content_fpath = RAWNIND_CONTENT_FPATH

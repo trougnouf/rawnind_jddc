@@ -27,7 +27,7 @@ selected_images = [
 ]
 
 # Get the "best_alignment_loss" values
-#loss_values = [item.get("best_alignment_loss", 0.0) for item in selected_images]
+# loss_values = [item.get("best_alignment_loss", 0.0) for item in selected_images]
 loss_values = [item.get("rgb_msssim_score", 0.0) for item in selected_images]
 
 # Sort the values for cumulative distribution plot

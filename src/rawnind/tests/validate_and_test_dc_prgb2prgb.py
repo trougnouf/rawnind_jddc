@@ -8,7 +8,9 @@ if __name__ == "__main__":
     preset_args = {"test_only": True, "init_step": None}
     if "--load_path" not in sys.argv:
         preset_args["load_path"] = None
-    preset_args['noise_dataset_yamlfpaths'] = ['../../datasets/RawNIND/RawNIND_masks_and_alignments.yaml']
+    preset_args["noise_dataset_yamlfpaths"] = [
+        "../../datasets/RawNIND/RawNIND_masks_and_alignments.yaml"
+    ]
     denoiserTraining = train_dc_prgb2prgb.DCTrainingProfiledRGBToProfiledRGB(
         preset_args=preset_args
     )

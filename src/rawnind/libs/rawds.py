@@ -32,9 +32,7 @@ BREAKPOINT_ON_ERROR = True
 COLOR_PROFILE = "lin_rec2020"
 LOG_FPATH = os.path.join("logs", os.path.basename(__file__) + ".log")
 
-MAX_MASKED: float = (
-    0.5  # Must ensure that we don't send a crop with this more than this many masked pixels
-)
+MAX_MASKED: float = 0.5  # Must ensure that we don't send a crop with this more than this many masked pixels
 MAX_RANDOM_CROP_ATTEMPS = 10
 
 MASK_MEAN_MIN = 0.8  # 14+11+1 = 26 images out of 1145 = 2.3 %
@@ -79,9 +77,9 @@ class RawImageDataset:
         x_crops = torch.empty(x_crops_dims)
         mask_crops = torch.BoolTensor(x_crops.shape)
         if yimg is not None:
-            assert rawproc.shape_is_compatible(
-                ximg.shape, yimg.shape
-            ), f"ximg and yimg should already be aligned. {ximg.shape=}, {yimg.shape=}"
+            assert rawproc.shape_is_compatible(ximg.shape, yimg.shape), (
+                f"ximg and yimg should already be aligned. {ximg.shape=}, {yimg.shape=}"
+            )
             y_crops_dims = (
                 self.num_crops,
                 yimg.shape[-3],
@@ -590,7 +588,7 @@ class CleanProfiledRGBNoisyBayerImageCropsDataset(
                     or image["mask_mean"] < mask_mean_min
                 ):
                     logging.info(
-                        f'{type(self).__name__}.__init__: rejected {image["f_fpath"]}'
+                        f"{type(self).__name__}.__init__: rejected {image['f_fpath']}"
                     )
                     continue
                 image["crops"] = sorted(
@@ -600,12 +598,12 @@ class CleanProfiledRGBNoisyBayerImageCropsDataset(
                     self._dataset.append(image)
                 else:
                     logging.warning(
-                        f'{type(self).__name__}.__init__: {image["f_fpath"]} has no crops.'
+                        f"{type(self).__name__}.__init__: {image['f_fpath']} has no crops."
                     )
         logging.info(f"initialized {type(self).__name__} with {len(self)} images.")
-        assert (
-            len(self) > 0
-        ), f"{type(self).__name__} has no images. {content_fpaths=}, {test_reserve=}"
+        assert len(self) > 0, (
+            f"{type(self).__name__} has no images. {content_fpaths=}, {test_reserve=}"
+        )
         self.data_pairing = data_pairing
 
     def __getitem__(self, i: int) -> RawDatasetOutput:
@@ -720,9 +718,9 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsDataset(
         self.match_gain = match_gain
         self.arbitrary_proc_method = arbitrary_proc_method
         if self.arbitrary_proc_method:
-            assert (
-                self.match_gain
-            ), f"{type(self).__name__}: arbitrary_proc_method requires match_gain"
+            assert self.match_gain, (
+                f"{type(self).__name__}: arbitrary_proc_method requires match_gain"
+            )
         self.data_pairing = data_pairing
         # contents: list[dict] = utilities.load_yaml(content_fpath)
         for content_fpath in content_fpaths:
@@ -768,7 +766,7 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsDataset(
                     or image["mask_mean"] < mask_mean_min
                 ):
                     logging.info(
-                        f'{type(self).__name__}.__init__: rejected {image["f_fpath"]}'
+                        f"{type(self).__name__}.__init__: rejected {image['f_fpath']}"
                     )
                     continue
                 image["crops"] = sorted(
@@ -1530,7 +1528,7 @@ if __name__ == "__main__":
         filemode="w",
     )
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
-    logging.info(f'# python {" ".join(sys.argv)}')
+    logging.info(f"# python {' '.join(sys.argv)}")
 
     cleanRGB_noisyBayer_ds = CleanProfiledRGBNoisyBayerImageDataset(
         content_fpaths=[rawproc.RAWNIND_CONTENT_FPATH], num_crops=4, crop_size=256

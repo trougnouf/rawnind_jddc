@@ -1,4 +1,5 @@
 """See also: https://chatgpt.com/c/66f42139-5b74-800f-bbdf-b7a697e4f393"""
+
 import os
 
 # Base directory
@@ -6,7 +7,22 @@ base_dir = "/orb/benoit_phd/models/rawnind_denoise"
 
 # Subdirectories to be created
 color_spaces = ["linRGB", "sRGB"]
-noise_levels = ["5", "10", "20", "30", "40", "50", "60", "70", "80", "90", "93", "95", "97", "99"]
+noise_levels = [
+    "5",
+    "10",
+    "20",
+    "30",
+    "40",
+    "50",
+    "60",
+    "70",
+    "80",
+    "90",
+    "93",
+    "95",
+    "97",
+    "99",
+]
 
 # YAML content template
 yaml_content = """
@@ -79,17 +95,17 @@ for color_space in color_spaces:
     for noise_level in noise_levels:
         # Define the directory
         dir_path = f"{base_dir}/bm3d_{color_space}_{noise_level}"
-        
+
         # Define the file path
         file_path = os.path.join(dir_path, "args.yaml")
-        
+
         # Replace placeholders in the template
-        yaml_data = yaml_content.format(color_space=color_space, noise_level=noise_level)
-        
+        yaml_data = yaml_content.format(
+            color_space=color_space, noise_level=noise_level
+        )
+
         # Create the args.yaml file
         with open(file_path, "w") as file:
             file.write(yaml_data)
-        
+
         print(f"Created: {file_path}")
-
-

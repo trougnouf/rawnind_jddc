@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Standard compression methods handlers."""
+
 import os
 from typing import List, Any, Optional
 import shutil
@@ -48,7 +49,6 @@ class StdCompression:
         overwrite: bool = False,
         **kwargs,
     ):
-
         assert outfpath is not None
         tmpfpath = cls.make_tmp_fpath(outfpath, tmpfpath)
         returnvals = {"infpath": infpath, "outfpath": outfpath, "tmpfpath": tmpfpath}
@@ -63,7 +63,7 @@ class StdCompression:
             start_time = time.time()
             subprocess.run(cmd)
             returnvals["enctime"] = time.time() - start_time
-        assert os.path.isfile(tmpfpath), f'{tmpfpath=}, {" ".join(cmd)}'
+        assert os.path.isfile(tmpfpath), f"{tmpfpath=}, {' '.join(cmd)}"
         returnvals["encsize"] = os.path.getsize(tmpfpath)
         if tmpfpath != outfpath:
             cmd = cls.make_dec_cl(tmpfpath, outfpath, **kwargs)
@@ -124,7 +124,6 @@ class StdCompression:
 
 
 class JPG_Compression(StdCompression):
-
     ENCBIN = BINARY = "gm"
     ENCEXT: str = "jpg"
     REQ_DEC: bool = False
@@ -154,7 +153,6 @@ class JPG_Compression(StdCompression):
 
 
 class JPEGXL_Compression(StdCompression):
-
     ENCBIN = BINARY = "cjxl"
     DECBIN = "djxl"
     ENCEXT: str = "jxl"
@@ -183,7 +181,6 @@ class JPEGXL_Compression(StdCompression):
 
 
 class BPG_Compression(StdCompression):
-
     ENCBIN: str = "bpgenc"
     DECBIN: str = "bpgdec"
     ENCEXT: str = "bpg"

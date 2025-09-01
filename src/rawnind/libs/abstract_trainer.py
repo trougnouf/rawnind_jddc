@@ -150,9 +150,9 @@ class ImageToImageNN:
             if len(img.shape) == 3:
                 img = img.unsqueeze(0)
             in_channels = img.shape[1]
-            assert (
-                in_channels == self.in_channels
-            ), f"{in_channels=}, {self.in_channels=}; model configuration does not match input image."
+            assert in_channels == self.in_channels, (
+                f"{in_channels=}, {self.in_channels=}; model configuration does not match input image."
+            )
             img = img.to(self.device)
             # img = pt_ops.crop_to_multiple(img, 16)
             # if rgb_xyz_matrix is not None:
@@ -359,7 +359,7 @@ class ImageToImageNN:
                 # but load the previous model if continue_training_from_last_model_if_exists or testing
                 if args.continue_training_from_last_model_if_exists:
                     if dup_cnt > 1:
-                        args.load_path = f"{args.expname}-{dup_cnt-1}"
+                        args.load_path = f"{args.expname}-{dup_cnt - 1}"
                     elif dup_cnt == 1:
                         args.load_path = args.expname
                     else:
@@ -419,7 +419,7 @@ class ImageToImageNN:
                         if dup_cnt_load > 1:
                             args.load_path = args.load_path.replace(
                                 f"-{dup_cnt_load}{os.sep}",
-                                f"-{dup_cnt_load-1}{os.sep}",
+                                f"-{dup_cnt_load - 1}{os.sep}",
                             )
                             dup_cnt_load -= 1
                         elif dup_cnt_load == 1:
@@ -523,9 +523,7 @@ class ImageToImageNNTraining(ImageToImageNN):
             old_lr = self.optimizer.param_groups[0]["lr"]
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] *= self.lr_multiplier
-            self.optimizer.param_groups[0][
-                "lr"
-            ] *= (
+            self.optimizer.param_groups[0]["lr"] *= (
                 self.lr_multiplier
             )  # FIXME/BUG rm this duplicate multiplication. Currently lr_multiplier is squared as a result
             # there is an assertion that len=1 in init
@@ -814,7 +812,7 @@ class ImageToImageNNTraining(ImageToImageNN):
                     #     gt_fn = os.path.basename(gt_fn)
                     #     image_key += f"_aligned_to_{gt_fn}"
                     if "image_set" in batch:
-                        image_key = f'{batch["image_set"]}_{image_key}'
+                        image_key = f"{batch['image_set']}_{image_key}"
                     if "gt_fpath" in batch and "aligned_to" not in image_key:
                         gt_fn = (
                             batch["gt_fpath"]
@@ -823,7 +821,7 @@ class ImageToImageNNTraining(ImageToImageNN):
                         )
                         if "aligned_to" in gt_fn and batch["image_set"] in gt_fn:
                             gt_fn = gt_fn.split("_aligned_to_")[0].split(
-                                f'{batch["image_set"]}_'
+                                f"{batch['image_set']}_"
                             )[-1]
                         image_key += f"_aligned_to_{os.path.basename(gt_fn)}"
                 else:
@@ -840,7 +838,9 @@ class ImageToImageNNTraining(ImageToImageNN):
                     continue
                 individual_results[image_key] = {}
                 x_crops = batch["x_crops"].to(self.device)
-                y_crops = batch["y_crops"].to(
+                y_crops = batch[
+                    "y_crops"
+                ].to(
                     self.device, x_crops.dtype
                 )  # 2023-08-30: fixed bug w/ match_gain == output: y_crops was always * batch["gain"]
                 mask_crops = batch["mask_crops"].to(self.device)
@@ -977,7 +977,7 @@ class ImageToImageNNTraining(ImageToImageNN):
             self.json_saver.add_res(
                 self.step_n,
                 {
-                    f"val_{lossn+self._get_lossn_extension()}": lossv
+                    f"val_{lossn + self._get_lossn_extension()}": lossv
                     for lossn, lossv in validation_losses.items()
                 },
             )
@@ -1021,7 +1021,7 @@ class ImageToImageNNTraining(ImageToImageNN):
                 self.json_saver.add_res(
                     self.step_n,
                     {
-                        f"val_{lossn+self._get_lossn_extension()}": lossv
+                        f"val_{lossn + self._get_lossn_extension()}": lossv
                         for lossn, lossv in validation_losses.items()
                     },
                 )
@@ -1036,7 +1036,7 @@ class ImageToImageNNTraining(ImageToImageNN):
                 self.json_saver.add_res(
                     self.step_n,
                     {
-                        f"test_{lossn+self._get_lossn_extension()}": lossv
+                        f"test_{lossn + self._get_lossn_extension()}": lossv
                         for lossn, lossv in test_losses.items()
                     },
                 )
@@ -1159,7 +1159,7 @@ class ImageToImageNNTraining(ImageToImageNN):
             batch_size=1,
             shuffle=False,
         )
-        logging.info(f"val_dataloader loading time: {time.time()-start_time}")
+        logging.info(f"val_dataloader loading time: {time.time() - start_time}")
         # print('DBG FIXME: test_dataloader is hard-disabled')
         try:
             self.cleannoisy_test_dataloader = test_dataloader_class(
@@ -1188,7 +1188,7 @@ class ImageToImageNNTraining(ImageToImageNN):
         for fn in os.listdir(os.path.join(self.save_dpath, "saved_models")):
             if fn.partition(".")[0] not in keepers:
                 logging.info(
-                    f'cleanup_models: rm {os.path.join(self.save_dpath, "saved_models", fn)}'
+                    f"cleanup_models: rm {os.path.join(self.save_dpath, 'saved_models', fn)}"
                 )
                 os.remove(os.path.join(self.save_dpath, "saved_models", fn))
         if "output_valtest_images" in self.debug_options:
@@ -1196,7 +1196,7 @@ class ImageToImageNNTraining(ImageToImageNN):
                 for dn in os.listdir(os.path.join(self.save_dpath, "visu")):
                     if dn not in keepers:
                         logging.info(
-                            f'cleanup_models: rm -r {os.path.join(self.save_dpath, "visu", dn)}'
+                            f"cleanup_models: rm -r {os.path.join(self.save_dpath, 'visu', dn)}"
                         )
                         shutil.rmtree(
                             os.path.join(self.save_dpath, "visu", dn),
@@ -1217,7 +1217,7 @@ class ImageToImageNNTraining(ImageToImageNN):
         i: int = 0
         for batch in itertools.islice(zip(dataloader_cc, dataloader_cn), 0, num_steps):
             if "timing" in self.debug_options or "spam" in self.debug_options:
-                logging.debug(f"data {i} loading time: {time.time()-last_time}")
+                logging.debug(f"data {i} loading time: {time.time() - last_time}")
                 last_time: float = time.time()
             locking.check_pause()
             step_losses.append(
@@ -1230,7 +1230,7 @@ class ImageToImageNNTraining(ImageToImageNN):
                 )
             )
             if "timing" in self.debug_options or "spam" in self.debug_options:
-                logging.debug(f"total step {i} time: {time.time()-last_time}")
+                logging.debug(f"total step {i} time: {time.time() - last_time}")
                 last_time: float = time.time()
                 i += 1
             first_step = False
@@ -1242,9 +1242,9 @@ class ImageToImageNNTraining(ImageToImageNN):
             self.step_n = self.init_step
         logging.info(f"test_and_validate_model: {self.step_n=}")
         if self.step_n not in self.json_saver.results:
-            self.json_saver.results[self.step_n] = (
-                {}
-            )  # this shouldn't happen but sometimes the results file is not properly synchronized and we are stuck with an old version I guess
+            self.json_saver.results[
+                self.step_n
+            ] = {}  # this shouldn't happen but sometimes the results file is not properly synchronized and we are stuck with an old version I guess
         if (
             "val_" + self.loss + self._get_lossn_extension()
             not in self.json_saver.results[self.step_n]
@@ -1256,7 +1256,7 @@ class ImageToImageNNTraining(ImageToImageNN):
             self.json_saver.add_res(
                 self.step_n,
                 {
-                    f"val_{lossn+self._get_lossn_extension()}": lossv
+                    f"val_{lossn + self._get_lossn_extension()}": lossv
                     for lossn, lossv in val_losses.items()
                 },
             )
@@ -1278,7 +1278,7 @@ class ImageToImageNNTraining(ImageToImageNN):
         self.json_saver.add_res(
             self.step_n,
             {
-                f"test_{lossn+self._get_lossn_extension()}": lossv
+                f"test_{lossn + self._get_lossn_extension()}": lossv
                 for lossn, lossv in test_losses.items()
             },
         )
@@ -1305,7 +1305,7 @@ class ImageToImageNNTraining(ImageToImageNN):
         self.json_saver.add_res(
             self.step_n,
             {
-                f"{test_name}_{lossn+self._get_lossn_extension()}": lossv
+                f"{test_name}_{lossn + self._get_lossn_extension()}": lossv
                 for lossn, lossv in test_losses.items()
             },
         )
@@ -1441,9 +1441,7 @@ class PRGBImageToImageNNTraining(ImageToImageNNTraining):
         else:
             reconstructed_image = reconstructed_image
 
-        if (
-            output_train_images
-        ):  # FIXME (current copy of bayer version. ideally should be a function but oh well)
+        if output_train_images:  # FIXME (current copy of bayer version. ideally should be a function but oh well)
             # should output reconstructed_image, batch["y_crops"], batch["x_crops"]
             # print(
             #    f"training {batch['y_crops'].mean((0,2,3))=}, {model_output.mean((0,2,3))=}"
@@ -1502,7 +1500,10 @@ class PRGBImageToImageNNTraining(ImageToImageNNTraining):
         # last_time = time.time()
         # apply mask, compute loss
         loss = self.compute_train_loss(
-            batch["mask_crops"], reconstructed_image, gt, bpp  # , approx_exposure_diff
+            batch["mask_crops"],
+            reconstructed_image,
+            gt,
+            bpp,  # , approx_exposure_diff
         )
         # loss = lossf(
         #     processed_output * batch["mask_crops"],
@@ -1691,7 +1692,7 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
             reconstructed_image = model_output
             bpp = 0
         if "timing" in self.debug_options or "spam" in self.debug_options:
-            logging.debug(f"model time: {time.time()-last_time}")
+            logging.debug(f"model time: {time.time() - last_time}")
             last_time = time.time()
         # print(f"model_output time: {time.time()-last_time}")
         # last_time = time.time()
@@ -1718,7 +1719,7 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
                 with open(
                     os.path.join(visu_save_dir, f"train_{i}_xyzm.txt"), "w"
                 ) as fp:
-                    fp.write(f'{batch["rgb_xyz_matrix"][i]}')
+                    fp.write(f"{batch['rgb_xyz_matrix'][i]}")
                 y_processed = (
                     self.process_net_output(
                         rawproc.demosaic(batch["y_crops"][i : i + 1].cpu()),
@@ -1781,17 +1782,20 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
         # last_time = time.time()
         # apply mask, compute loss
         if "timing" in self.debug_options or "spam" in self.debug_options:
-            logging.debug(f"processing time: {time.time()-last_time}")
+            logging.debug(f"processing time: {time.time() - last_time}")
             last_time = time.time()
         loss = self.compute_train_loss(
-            batch["mask_crops"], processed_output, gt, bpp  # , approx_exposure_diff
+            batch["mask_crops"],
+            processed_output,
+            gt,
+            bpp,  # , approx_exposure_diff
         )
 
         # print(f"loss time: {time.time()-last_time}")
         # last_time = time.time()
         # backpropagate and optimize
         if "timing" in self.debug_options or "spam" in self.debug_options:
-            logging.debug(f"loss time: {time.time()-last_time}")
+            logging.debug(f"loss time: {time.time() - last_time}")
             last_time = time.time()
         optimizer.zero_grad()
         loss.backward()
@@ -1802,7 +1806,7 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
 
         optimizer.step()
         if "timing" in self.debug_options or "spam" in self.debug_options:
-            logging.debug(f"bw+optim: {time.time()-last_time}")
+            logging.debug(f"bw+optim: {time.time() - last_time}")
             last_time = time.time()
         # print(f"optimizer time: {time.time()-last_time}")
         # last_time = time.time()
@@ -1828,7 +1832,7 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
             ),
             "w",
         ) as fp:
-            fp.write(f'{batch["rgb_xyz_matrix"]}')
+            fp.write(f"{batch['rgb_xyz_matrix']}")
         # raw.hdr_nparray_to_file(
         #     reconstructed_image.squeeze(0).cpu().numpy(),
         #     os.path.join(

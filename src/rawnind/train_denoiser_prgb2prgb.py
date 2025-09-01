@@ -33,7 +33,7 @@ if __name__ == "__main__":
     if any("proc2proc" in arg or "opencv" in arg for arg in sys.argv):
         try:
             print("setting multiprocessing.set_start_method('spawn')")
-            multiprocessing.set_start_method('spawn')
+            multiprocessing.set_start_method("spawn")
         except RuntimeError:
             print("multiprocessing.set_start_method('spawn') failed")
             pass

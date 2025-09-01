@@ -1,5 +1,6 @@
 #!/bin/python3
 """Capture a scene with different ISO values. If an argument is set, it will be used as the scene name."""
+
 # TODO validate by computing difference between first and last image
 # TODO set silent shooting
 import subprocess
@@ -116,7 +117,7 @@ if __name__ == "__main__":
     gt2_fpath = capture_image(
         camera, out_dpath=os.path.join(out_dpath, "gt"), fn_prefix="ISO" + gt_iso
     )
-    print(f"Total capture time: {time.time()-start_time} seconds")
+    print(f"Total capture time: {time.time() - start_time} seconds")
     set_focus(camera, cfg, "auto")
     gt1_tensor, _ = raw.raw_fpath_to_mono_img_and_metadata(gt1_fpath)
     gt2_tensor, _ = raw.raw_fpath_to_mono_img_and_metadata(gt2_fpath)

@@ -58,7 +58,8 @@ def _opencv_img_fpath_to_np(fpath: str):
 
 
 def img_fpath_to_np_flt(
-    fpath: str, incl_metadata=False  # , bit_depth: Optional[int] = None
+    fpath: str,
+    incl_metadata=False,  # , bit_depth: Optional[int] = None
 ) -> Union[np.ndarray, Tuple[np.ndarray, dict]]:
     """returns a numpy float32 array from RGB image path (8-16 bits per component)
     shape: c, h, w

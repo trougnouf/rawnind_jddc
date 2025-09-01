@@ -24,6 +24,7 @@ class Passthrough(Denoiser):
         self.dummy_parameter = torch.nn.Parameter(torch.randn(3))
         if kwargs:
             print(f"Passthrough: ignoring unexpected kwargs: {kwargs}")
+
     def forward(self, batch: torch.Tensor):
         if self.in_channels == 3:
             return batch

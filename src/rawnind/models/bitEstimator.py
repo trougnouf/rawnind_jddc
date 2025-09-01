@@ -16,7 +16,7 @@ class MultiHeadBitEstimator(torch.nn.Module):
         shape=("g", "bs", "ch", "h", "w"),
         bitparm_init_mode="normal",
         bitparm_init_range=0.01,
-        **kwargs
+        **kwargs,
     ):
         super(MultiHeadBitEstimator, self).__init__()
         self.f1 = MultiHeadBitparm(

@@ -49,13 +49,16 @@ if __name__ == "__main__":
                     if os.path.exists(os.path.join(model_dpath, "trainres.yaml")):
                         with open(os.path.join(model_dpath, "trainres.yaml")) as f:
                             trainres = yaml.load(f, Loader=yaml.FullLoader)
-                        if (  # check that at least one key in trainres["best_step"] starts with "val"
-                            trainres["best_step"] != {}
-                            and any(
-                                akey.startswith("val")
-                                for akey in trainres["best_step"].keys()
+                        if (
+                            (  # check that at least one key in trainres["best_step"] starts with "val"
+                                trainres["best_step"] != {}
+                                and any(
+                                    akey.startswith("val")
+                                    for akey in trainres["best_step"].keys()
+                                )
                             )
-                        ) or time.time() - mod_time < TIME_LIMIT_TRAINRES_EMPTY:
+                            or time.time() - mod_time < TIME_LIMIT_TRAINRES_EMPTY
+                        ):
                             continue
             # Spare if the model was just created
             if time.time() - mod_time < TIME_LIMIT_START:

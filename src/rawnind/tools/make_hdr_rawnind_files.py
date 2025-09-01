@@ -134,6 +134,6 @@ def proc_dataset(
 if __name__ == "__main__":
     args = get_args()
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
-    logging.info(f'# python {" ".join(sys.argv)}')
+    logging.info(f"# python {' '.join(sys.argv)}")
     logging.info(f"# {args=}")
     proc_dataset(**vars(args))

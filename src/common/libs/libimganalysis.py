@@ -2,6 +2,7 @@
 """
 Image analysis on file paths
 """
+
 import subprocess
 from typing import Union
 from PIL import Image
@@ -21,9 +22,9 @@ except ModuleNotFoundError:
 from typing import Optional
 import sys
 
-#try:
+# try:
 #    import tensorflow as tf
-#except ModuleNotFoundError as e:
+# except ModuleNotFoundError as e:
 #    print("libimganalysis.py: tensorflow is missing, some functions are disabled")
 
 import piqa
@@ -31,9 +32,9 @@ import piqa
 import sys
 
 sys.path.append("..")
-#try:
+# try:
 #    from common.libs import tf_helpers
-#except ModuleNotFoundError as e:
+# except ModuleNotFoundError as e:
 #    print("libimganalysis: warning: {}".format(e))
 from common.libs import pt_helpers
 from rawnind.libs import rawproc

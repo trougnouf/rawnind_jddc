@@ -74,9 +74,9 @@ def batch_to_img(btensor, height: int, width: int, ch=3):
     patch_size = btensor.shape[-1]
     xstart = ystart = 0
     for i in range(btensor.size(0)):
-        imgtensor[
-            0, :, ystart : ystart + patch_size, xstart : xstart + patch_size
-        ] = btensor[i]
+        imgtensor[0, :, ystart : ystart + patch_size, xstart : xstart + patch_size] = (
+            btensor[i]
+        )
         xstart += patch_size
         if xstart + patch_size > width:
             xstart = 0

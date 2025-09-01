@@ -10,12 +10,12 @@ def print_attributes(fpath):
     attributes["camera_whitebalance"] = rawpy_img.camera_whitebalance
     attributes["black_level_per_channel"] = rawpy_img.black_level_per_channel
     attributes["white_level"] = rawpy_img.white_level  # imgdata.rawdata.color.maximum
-    attributes[
-        "camera_white_level_per_channel"
-    ] = rawpy_img.camera_white_level_per_channel  # imgdata.rawdata.color.linear_max
-    attributes[
-        "daylight_whitebalance"
-    ] = rawpy_img.daylight_whitebalance  # imgdata.rawdata.color.pre_mul
+    attributes["camera_white_level_per_channel"] = (
+        rawpy_img.camera_white_level_per_channel
+    )  # imgdata.rawdata.color.linear_max
+    attributes["daylight_whitebalance"] = (
+        rawpy_img.daylight_whitebalance
+    )  # imgdata.rawdata.color.pre_mul
     attributes["rgb_xyz_matrix"] = rawpy_img.rgb_xyz_matrix
     print(attributes)
 
