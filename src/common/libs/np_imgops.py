@@ -1,20 +1,18 @@
-from typing import Optional, Tuple, Union
-import numpy as np
+# cv2.setNumThreads(0)
+import os
 import random
+import sys
 import unittest
 from enum import Enum, auto
+from typing import Tuple, Union
 
 # import multiprocessing
 # multiprocessing.set_start_method('spawn')
 import cv2
-
-# cv2.setNumThreads(0)
-import os
-import sys
+import numpy as np
 
 try:
     import OpenImageIO as oiio
-
     TIFF_PROVIDER = "OpenImageIO"
 except ImportError:
     TIFF_PROVIDER = "OpenCV"

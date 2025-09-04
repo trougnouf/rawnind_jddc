@@ -4,21 +4,21 @@ This file also handles HDR image export.
 """
 
 from __future__ import annotations
-import os
-import Imath  # OpenEXR
-import requests
+
 import argparse
 import operator
-import subprocess
+import os
 import shutil
-from collections import OrderedDict
+import subprocess
 from enum import Enum
 from typing import Literal, NamedTuple, Optional, Union
+
+import Imath  # OpenEXR
 import numpy as np
 import rawpy
+import requests
 
 from common.libs import icc
-
 
 try:
     import OpenImageIO as oiio
@@ -31,7 +31,7 @@ except ImportError:
         OPENEXR_PROVIDER = "OpenEXR"
     except ImportError:
         raise ImportError("OpenImageIO or OpenEXR must be installed")
-
+print("\n Using ", OPENEXR_PROVIDER)
 # import multiprocessing
 # multiprocessing.set_start_method('spawn')
 import cv2
@@ -46,7 +46,6 @@ except ImportError:
         "raw.py warning: OpenImageIO not found, using OpenCV for TIFFs. Install OpenImageIO for better TIFF support."
     )
     TIFF_PROVIDER = "OpenCV"
-import matplotlib.pyplot as plt
 import torch  # for typing only
 
 
@@ -622,7 +621,7 @@ def xtrans_fpath_to_OpenEXR(
     conversion_cmd: tuple = (
         "darktable-cli",
         src_fpath,
-        os.path.join("config", "dt4_xtrans_to_linrec2020.xmp"),
+        os.path.join(os.path.curdir, "src/rawnind/config", "dt4_xtrans_to_linrec2020.xmp"),
         dest_fpath,
         "--core",
         "--conf",

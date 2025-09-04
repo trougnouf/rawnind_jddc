@@ -1,19 +1,15 @@
+import os
 import shutil
 import subprocess
-from typing import Union
-import sys
-import os
 import unittest
-import random
-import logging
-import numpy as np
-import torch
-import scipy.ndimage
+from typing import Union
+
 import colour  # colour-science, needed for the PQ OETF(-1) transfer function
-import torchvision
+import numpy as np
+import scipy.ndimage
+import torch
 
-
-sys.path.append("..")
+# sys.path.append("..")
 from common.libs import np_imgops
 from rawnind.libs import raw
 

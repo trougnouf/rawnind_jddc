@@ -1,13 +1,13 @@
 """This model serves for testing comparison; an image is denoised w/ a given denoising model then compressed with a non-denoising compression model."""
 
-import sys
 from typing import Literal, Optional
+
 import torch
 
-sys.path.append("..")
-from rawnind.models import raw_denoiser, manynets_compression
-
 from rawnind.libs import rawproc
+# sys.path.append("..")
+from . import raw_denoiser, manynets_compression
+
 
 # DBG
 # from rawnind.libs import raw
