@@ -15,9 +15,18 @@ import torch
 # Optional GPU acceleration
 try:
     import cupy as cp
+    # Test if CUDA is actually functional
+    cp.cuda.runtime.getDeviceCount()
+    # Try a simple operation to verify CUDA works
+    test_array = cp.array([1, 2, 3])
+    _ = cp.sum(test_array)
     print('Accelerating with CuPy. \n')
     CUPY_AVAILABLE = True
 except ImportError:
+    CUPY_AVAILABLE = False
+    cp = None
+except Exception:
+    # CuPy imported but CUDA initialization failed
     CUPY_AVAILABLE = False
     cp = None
 
@@ -606,7 +615,7 @@ def find_best_alignment_gpu(
         
     except Exception as e:
         if verbose:
-            print(f"GPU alignment failed: {e}, falling back to FFT search")
+            print(f"GPU alignment failed: {type(e).__name__}: {e}, falling back to FFT search")
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
 
 
