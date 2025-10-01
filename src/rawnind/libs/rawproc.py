@@ -535,8 +535,8 @@ def find_best_alignment_gpu(
 ) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
     """GPU-accelerated alignment search using CuPy."""
     if not CUPY_AVAILABLE:
-        # Fallback to hierarchical search
-        return find_best_alignment_hierarchical(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
+        # Fallback to FFT search first
+        return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     
     try:
         target_img = match_gain(anchor_img, target_img)
@@ -606,8 +606,8 @@ def find_best_alignment_gpu(
         
     except Exception as e:
         if verbose:
-            print(f"GPU alignment failed: {e}, falling back to hierarchical search")
-        return find_best_alignment_hierarchical(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
+            print(f"GPU alignment failed: {e}, falling back to FFT search")
+        return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
 
 
 def find_best_alignment(
