@@ -264,7 +264,7 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
     sample_args = random.sample(valid_samples, min(num_samples, len(valid_samples)))
     methods = ["original", "hierarchical", "fft"]
     
-    if rawproc.CUPY_AVAILABLE:
+    if rawproc.CUPY_IMPORTABLE:
         methods.append("gpu")
     
     logging.info(f"Running alignment benchmarks on {len(sample_args)} samples...")

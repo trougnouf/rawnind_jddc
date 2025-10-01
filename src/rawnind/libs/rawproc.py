@@ -663,7 +663,7 @@ def find_best_alignment(
     # Method selection
     if method == "auto":
         image_size = anchor_img.shape[-1] * anchor_img.shape[-2]
-        if CUPY_AVAILABLE and image_size > 512 * 512:
+        if CUPY_IMPORTABLE and image_size > 512 * 512:
             method = "gpu"
         elif max_shift_search > 32:
             method = "hierarchical"
