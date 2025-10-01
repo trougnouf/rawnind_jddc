@@ -427,52 +427,49 @@ if __name__ == "__main__":
                     
                 total_gt_files += 1
                 
-                # FIXED: Only pair GT files with corresponding noisy files from the same scene
-                # Instead of pairing with ALL files (gt_files_endpaths + noisy_files_endpaths)
-                for noisy_dir in noisy_files_endpaths:
-                    noisy_dir_path = os.path.join(in_image_set_dpath, noisy_dir)
-                    if not os.path.isdir(noisy_dir_path):
+                # FIXED: Pair GT files with noisy files from the same scene directory
+                # GT files are in gt/ subdirectory, noisy files are directly in scene directory
+                for noisy_file in noisy_files_endpaths:
+                    # Skip if it's a directory (like 'gt') or unwanted files
+                    noisy_file_path = os.path.join(in_image_set_dpath, noisy_file)
+                    if os.path.isdir(noisy_file_path) or noisy_file.endswith(".xmp") or noisy_file.endswith("darktable_exported"):
                         continue
                         
-                    for noisy_file in os.listdir(noisy_dir_path):
-                        if noisy_file.endswith(".xmp") or noisy_file.endswith("darktable_exported"):
-                            continue
-                            
-                        f_endpath = os.path.join(noisy_dir, noisy_file)
+                    f_endpath = noisy_file  # noisy files are directly in scene directory
+                    
+                    # Check if this GT and noisy file are from the same scene
+                    if not files_match_same_scene(gt_file_endpath, f_endpath):
+                        continue
                         
-                        # Check if this GT and noisy file are from the same scene
-                        if not files_match_same_scene(gt_file_endpath, f_endpath):
-                            continue
-                            
-                        # Check if result is already cached
-                        if find_cached_result(
-                            ds_dpath, image_set, gt_file_endpath, f_endpath, cached_results
-                        ):
-                            continue
-                            
-                        # Validate image compatibility (size check)
-                        gt_full_path = os.path.join(ds_dpath, image_set, gt_file_endpath)
-                        f_full_path = os.path.join(ds_dpath, image_set, f_endpath)
+                    # Check if result is already cached
+                    if find_cached_result(
+                        ds_dpath, image_set, gt_file_endpath, f_endpath, cached_results
+                    ):
+                        continue
                         
-                        if not validate_image_compatibility(gt_full_path, f_full_path):
-                            skipped_incompatible += 1
-                            logging.warning(f"Skipping incompatible pair: {gt_file_endpath} <-> {f_endpath}")
-                            continue
-                            
-                        matched_pairs += 1
-                        args_in.append(
-                            {
-                                "ds_dpath": ds_dpath,
-                                "image_set": image_set,
-                                "gt_file_endpath": gt_file_endpath,
-                                "f_endpath": f_endpath,
-                                "masks_dpath": os.path.join(
-                                    DATASETS_ROOT, args.dataset, f"masks_{LOSS_THRESHOLD}"
-                                ),
-                                "alignment_method": args.alignment_method,
-                                "verbose_alignment": args.verbose_alignment,
-                            }
-                        )
+                    # Validate image compatibility (size check)
+                    gt_full_path = os.path.join(ds_dpath, image_set, gt_file_endpath)
+                    f_full_path = os.path.join(ds_dpath, image_set, f_endpath)
+                    
+                    if not validate_image_compatibility(gt_full_path, f_full_path):
+                        skipped_incompatible += 1
+                        logging.warning(f"Skipping incompatible pair: {gt_file_endpath} <-> {f_endpath}")
+                        continue
+                        
+                    matched_pairs += 1
+                    args_in.append(
+                        {
+                            "ds_dpath": ds_dpath,
+                            "image_set": image_set,
+                            "gt_file_endpath": gt_file_endpath,
+                            "f_endpath": f_endpath,
+                            "masks_dpath": os.path.join(
+                                DATASETS_ROOT, args.dataset, f"masks_{LOSS_THRESHOLD}"
+                            ),
+                            "alignment_method": args.alignment_method,
+                            "verbose_alignment": args.verbose_alignment,
+                        }
+                    )
             
             if total_gt_files > 0:
                 logging.info(f"Image set '{image_set}': {total_gt_files} GT files, {matched_pairs} valid pairs, {skipped_incompatible} incompatible pairs")
