@@ -438,7 +438,8 @@ if __name__ == "__main__":
     processing_time = time.time() - processing_start
     logging.info(f"Alignment and mask generation completed in {processing_time:.2f} seconds")
     
-    results = results + cached_results
+    if cached_results:
+        results = results + cached_results
 
     # Process crops with timing
     crops_start = time.time()
@@ -457,10 +458,13 @@ if __name__ == "__main__":
     logging.info(f"Crops processing completed in {crops_time:.2f} seconds")
     print("trying to write to ",content_fpath.resolve())
     with content_fpath.open("w", encoding='utf-8') as f:
-        yaml.dump(result, f, allow_unicode=True)
+        yaml.dump(results, f, allow_unicode=True)
 
     total_time = time.time() - start_time
     logging.info(f"Total processing time: {total_time:.2f} seconds")
-    logging.info(f"Average time per image pair: {total_time/len(args_in):.2f} seconds")
+    if len(args_in) > 0:
+        logging.info(f"Average time per image pair: {total_time/len(args_in):.2f} seconds")
+    else:
+        logging.info("No image pairs processed")
     logging.info(f"Cache hit statistics - listdir cache: {cached_listdir.cache_info()}")
     logging.info(f"Cache hit statistics - exists cache: {cached_exists.cache_info()}")
