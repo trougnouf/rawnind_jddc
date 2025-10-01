@@ -236,32 +236,13 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
     """Run performance benchmarks comparing different alignment methods."""
     import random
     
-    # Filter out potentially problematic samples first
-    valid_samples = []
-    for arg in args_in:
-        try:
-            # Quick compatibility check
-            anchor_img = rawproc.load_image(arg["gt_fpath"])
-            target_img = rawproc.load_image(arg["f_fpath"])
-            
-            # Check if shapes are at least somewhat compatible
-            if (anchor_img is not None and target_img is not None and 
-                len(anchor_img.shape) == len(target_img.shape) and
-                min(anchor_img.shape[-2:]) > 100 and min(target_img.shape[-2:]) > 100):
-                valid_samples.append(arg)
-                
-            if len(valid_samples) >= num_samples * 2:  # Get enough candidates
-                break
-                
-        except Exception:
-            continue
-    
-    if len(valid_samples) < num_samples:
-        logging.warning(f"Only found {len(valid_samples)} valid samples for benchmarking")
-        num_samples = len(valid_samples)
-    
-    # Select a subset of valid samples for benchmarking
-    sample_args = random.sample(valid_samples, min(num_samples, len(valid_samples)))
+    # Use first few samples for benchmarking (skip expensive validation)
+    if len(args_in) == 0:
+        logging.warning("No samples available for benchmarking")
+        return
+        
+    num_samples = min(num_samples, len(args_in))
+    sample_args = random.sample(args_in, num_samples)
     methods = ["original", "hierarchical", "fft"]
     
     if rawproc.CUPY_IMPORTABLE:
@@ -427,6 +408,7 @@ if __name__ == "__main__":
     logging.info(f"Using alignment method: {args.alignment_method}")
     processing_start = time.time()
     
+    results = []
     try:
         results = utilities.mt_runner(
             rawproc.get_best_alignment_compute_gain_and_make_loss_mask,

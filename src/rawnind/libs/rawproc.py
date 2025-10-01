@@ -13,9 +13,42 @@ from scipy.signal import correlate
 import torch
 
 # Optional GPU acceleration - test at runtime, not import time
+def setup_cuda_environment():
+    """Set up CUDA environment for multiprocessing workers."""
+    import os
+    import sys
+    
+    # Try to detect virtual environment CUDA libraries
+    venv_path = getattr(sys, 'prefix', None)
+    if venv_path:
+        cuda_lib_paths = [
+            os.path.join(venv_path, 'lib', 'python*', 'site-packages', 'nvidia', '*', 'lib'),
+            os.path.join(venv_path, 'lib'),
+        ]
+        
+        # Add to LD_LIBRARY_PATH if not already there
+        current_ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+        new_paths = []
+        
+        for path_pattern in cuda_lib_paths:
+            import glob
+            for path in glob.glob(path_pattern):
+                if os.path.isdir(path) and path not in current_ld_path:
+                    new_paths.append(path)
+        
+        if new_paths:
+            if current_ld_path:
+                os.environ['LD_LIBRARY_PATH'] = ':'.join(new_paths) + ':' + current_ld_path
+            else:
+                os.environ['LD_LIBRARY_PATH'] = ':'.join(new_paths)
+
+
 def test_cuda_functionality():
     """Test if CUDA is actually functional, not just importable."""
     try:
+        # Set up CUDA environment first (important for multiprocessing workers)
+        setup_cuda_environment()
+        
         import cupy as cp
         # Test device count
         device_count = cp.cuda.runtime.getDeviceCount()
