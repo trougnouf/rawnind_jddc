@@ -337,7 +337,7 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
             method_results = utilities.mt_runner(
                 rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
                 test_args,
-                num_threads=min(4, len(test_args)),  # Use fewer threads for benchmarking
+                num_threads=min(os.cpu_count(), len(test_args)),  # Use all available cores for benchmarking
             )
             
             elapsed = time.time() - start_time
