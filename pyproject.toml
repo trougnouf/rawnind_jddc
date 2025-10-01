@@ -28,3 +28,8 @@ dependencies = [
     "torchvision==0.23.0",
     "tqdm==4.66.5",
 ]
+
+[project.optional-dependencies]
+gpu = [
+    "cupy-cuda12x>=13.0.0",  # GPU acceleration for image alignment
+]
