@@ -111,16 +111,30 @@ def extract_scene_identifier(filename: str) -> str:
     """
     Extract scene identifier from filename to match GT with corresponding noisy images.
     
-    Examples:
+    RawNIND filename patterns:
+    - "Bayer_2pilesofplates_GT_ISO100_sha1=854554a34b339413462eb1538d4cb0fa95d468b5.arw" -> "2pilesofplates"
+    - "Bayer_2pilesofplates_ISO1250_sha1=9121efbd50e2f2392665cb17b435b2526df8e9ae.arw" -> "2pilesofplates"
+    - "Bayer_7D-1_GT_ISO100_sha1=22aef4a5b4038e241082741117827f364ce6a5ac.cr2" -> "7D-1"
+    
+    Legacy patterns (for backward compatibility):
     - "gt/scene001_iso100.dng" -> "scene001"
     - "iso3200/scene001_iso3200.dng" -> "scene001"
-    - "Picture1_32.tiff" -> "Picture1"
-    - "IMG_1234_GT.dng" -> "IMG_1234"
     """
     # Remove directory path and extension
     basename = os.path.splitext(os.path.basename(filename))[0]
     
-    # Common patterns for scene identification
+    # RawNIND pattern: Bayer_<SCENE>_[GT_]ISO<NUMBER>_sha1=<HASH>
+    # First try with GT pattern
+    rawnind_match = re.match(r'^Bayer_([^_]+(?:_[^_]+)*)_GT_ISO\d+_sha1=', basename)
+    if rawnind_match:
+        return rawnind_match.group(1).lower()
+    
+    # Then try without GT pattern
+    rawnind_match = re.match(r'^Bayer_([^_]+(?:_[^_]+)*)_ISO\d+_sha1=', basename)
+    if rawnind_match:
+        return rawnind_match.group(1).lower()
+    
+    # Legacy patterns for backward compatibility
     patterns = [
         r'^([A-Za-z]+\d+)',           # scene001, Picture1, IMG1234
         r'^(\w+)_(?:iso|ISO)',        # filename_iso3200
