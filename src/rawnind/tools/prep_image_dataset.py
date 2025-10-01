@@ -100,6 +100,8 @@ def get_args() -> argparse.Namespace:
 
 
 def find_cached_result(ds_dpath, image_set, gt_file_endpath, f_endpath, cached_results):
+    if cached_results is None:
+        return None
     gt_fpath = os.path.join(ds_dpath, image_set, gt_file_endpath)
     f_fpath = os.path.join(ds_dpath, image_set, f_endpath)
     for result in cached_results:
