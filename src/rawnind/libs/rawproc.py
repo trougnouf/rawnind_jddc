@@ -12,23 +12,35 @@ import scipy.ndimage
 from scipy.signal import correlate
 import torch
 
-# Optional GPU acceleration
+# Optional GPU acceleration - test at runtime, not import time
+def test_cuda_functionality():
+    """Test if CUDA is actually functional, not just importable."""
+    try:
+        import cupy as cp
+        # Test device count
+        device_count = cp.cuda.runtime.getDeviceCount()
+        if device_count == 0:
+            return False, None
+        
+        # Test basic GPU operations
+        test_array = cp.array([1, 2, 3])
+        result = cp.sum(test_array)
+        
+        # Test memory allocation
+        large_array = cp.zeros((100, 100))
+        _ = cp.mean(large_array)
+        
+        return True, cp
+    except Exception as e:
+        return False, None
+
+# Don't test CUDA at import time - do it at runtime in multiprocessing workers
 try:
     import cupy as cp
-    # Test if CUDA is actually functional
-    cp.cuda.runtime.getDeviceCount()
-    # Try a simple operation to verify CUDA works
-    test_array = cp.array([1, 2, 3])
-    _ = cp.sum(test_array)
-    print('Accelerating with CuPy. \n')
-    CUPY_AVAILABLE = True
+    CUPY_IMPORTABLE = True
 except ImportError:
-    CUPY_AVAILABLE = False
     cp = None
-except Exception:
-    # CuPy imported but CUDA initialization failed
-    CUPY_AVAILABLE = False
-    cp = None
+    CUPY_IMPORTABLE = False
 
 # sys.path.append("..")
 from importlib import resources
@@ -543,21 +555,29 @@ def find_best_alignment_gpu(
     verbose: bool = False,
 ) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
     """GPU-accelerated alignment search using CuPy."""
-    if not CUPY_AVAILABLE:
-        # Fallback to FFT search first
+    # Test CUDA functionality at runtime (important for multiprocessing workers)
+    if not CUPY_IMPORTABLE:
+        if verbose:
+            print("CuPy not available, falling back to FFT search")
+        return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
+    
+    cuda_available, cp_runtime = test_cuda_functionality()
+    if not cuda_available:
+        if verbose:
+            print("CUDA functionality test failed, falling back to FFT search")
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     
     try:
         target_img = match_gain(anchor_img, target_img)
         
-        # Transfer to GPU
-        anchor_gpu = cp.asarray(anchor_img)
-        target_gpu = cp.asarray(target_img)
+        # Transfer to GPU using runtime-tested CuPy
+        anchor_gpu = cp_runtime.asarray(anchor_img)
+        target_gpu = cp_runtime.asarray(target_img)
         
         # Use FFT-based correlation on GPU
         if len(anchor_img.shape) > 2:
-            anchor_gray = cp.mean(anchor_gpu, axis=0)
-            target_gray = cp.mean(target_gpu, axis=0)
+            anchor_gray = cp_runtime.mean(anchor_gpu, axis=0)
+            target_gray = cp_runtime.mean(target_gpu, axis=0)
         else:
             anchor_gray = anchor_gpu
             target_gray = target_gpu
@@ -579,16 +599,16 @@ def find_best_alignment_gpu(
         target_crop = target_gray[target_y_start:target_y_start+min_h, target_x_start:target_x_start+min_w]
         
         # Normalize
-        anchor_crop = (anchor_crop - cp.mean(anchor_crop)) / (cp.std(anchor_crop) + 1e-8)
-        target_crop = (target_crop - cp.mean(target_crop)) / (cp.std(target_crop) + 1e-8)
+        anchor_crop = (anchor_crop - cp_runtime.mean(anchor_crop)) / (cp_runtime.std(anchor_crop) + 1e-8)
+        target_crop = (target_crop - cp_runtime.mean(target_crop)) / (cp_runtime.std(target_crop) + 1e-8)
         
         # Cross-correlation using CuPy's FFT
         from cupyx.scipy.signal import correlate as cp_correlate
         correlation = cp_correlate(anchor_crop, target_crop, mode='same')
         
         # Find peak
-        peak_idx = cp.argmax(correlation)
-        y_peak, x_peak = cp.unravel_index(peak_idx, correlation.shape)
+        peak_idx = cp_runtime.argmax(correlation)
+        y_peak, x_peak = cp_runtime.unravel_index(peak_idx, correlation.shape)
         
         # Convert to shift coordinates
         shift_y = int(y_peak) - anchor_crop.shape[0] // 2
