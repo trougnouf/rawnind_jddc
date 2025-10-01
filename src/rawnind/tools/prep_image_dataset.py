@@ -24,6 +24,9 @@ import os
 import sys
 import logging
 import argparse
+import time
+from functools import lru_cache
+from typing import Dict, List, Tuple, Optional
 
 sys.path.append("..")
 from rawnind.libs import rawproc
@@ -42,6 +45,17 @@ from rawnind.libs.rawproc import (
 NUM_THREADS: int = os.cpu_count() // 4 * 3  #
 LOG_FPATH = os.path.join("logs", os.path.basename(__file__) + ".log")
 HDR_EXT = "tif"
+
+# Performance optimization caches
+@lru_cache(maxsize=256)
+def cached_listdir(directory: str) -> List[str]:
+    """Cached directory listing to avoid repeated filesystem calls."""
+    return os.listdir(directory) if os.path.exists(directory) else []
+
+@lru_cache(maxsize=64)
+def cached_exists(filepath: str) -> bool:
+    """Cached file existence check."""
+    return os.path.exists(filepath)
 
 """
 #align images needs: bayer_gt_fpath, profiledrgb_gt_fpath, profiledrgb_noisy_fpath
@@ -63,6 +77,22 @@ def get_args() -> argparse.Namespace:
         default=DS_DN,
         help="Process external dataset (ext_raw_denoise_train, ext_raw_denoise_test, RawNIND, RawNIND_Bostitch)",
     )
+    parser.add_argument(
+        "--alignment_method",
+        choices=["auto", "gpu", "hierarchical", "fft", "original"],
+        default="auto",
+        help="Alignment method to use (auto=automatically select best method)",
+    )
+    parser.add_argument(
+        "--verbose_alignment",
+        action="store_true",
+        help="Enable verbose output for alignment operations",
+    )
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Run performance benchmarks comparing different alignment methods",
+    )
     return parser.parse_args()
 
 
@@ -75,60 +105,143 @@ def find_cached_result(ds_dpath, image_set, gt_file_endpath, f_endpath, cached_r
 
 
 def fetch_crops_list(image_set, gt_fpath, f_fpath, is_bayer, ds_base_dpath):
-    def get_coordinates(fn: str) -> list[int, int]:
-        return [int(c) for c in fn.split(".")[-2].split("_")]
+    """Optimized crops list fetching with caching and vectorized operations."""
+    def get_coordinates(fn: str) -> Tuple[int, int]:
+        return tuple(int(c) for c in fn.split(".")[-2].split("_"))
 
     crops = []
     gt_basename = os.path.basename(gt_fpath)
     f_basename = os.path.basename(f_fpath)
+    
     prgb_image_set_dpath = os.path.join(
         ds_base_dpath, "crops", "proc", "lin_rec2020", image_set
     )
+    
+    # Use cached directory listings
+    prgb_gt_dir = os.path.join(prgb_image_set_dpath, "gt")
+    prgb_noisy_dir = prgb_image_set_dpath
+    
+    gt_files = cached_listdir(prgb_gt_dir)
+    noisy_files = cached_listdir(prgb_noisy_dir)
+    
+    # Pre-filter and extract coordinates for GT files
+    gt_file_coords = {}
+    for fn_gt in gt_files:
+        if fn_gt.startswith(gt_basename):
+            coords = get_coordinates(fn_gt)
+            gt_file_coords[coords] = fn_gt
+    
     if is_bayer:
         bayer_image_set_dpath = os.path.join(
             ds_base_dpath, "crops", "src", "Bayer", image_set
         )
+    
+    # Process both GT and noisy files
     for f_is_gt in (True, False):
-        for fn_f in os.listdir(
-            os.path.join(prgb_image_set_dpath, "gt" if f_is_gt else "")
-        ):
+        file_list = gt_files if f_is_gt else noisy_files
+        search_dir = prgb_gt_dir if f_is_gt else prgb_noisy_dir
+        
+        for fn_f in file_list:
             if fn_f.startswith(f_basename):
                 coordinates = get_coordinates(fn_f)
-                for fn_gt in os.listdir(os.path.join(prgb_image_set_dpath, "gt")):
-                    if fn_gt.startswith(gt_basename):
-                        coordinates_gt = get_coordinates(fn_gt)
-                        if coordinates == coordinates_gt:
-                            crop = {
-                                "coordinates": coordinates,
-                                "f_linrec2020_fpath": os.path.join(
-                                    prgb_image_set_dpath, "gt" if f_is_gt else "", fn_f
-                                ),
-                                "gt_linrec2020_fpath": os.path.join(
-                                    prgb_image_set_dpath, "gt", fn_gt
-                                ),
-                            }
-                            if is_bayer:
-                                crop["f_bayer_fpath"] = os.path.join(
-                                    bayer_image_set_dpath,
-                                    "gt" if f_is_gt else "",
-                                    fn_f.replace("." + HDR_EXT, ".npy"),
-                                )
-                                crop["gt_bayer_fpath"] = os.path.join(
-                                    bayer_image_set_dpath,
-                                    "gt",
-                                    fn_gt.replace("." + HDR_EXT, ".npy"),
-                                )
-                                if not os.path.exists(
-                                    crop["f_bayer_fpath"]
-                                ) or not os.path.exists(crop["gt_bayer_fpath"]):
-                                    logging.error(
-                                        f"Missing crop: {crop['f_bayer_fpath']} and/or {crop['gt_bayer_fpath']}"
-                                    )
-                                    breakpoint()
-                                assert os.path.exists(crop["f_bayer_fpath"])
-                                assert os.path.exists(crop["gt_bayer_fpath"])
-                            crops.append(crop)
+                
+                # Check if matching GT coordinates exist
+                if coordinates in gt_file_coords:
+                    fn_gt = gt_file_coords[coordinates]
+                    
+                    crop = {
+                        "coordinates": list(coordinates),
+                        "f_linrec2020_fpath": os.path.join(search_dir, fn_f),
+                        "gt_linrec2020_fpath": os.path.join(prgb_gt_dir, fn_gt),
+                    }
+                    
+                    if is_bayer:
+                        f_bayer_path = os.path.join(
+                            bayer_image_set_dpath,
+                            "gt" if f_is_gt else "",
+                            fn_f.replace("." + HDR_EXT, ".npy"),
+                        )
+                        gt_bayer_path = os.path.join(
+                            bayer_image_set_dpath,
+                            "gt",
+                            fn_gt.replace("." + HDR_EXT, ".npy"),
+                        )
+                        
+                        crop["f_bayer_fpath"] = f_bayer_path
+                        crop["gt_bayer_fpath"] = gt_bayer_path
+                        
+                        # Use cached existence checks
+                        if not cached_exists(f_bayer_path) or not cached_exists(gt_bayer_path):
+                            logging.error(
+                                f"Missing crop: {f_bayer_path} and/or {gt_bayer_path}"
+                            )
+                            continue  # Skip instead of breaking
+                    
+                    crops.append(crop)
+    
     return crops
+
+
+def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
+    """Run performance benchmarks comparing different alignment methods."""
+    import random
+    
+    # Select a subset of samples for benchmarking
+    sample_args = random.sample(args_in, min(num_samples, len(args_in)))
+    methods = ["original", "hierarchical", "fft"]
+    
+    if rawproc.CUPY_AVAILABLE:
+        methods.append("gpu")
+    
+    logging.info(f"Running alignment benchmarks on {len(sample_args)} samples...")
+    logging.info(f"Methods to test: {methods}")
+    
+    results = {}
+    
+    for method in methods:
+        logging.info(f"Testing method: {method}")
+        start_time = time.time()
+        
+        # Update method for all samples
+        test_args = []
+        for arg in sample_args:
+            test_arg = arg.copy()
+            test_arg["alignment_method"] = method
+            test_arg["verbose_alignment"] = False
+            test_args.append(test_arg)
+        
+        try:
+            # Run the alignment
+            method_results = utilities.mt_runner(
+                rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
+                test_args,
+                num_threads=min(4, len(test_args)),  # Use fewer threads for benchmarking
+            )
+            
+            elapsed = time.time() - start_time
+            results[method] = {
+                "time": elapsed,
+                "avg_time_per_sample": elapsed / len(sample_args),
+                "success": True,
+                "results": method_results
+            }
+            
+            logging.info(f"Method '{method}': {elapsed:.2f}s total, {elapsed/len(sample_args):.2f}s per sample")
+            
+        except Exception as e:
+            logging.error(f"Method '{method}' failed: {e}")
+            results[method] = {"success": False, "error": str(e)}
+    
+    # Print comparison
+    logging.info("\n=== BENCHMARK RESULTS ===")
+    baseline_time = results.get("original", {}).get("time", 1.0)
+    
+    for method, result in results.items():
+        if result.get("success"):
+            speedup = baseline_time / result["time"] if result["time"] > 0 else float('inf')
+            logging.info(f"{method:>12}: {result['time']:6.2f}s ({speedup:5.1f}x speedup)")
+        else:
+            logging.info(f"{method:>12}: FAILED - {result.get('error', 'Unknown error')}")
 
 
 if __name__ == "__main__":
@@ -142,6 +255,11 @@ if __name__ == "__main__":
     args = get_args()
     logging.info(f"# python {' '.join(sys.argv)}")
     logging.info(f"# {args=}")
+    
+    # Performance monitoring
+    start_time = time.time()
+    logging.info(f"Starting dataset preparation at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info(f"Using {args.num_threads} threads for processing")
     if args.dataset == DS_DN:
         content_fpath = RAWNIND_CONTENT_FPATH
         bayer_ds_dpath = BAYER_DS_DPATH
@@ -197,11 +315,22 @@ if __name__ == "__main__":
                             "masks_dpath": os.path.join(
                                 DATASETS_ROOT, args.dataset, f"masks_{LOSS_THRESHOLD}"
                             ),
+                            "alignment_method": args.alignment_method,
+                            "verbose_alignment": args.verbose_alignment,
                         }
                     )
                 # INPUT: gt_file_endpath, f_endpath
                 # OUTPUT: gt_file_endpath, f_endpath, best_alignment, mask_fpath, mask_name
 
+    # Run benchmark if requested
+    if args.benchmark and len(args_in) > 0:
+        run_alignment_benchmark(args_in, num_samples=min(5, len(args_in)))
+        logging.info("Benchmark completed. Proceeding with normal processing...")
+    
+    logging.info(f"Processing {len(args_in)} image pairs...")
+    logging.info(f"Using alignment method: {args.alignment_method}")
+    processing_start = time.time()
+    
     try:
         results = utilities.mt_runner(
             rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
@@ -212,8 +341,15 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logging.error(f"prep_image_dataset.py interrupted. Saving results.")
 
+    processing_time = time.time() - processing_start
+    logging.info(f"Alignment and mask generation completed in {processing_time:.2f} seconds")
+    
     results = results + cached_results
 
+    # Process crops with timing
+    crops_start = time.time()
+    logging.info(f"Processing crops for {len(results)} results...")
+    
     for result in results:  # FIXME
         result["crops"] = fetch_crops_list(
             result["image_set"],
@@ -222,7 +358,17 @@ if __name__ == "__main__":
             result["is_bayer"],
             ds_base_dpath=os.path.join(DATASETS_ROOT, args.dataset),
         )
+    
+    crops_time = time.time() - crops_start
+    logging.info(f"Crops processing completed in {crops_time:.2f} seconds")
+    
     utilities.dict_to_yaml(
         results,
         content_fpath,
     )
+    
+    total_time = time.time() - start_time
+    logging.info(f"Total processing time: {total_time:.2f} seconds")
+    logging.info(f"Average time per image pair: {total_time/len(args_in):.2f} seconds")
+    logging.info(f"Cache hit statistics - listdir cache: {cached_listdir.cache_info()}")
+    logging.info(f"Cache hit statistics - exists cache: {cached_exists.cache_info()}")

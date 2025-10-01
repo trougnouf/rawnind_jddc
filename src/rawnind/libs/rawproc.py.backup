@@ -2,23 +2,12 @@ import os
 import shutil
 import subprocess
 import unittest
-import time
-from typing import Union, Tuple, Optional
-from functools import lru_cache
+from typing import Union
 
 import colour  # colour-science, needed for the PQ OETF(-1) transfer function
 import numpy as np
 import scipy.ndimage
-from scipy.signal import correlate
 import torch
-
-# Optional GPU acceleration
-try:
-    import cupy as cp
-    CUPY_AVAILABLE = True
-except ImportError:
-    CUPY_AVAILABLE = False
-    cp = None
 
 # sys.path.append("..")
 from common.libs import np_imgops
@@ -383,252 +372,15 @@ def make_loss_mask(
     return loss_mask  # if not return map else (loss_mask, loss_map)
 
 
-def find_best_alignment_fft(
-    anchor_img: np.ndarray,
-    target_img: np.ndarray,
-    max_shift_search: int = MAX_SHIFT_SEARCH,
-    return_loss_too: bool = False,
-    verbose: bool = False,
-) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
-    """Fast alignment using FFT-based cross-correlation."""
-    target_img = match_gain(anchor_img, target_img)
-    
-    # Convert to grayscale for correlation
-    if len(anchor_img.shape) > 2:
-        anchor_gray = anchor_img.mean(axis=0)
-        target_gray = target_img.mean(axis=0)
-    else:
-        anchor_gray = anchor_img
-        target_gray = target_img
-    
-    # Normalize images
-    anchor_gray = (anchor_gray - anchor_gray.mean()) / (anchor_gray.std() + 1e-8)
-    target_gray = (target_gray - target_gray.mean()) / (target_gray.std() + 1e-8)
-    
-    # Cross-correlation using FFT
-    correlation = correlate(anchor_gray, target_gray, mode='same')
-    
-    # Find peak
-    y_peak, x_peak = np.unravel_index(np.argmax(correlation), correlation.shape)
-    
-    # Convert to shift coordinates
-    shift_y = y_peak - anchor_gray.shape[0] // 2
-    shift_x = x_peak - anchor_gray.shape[1] // 2
-    
-    # Clamp to search range
-    shift_y = np.clip(shift_y, -max_shift_search, max_shift_search)
-    shift_x = np.clip(shift_x, -max_shift_search, max_shift_search)
-    
-    best_shift = (int(shift_y), int(shift_x))
-    
-    if return_loss_too:
-        # Compute actual L1 loss for the found shift
-        shifted_anchor, shifted_target = shift_images(anchor_img, target_img, best_shift)
-        loss = np_l1(shifted_anchor, shifted_target, avg=True)
-        return best_shift, float(loss)
-    
-    return best_shift
-
-
-def find_best_alignment_hierarchical(
-    anchor_img: np.ndarray,
-    target_img: np.ndarray,
-    max_shift_search: int = MAX_SHIFT_SEARCH,
-    return_loss_too: bool = False,
-    verbose: bool = False,
-) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
-    """Hierarchical coarse-to-fine alignment search."""
-    target_img = match_gain(anchor_img, target_img)
-    
-    # Multi-scale pyramid
-    scales = [4, 2, 1]
-    best_shift = (0, 0)
-    
-    for scale in scales:
-        if scale > 1:
-            # Downsample images
-            if len(anchor_img.shape) > 2:
-                anchor_small = anchor_img[:, ::scale, ::scale]
-                target_small = target_img[:, ::scale, ::scale]
-            else:
-                anchor_small = anchor_img[::scale, ::scale]
-                target_small = target_img[::scale, ::scale]
-            
-            search_range = max(4, max_shift_search // scale)
-            scale_factor = scale
-        else:
-            anchor_small = anchor_img
-            target_small = target_img
-            search_range = min(8, max_shift_search)  # Fine refinement
-            scale_factor = 1
-        
-        # Scale previous estimate
-        scaled_shift = (best_shift[0] * scale_factor, best_shift[1] * scale_factor)
-        
-        # Local search around scaled estimate
-        best_loss = float('inf')
-        current_best = scaled_shift
-        
-        for dy in range(-search_range, search_range + 1):
-            for dx in range(-search_range, search_range + 1):
-                test_shift = (scaled_shift[0] + dy, scaled_shift[1] + dx)
-                
-                # Clamp to valid range
-                test_shift = (
-                    np.clip(test_shift[0], -max_shift_search, max_shift_search),
-                    np.clip(test_shift[1], -max_shift_search, max_shift_search)
-                )
-                
-                try:
-                    shifted_anchor, shifted_target = shift_images(anchor_small, target_small, 
-                                                                (test_shift[0] // scale_factor, 
-                                                                 test_shift[1] // scale_factor))
-                    loss = np_l1(shifted_anchor, shifted_target, avg=True)
-                    
-                    if loss < best_loss:
-                        best_loss = loss
-                        current_best = test_shift
-                        
-                        # Early termination for very good alignment
-                        if loss < 1e-6:
-                            break
-                            
-                except (ValueError, IndexError):
-                    continue
-        
-        best_shift = (current_best[0] // scale_factor, current_best[1] // scale_factor)
-    
-    if return_loss_too:
-        return best_shift, float(best_loss)
-    
-    return best_shift
-
-
-def find_best_alignment_gpu(
-    anchor_img: np.ndarray,
-    target_img: np.ndarray,
-    max_shift_search: int = MAX_SHIFT_SEARCH,
-    return_loss_too: bool = False,
-    verbose: bool = False,
-) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
-    """GPU-accelerated alignment search using CuPy."""
-    if not CUPY_AVAILABLE:
-        # Fallback to hierarchical search
-        return find_best_alignment_hierarchical(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
-    
-    try:
-        target_img = match_gain(anchor_img, target_img)
-        
-        # Transfer to GPU
-        anchor_gpu = cp.asarray(anchor_img)
-        target_gpu = cp.asarray(target_img)
-        
-        # Use FFT-based correlation on GPU
-        if len(anchor_img.shape) > 2:
-            anchor_gray = cp.mean(anchor_gpu, axis=0)
-            target_gray = cp.mean(target_gpu, axis=0)
-        else:
-            anchor_gray = anchor_gpu
-            target_gray = target_gpu
-        
-        # Normalize
-        anchor_gray = (anchor_gray - cp.mean(anchor_gray)) / (cp.std(anchor_gray) + 1e-8)
-        target_gray = (target_gray - cp.mean(target_gray)) / (cp.std(target_gray) + 1e-8)
-        
-        # Cross-correlation using CuPy's FFT
-        from cupyx.scipy.signal import correlate as cp_correlate
-        correlation = cp_correlate(anchor_gray, target_gray, mode='same')
-        
-        # Find peak
-        peak_idx = cp.argmax(correlation)
-        y_peak, x_peak = cp.unravel_index(peak_idx, correlation.shape)
-        
-        # Convert to shift coordinates
-        shift_y = int(y_peak) - anchor_gray.shape[0] // 2
-        shift_x = int(x_peak) - anchor_gray.shape[1] // 2
-        
-        # Clamp to search range
-        shift_y = np.clip(shift_y, -max_shift_search, max_shift_search)
-        shift_x = np.clip(shift_x, -max_shift_search, max_shift_search)
-        
-        best_shift = (shift_y, shift_x)
-        
-        if return_loss_too:
-            # Compute actual L1 loss
-            shifted_anchor, shifted_target = shift_images(anchor_img, target_img, best_shift)
-            loss = np_l1(shifted_anchor, shifted_target, avg=True)
-            return best_shift, float(loss)
-        
-        return best_shift
-        
-    except Exception as e:
-        if verbose:
-            print(f"GPU alignment failed: {e}, falling back to hierarchical search")
-        return find_best_alignment_hierarchical(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
-
-
 def find_best_alignment(
     anchor_img: np.ndarray,
     target_img: np.ndarray,
     max_shift_search: int = MAX_SHIFT_SEARCH,
     return_loss_too: bool = False,
     verbose: bool = False,
-    method: str = "auto",
     # ) -> Union[tuple[int, int], tuple[tuple[int, int], float]]: # python bw compat 2022-11-10
 ) -> Union[tuple, tuple]:  # python bw compat 2022-11-10
-    """Find best alignment (minimal loss) between anchor_img and target_img.
-    
-    Args:
-        method: Alignment method to use:
-            - "auto": Automatically select best method based on image size and GPU availability
-            - "gpu": Use GPU acceleration if available, fallback to hierarchical
-            - "hierarchical": Use hierarchical coarse-to-fine search
-            - "fft": Use FFT-based cross-correlation
-            - "original": Use original brute-force method
-    """
-    start_time = time.time() if verbose else None
-    
-    # Method selection
-    if method == "auto":
-        image_size = anchor_img.shape[-1] * anchor_img.shape[-2]
-        if CUPY_AVAILABLE and image_size > 512 * 512:
-            method = "gpu"
-        elif max_shift_search > 32:
-            method = "hierarchical"
-        elif image_size > 256 * 256:
-            method = "fft"
-        else:
-            method = "hierarchical"
-    
-    # Dispatch to appropriate method
-    if method == "gpu":
-        result = find_best_alignment_gpu(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
-    elif method == "hierarchical":
-        result = find_best_alignment_hierarchical(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
-    elif method == "fft":
-        result = find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
-    elif method == "original":
-        result = find_best_alignment_original(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
-    else:
-        raise ValueError(f"Unknown alignment method: {method}")
-    
-    if verbose and start_time:
-        elapsed = time.time() - start_time
-        shift = result[0] if return_loss_too else result
-        loss = result[1] if return_loss_too else "N/A"
-        print(f"Alignment method '{method}' took {elapsed:.3f}s, shift={shift}, loss={loss}")
-    
-    return result
-
-
-def find_best_alignment_original(
-    anchor_img: np.ndarray,
-    target_img: np.ndarray,
-    max_shift_search: int = MAX_SHIFT_SEARCH,
-    return_loss_too: bool = False,
-    verbose: bool = False,
-) -> Union[tuple, tuple]:
-    """Original brute-force alignment search (for comparison/fallback)."""
+    """Find best alignment (minimal loss) between anchor_img and target_img."""
     target_img = match_gain(anchor_img, target_img)
     assert np.isclose(anchor_img.mean(), target_img.mean(), atol=1e-07), (
         f"{anchor_img.mean()=}, {target_img.mean()=}"
@@ -677,9 +429,7 @@ def find_best_alignment_original(
     return current_best_shift
 
 
-@lru_cache(maxsize=32)  # Cache recently loaded images
 def img_fpath_to_np_mono_flt_and_metadata(fpath: str):
-    """Load image with caching to avoid repeated I/O operations."""
     if fpath.endswith(".exr"):
         return np_imgops.img_fpath_to_np_flt(fpath), {"overexposure_lb": 1.0}
     return raw.raw_fpath_to_mono_img_and_metadata(fpath)
@@ -723,12 +473,8 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         f_rgb = f_img
         rgb_xyz_matrix = None
         raw_gain = None
-    # Get alignment method and verbose setting from kwargs
-    alignment_method = kwargs.get("alignment_method", "auto")
-    verbose_alignment = kwargs.get("verbose_alignment", False)
-    
     best_alignment, best_alignment_loss = find_best_alignment(
-        gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_alignment
+        gt_rgb, f_rgb, return_loss_too=True
     )
     rgb_gain = float(match_gain(gt_rgb, f_rgb, return_val=True))
     # gt_rgb_mean = gt_rgb.mean()
