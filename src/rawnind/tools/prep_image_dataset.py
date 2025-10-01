@@ -391,11 +391,23 @@ if __name__ == "__main__":
                             ),
                             "alignment_method": args.alignment_method,
                             "verbose_alignment": args.verbose_alignment,
+                            "num_threads": args.num_threads,
                         }
                     )
             
             if total_gt_files > 0:
                 logging.info(f"Image set '{image_set}': {total_gt_files} GT files, {matched_pairs} valid pairs")
+                
+                # Log detailed pairing information for debugging
+                if matched_pairs > 0:
+                    logging.debug(f"Detailed pairs for '{image_set}':")
+                    pair_count = 0
+                    for arg in args_in[-matched_pairs:]:  # Get the pairs we just added
+                        pair_count += 1
+                        gt_name = os.path.basename(arg['gt_file_endpath'])
+                        f_name = os.path.basename(arg['f_endpath'])
+                        logging.debug(f"  Pair {pair_count}: GT={gt_name} <-> Noisy={f_name}")
+                        
                 # INPUT: gt_file_endpath, f_endpath
                 # OUTPUT: gt_file_endpath, f_endpath, best_alignment, mask_fpath, mask_name
 

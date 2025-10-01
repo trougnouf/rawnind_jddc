@@ -2,13 +2,13 @@
 """Common utilities."""
 
 import os
+import sys
 import logging
 import random
 from typing import Callable, Union, Iterable, Optional, List, Any
 from multiprocessing import Pool
 import tqdm
 import json
-import sys
 import csv
 import lzma
 import shutil
@@ -120,15 +120,33 @@ def mt_runner(
             if progress_bar:
                 ret = []
                 try:
+                    # Use a stationary progress bar that sticks to bottom
+                    bar_format = '{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
                     pbar = tqdm.tqdm(amap(fun, argslist), total=len(argslist), desc=progress_desc, 
-                                   bar_format='{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]',
-                                   position=0, leave=True)
-                    for ares in pbar:
+                                   bar_format=bar_format, position=0, leave=False, ncols=120, 
+                                   dynamic_ncols=False, file=sys.stdout)
+                    
+                    current_scene = None
+                    current_method = None
+                    
+                    for i, ares in enumerate(pbar):
                         ret.append(ares)
-                        # Try to extract filename from result for display
+                        # Extract scene and method info for display
                         if hasattr(ares, 'get') and 'gt_fpath' in ares:
-                            filename = os.path.basename(ares['gt_fpath']).split('_')[1] if '_' in os.path.basename(ares['gt_fpath']) else os.path.basename(ares['gt_fpath'])[:20]
-                            pbar.set_description(f"{progress_desc}: {filename}")
+                            # Extract scene from the result
+                            scene_name = ares.get('image_set', 'unknown')
+                            method = ares.get('alignment_method', 'auto')
+                            
+                            # Only update description if scene or method changed to avoid flicker
+                            if scene_name != current_scene or method != current_method:
+                                current_scene = scene_name
+                                current_method = method
+                                desc = f"Scene: {scene_name:<30} Method: {method.upper()}"
+                                pbar.set_description(desc)
+                    
+                    # Clear the progress bar after completion to avoid leaving it on screen
+                    pbar.close()
+                            
                 except TypeError as e:
                     print(e)
                     raise RuntimeError

@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import unittest
 import time
+import multiprocessing
 from typing import Union, Tuple, Optional
 from functools import lru_cache
 
@@ -11,6 +12,13 @@ import numpy as np
 import scipy.ndimage
 from scipy.signal import correlate
 import torch
+
+def _is_multiprocessing_worker():
+    """Check if we're running in a multiprocessing worker process."""
+    try:
+        return multiprocessing.current_process().name != 'MainProcess'
+    except:
+        return False
 
 # Optional GPU acceleration - test at runtime, not import time
 def setup_cuda_environment():
@@ -646,8 +654,9 @@ def find_best_alignment_gpu(
     
     cuda_available, cp_runtime = test_cuda_functionality()
     if not cuda_available:
-        if verbose:
-            print("CUDA functionality test failed, falling back to FFT search")
+        # Only show CUDA failure message in debug/verbose mode, not during normal processing
+        import logging
+        logging.debug("CUDA functionality test failed, falling back to FFT search")
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     
     try:
@@ -767,7 +776,8 @@ def find_best_alignment(
     else:
         raise ValueError(f"Unknown alignment method: {method}")
     
-    if verbose and start_time:
+    # Suppress verbose output during multiprocessing to keep progress bar clean
+    if verbose and start_time and not _is_multiprocessing_worker():
         elapsed = time.time() - start_time
         shift = result[0] if return_loss_too else result
         loss = result[1] if return_loss_too else "N/A"
@@ -885,8 +895,12 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     alignment_method = kwargs.get("alignment_method", "auto")
     verbose_alignment = kwargs.get("verbose_alignment", False)
     
+    # Disable verbose during multiprocessing to avoid spam, only enable for single-threaded debug
+    is_multiprocessing = kwargs.get("num_threads", 1) > 1
+    verbose_for_alignment = verbose_alignment and not is_multiprocessing
+    
     best_alignment, best_alignment_loss = find_best_alignment(
-        gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_alignment
+        gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
     )
     rgb_gain = float(match_gain(gt_rgb, f_rgb, return_val=True))
     # gt_rgb_mean = gt_rgb.mean()
@@ -921,6 +935,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         "gt_fpath": gt_fpath,
         "f_fpath": f_fpath,
         "image_set": kwargs["image_set"],
+        "alignment_method": alignment_method,
         "best_alignment": list(best_alignment),
         "best_alignment_loss": best_alignment_loss,
         "mask_fpath": mask_fpath,
