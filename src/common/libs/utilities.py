@@ -124,7 +124,7 @@ def mt_runner(
                     bar_format = '{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
                     pbar = tqdm.tqdm(amap(fun, argslist), total=len(argslist), desc=progress_desc, 
                                    bar_format=bar_format, position=0, leave=False, ncols=120, 
-                                   dynamic_ncols=False, file=sys.stdout)
+                                   dynamic_ncols=False, file=sys.stdout, mininterval=0.1)
                     
                     current_scene = None
                     current_method = None
