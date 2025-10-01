@@ -2,7 +2,7 @@
 name = "rawnind"
 version = "0.2.0"
 description = "Add your description here"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "colour==0.1.5",
     "colour-science==0.4.6",

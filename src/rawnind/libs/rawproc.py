@@ -402,19 +402,35 @@ def find_best_alignment_fft(
         anchor_gray = anchor_img
         target_gray = target_img
     
+    # Handle different image sizes by cropping to common region
+    min_h = min(anchor_gray.shape[0], target_gray.shape[0])
+    min_w = min(anchor_gray.shape[1], target_gray.shape[1])
+    
+    # Crop both images to same size from center
+    anchor_h, anchor_w = anchor_gray.shape
+    target_h, target_w = target_gray.shape
+    
+    anchor_y_start = (anchor_h - min_h) // 2
+    anchor_x_start = (anchor_w - min_w) // 2
+    target_y_start = (target_h - min_h) // 2
+    target_x_start = (target_w - min_w) // 2
+    
+    anchor_crop = anchor_gray[anchor_y_start:anchor_y_start+min_h, anchor_x_start:anchor_x_start+min_w]
+    target_crop = target_gray[target_y_start:target_y_start+min_h, target_x_start:target_x_start+min_w]
+    
     # Normalize images
-    anchor_gray = (anchor_gray - anchor_gray.mean()) / (anchor_gray.std() + 1e-8)
-    target_gray = (target_gray - target_gray.mean()) / (target_gray.std() + 1e-8)
+    anchor_crop = (anchor_crop - anchor_crop.mean()) / (anchor_crop.std() + 1e-8)
+    target_crop = (target_crop - target_crop.mean()) / (target_crop.std() + 1e-8)
     
     # Cross-correlation using FFT
-    correlation = correlate(anchor_gray, target_gray, mode='same')
+    correlation = correlate(anchor_crop, target_crop, mode='same')
     
     # Find peak
     y_peak, x_peak = np.unravel_index(np.argmax(correlation), correlation.shape)
     
     # Convert to shift coordinates
-    shift_y = y_peak - anchor_gray.shape[0] // 2
-    shift_x = x_peak - anchor_gray.shape[1] // 2
+    shift_y = y_peak - anchor_crop.shape[0] // 2
+    shift_x = x_peak - anchor_crop.shape[1] // 2
     
     # Clamp to search range
     shift_y = np.clip(shift_y, -max_shift_search, max_shift_search)
@@ -424,9 +440,14 @@ def find_best_alignment_fft(
     
     if return_loss_too:
         # Compute actual L1 loss for the found shift
-        shifted_anchor, shifted_target = shift_images(anchor_img, target_img, best_shift)
-        loss = np_l1(shifted_anchor, shifted_target, avg=True)
-        return best_shift, float(loss)
+        try:
+            shifted_anchor, shifted_target = shift_images(anchor_img, target_img, best_shift)
+            loss = np_l1(shifted_anchor, shifted_target, avg=True)
+            return best_shift, float(loss)
+        except Exception as e:
+            if verbose:
+                print(f"Warning: Could not compute loss for shift {best_shift}: {e}")
+            return best_shift, float('inf')
     
     return best_shift
 
@@ -532,21 +553,37 @@ def find_best_alignment_gpu(
             anchor_gray = anchor_gpu
             target_gray = target_gpu
         
+        # Handle different image sizes by cropping to common region
+        min_h = min(anchor_gray.shape[0], target_gray.shape[0])
+        min_w = min(anchor_gray.shape[1], target_gray.shape[1])
+        
+        # Crop both images to same size from center
+        anchor_h, anchor_w = anchor_gray.shape
+        target_h, target_w = target_gray.shape
+        
+        anchor_y_start = (anchor_h - min_h) // 2
+        anchor_x_start = (anchor_w - min_w) // 2
+        target_y_start = (target_h - min_h) // 2
+        target_x_start = (target_w - min_w) // 2
+        
+        anchor_crop = anchor_gray[anchor_y_start:anchor_y_start+min_h, anchor_x_start:anchor_x_start+min_w]
+        target_crop = target_gray[target_y_start:target_y_start+min_h, target_x_start:target_x_start+min_w]
+        
         # Normalize
-        anchor_gray = (anchor_gray - cp.mean(anchor_gray)) / (cp.std(anchor_gray) + 1e-8)
-        target_gray = (target_gray - cp.mean(target_gray)) / (cp.std(target_gray) + 1e-8)
+        anchor_crop = (anchor_crop - cp.mean(anchor_crop)) / (cp.std(anchor_crop) + 1e-8)
+        target_crop = (target_crop - cp.mean(target_crop)) / (cp.std(target_crop) + 1e-8)
         
         # Cross-correlation using CuPy's FFT
         from cupyx.scipy.signal import correlate as cp_correlate
-        correlation = cp_correlate(anchor_gray, target_gray, mode='same')
+        correlation = cp_correlate(anchor_crop, target_crop, mode='same')
         
         # Find peak
         peak_idx = cp.argmax(correlation)
         y_peak, x_peak = cp.unravel_index(peak_idx, correlation.shape)
         
         # Convert to shift coordinates
-        shift_y = int(y_peak) - anchor_gray.shape[0] // 2
-        shift_x = int(x_peak) - anchor_gray.shape[1] // 2
+        shift_y = int(y_peak) - anchor_crop.shape[0] // 2
+        shift_x = int(x_peak) - anchor_crop.shape[1] // 2
         
         # Clamp to search range
         shift_y = np.clip(shift_y, -max_shift_search, max_shift_search)
@@ -556,9 +593,14 @@ def find_best_alignment_gpu(
         
         if return_loss_too:
             # Compute actual L1 loss
-            shifted_anchor, shifted_target = shift_images(anchor_img, target_img, best_shift)
-            loss = np_l1(shifted_anchor, shifted_target, avg=True)
-            return best_shift, float(loss)
+            try:
+                shifted_anchor, shifted_target = shift_images(anchor_img, target_img, best_shift)
+                loss = np_l1(shifted_anchor, shifted_target, avg=True)
+                return best_shift, float(loss)
+            except Exception as e:
+                if verbose:
+                    print(f"Warning: Could not compute loss for shift {best_shift}: {e}")
+                return best_shift, float('inf')
         
         return best_shift
         

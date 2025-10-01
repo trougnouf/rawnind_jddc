@@ -27,6 +27,7 @@ import argparse
 import time
 import yaml
 from functools import lru_cache
+import re
 from typing import Dict, List, Tuple, Optional
 
 sys.path.append("..")
@@ -104,6 +105,87 @@ def find_cached_result(ds_dpath, image_set, gt_file_endpath, f_endpath, cached_r
     for result in cached_results:
         if result["gt_fpath"] == gt_fpath and result["f_fpath"] == f_fpath:
             return result
+
+
+def extract_scene_identifier(filename: str) -> str:
+    """
+    Extract scene identifier from filename to match GT with corresponding noisy images.
+    
+    Examples:
+    - "gt/scene001_iso100.dng" -> "scene001"
+    - "iso3200/scene001_iso3200.dng" -> "scene001"
+    - "Picture1_32.tiff" -> "Picture1"
+    - "IMG_1234_GT.dng" -> "IMG_1234"
+    """
+    # Remove directory path and extension
+    basename = os.path.splitext(os.path.basename(filename))[0]
+    
+    # Common patterns for scene identification
+    patterns = [
+        r'^([A-Za-z]+\d+)',           # scene001, Picture1, IMG1234
+        r'^(\w+)_(?:iso|ISO)',        # filename_iso3200
+        r'^(\w+)_(?:gt|GT)',          # filename_gt
+        r'^(\w+)_\d+',                # filename_32
+        r'^([^_]+)',                  # everything before first underscore
+    ]
+    
+    for pattern in patterns:
+        match = re.match(pattern, basename)
+        if match:
+            return match.group(1).lower()
+    
+    # Fallback: return the basename without common suffixes
+    return re.sub(r'_(?:gt|iso\d+|\d+)$', '', basename.lower())
+
+
+def files_match_same_scene(gt_file: str, noisy_file: str) -> bool:
+    """
+    Check if GT file and noisy file are from the same scene.
+    
+    Args:
+        gt_file: Path to GT file (e.g., "gt/scene001_gt.dng")
+        noisy_file: Path to noisy file (e.g., "iso3200/scene001_iso3200.dng")
+    
+    Returns:
+        True if files are from the same scene, False otherwise
+    """
+    gt_scene = extract_scene_identifier(gt_file)
+    noisy_scene = extract_scene_identifier(noisy_file)
+    
+    return gt_scene == noisy_scene and gt_scene != ""
+
+
+def validate_image_compatibility(gt_path: str, noisy_path: str, max_size_ratio: float = 2.0) -> bool:
+    """
+    Check if two images are compatible for alignment based on size.
+    
+    Args:
+        gt_path: Path to GT image
+        noisy_path: Path to noisy image  
+        max_size_ratio: Maximum allowed ratio between image dimensions
+        
+    Returns:
+        True if images are compatible, False otherwise
+    """
+    try:
+        # Quick size check without loading full images
+        gt_img = rawproc.load_image(gt_path)
+        noisy_img = rawproc.load_image(noisy_path)
+        
+        if gt_img is None or noisy_img is None:
+            return False
+            
+        gt_h, gt_w = gt_img.shape[-2:]
+        noisy_h, noisy_w = noisy_img.shape[-2:]
+        
+        # Check if dimensions are reasonably similar
+        h_ratio = max(gt_h, noisy_h) / min(gt_h, noisy_h)
+        w_ratio = max(gt_w, noisy_w) / min(gt_w, noisy_w)
+        
+        return h_ratio <= max_size_ratio and w_ratio <= max_size_ratio
+        
+    except Exception:
+        return False
 
 
 def fetch_crops_list(image_set, gt_fpath, f_fpath, is_bayer, ds_base_dpath):
@@ -188,8 +270,32 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
     """Run performance benchmarks comparing different alignment methods."""
     import random
     
-    # Select a subset of samples for benchmarking
-    sample_args = random.sample(args_in, min(num_samples, len(args_in)))
+    # Filter out potentially problematic samples first
+    valid_samples = []
+    for arg in args_in:
+        try:
+            # Quick compatibility check
+            anchor_img = rawproc.load_image(arg["gt_fpath"])
+            target_img = rawproc.load_image(arg["f_fpath"])
+            
+            # Check if shapes are at least somewhat compatible
+            if (anchor_img is not None and target_img is not None and 
+                len(anchor_img.shape) == len(target_img.shape) and
+                min(anchor_img.shape[-2:]) > 100 and min(target_img.shape[-2:]) > 100):
+                valid_samples.append(arg)
+                
+            if len(valid_samples) >= num_samples * 2:  # Get enough candidates
+                break
+                
+        except Exception:
+            continue
+    
+    if len(valid_samples) < num_samples:
+        logging.warning(f"Only found {len(valid_samples)} valid samples for benchmarking")
+        num_samples = len(valid_samples)
+    
+    # Select a subset of valid samples for benchmarking
+    sample_args = random.sample(valid_samples, min(num_samples, len(valid_samples)))
     methods = ["original", "hierarchical", "fft"]
     
     if rawproc.CUPY_AVAILABLE:
@@ -294,33 +400,68 @@ if __name__ == "__main__":
             noisy_files_endpaths: list[str] = os.listdir(in_image_set_dpath)
             noisy_files_endpaths.remove("gt")
 
+            # Statistics for logging
+            total_gt_files = 0
+            matched_pairs = 0
+            skipped_incompatible = 0
+            
             for gt_file_endpath in gt_files_endpaths:
                 if gt_file_endpath.endswith(".xmp") or gt_file_endpath.endswith(
                     "darktable_exported"
                 ):
                     continue
-                for f_endpath in gt_files_endpaths + noisy_files_endpaths:
-                    if f_endpath.endswith(".xmp") or f_endpath.endswith(
-                        "darktable_exported"
-                    ):
+                    
+                total_gt_files += 1
+                
+                # FIXED: Only pair GT files with corresponding noisy files from the same scene
+                # Instead of pairing with ALL files (gt_files_endpaths + noisy_files_endpaths)
+                for noisy_dir in noisy_files_endpaths:
+                    noisy_dir_path = os.path.join(in_image_set_dpath, noisy_dir)
+                    if not os.path.isdir(noisy_dir_path):
                         continue
-                    if find_cached_result(
-                        ds_dpath, image_set, gt_file_endpath, f_endpath, cached_results
-                    ):
-                        continue
-                    args_in.append(
-                        {
-                            "ds_dpath": ds_dpath,
-                            "image_set": image_set,
-                            "gt_file_endpath": gt_file_endpath,
-                            "f_endpath": f_endpath,
-                            "masks_dpath": os.path.join(
-                                DATASETS_ROOT, args.dataset, f"masks_{LOSS_THRESHOLD}"
-                            ),
-                            "alignment_method": args.alignment_method,
-                            "verbose_alignment": args.verbose_alignment,
-                        }
-                    )
+                        
+                    for noisy_file in os.listdir(noisy_dir_path):
+                        if noisy_file.endswith(".xmp") or noisy_file.endswith("darktable_exported"):
+                            continue
+                            
+                        f_endpath = os.path.join(noisy_dir, noisy_file)
+                        
+                        # Check if this GT and noisy file are from the same scene
+                        if not files_match_same_scene(gt_file_endpath, f_endpath):
+                            continue
+                            
+                        # Check if result is already cached
+                        if find_cached_result(
+                            ds_dpath, image_set, gt_file_endpath, f_endpath, cached_results
+                        ):
+                            continue
+                            
+                        # Validate image compatibility (size check)
+                        gt_full_path = os.path.join(ds_dpath, image_set, gt_file_endpath)
+                        f_full_path = os.path.join(ds_dpath, image_set, f_endpath)
+                        
+                        if not validate_image_compatibility(gt_full_path, f_full_path):
+                            skipped_incompatible += 1
+                            logging.warning(f"Skipping incompatible pair: {gt_file_endpath} <-> {f_endpath}")
+                            continue
+                            
+                        matched_pairs += 1
+                        args_in.append(
+                            {
+                                "ds_dpath": ds_dpath,
+                                "image_set": image_set,
+                                "gt_file_endpath": gt_file_endpath,
+                                "f_endpath": f_endpath,
+                                "masks_dpath": os.path.join(
+                                    DATASETS_ROOT, args.dataset, f"masks_{LOSS_THRESHOLD}"
+                                ),
+                                "alignment_method": args.alignment_method,
+                                "verbose_alignment": args.verbose_alignment,
+                            }
+                        )
+            
+            if total_gt_files > 0:
+                logging.info(f"Image set '{image_set}': {total_gt_files} GT files, {matched_pairs} valid pairs, {skipped_incompatible} incompatible pairs")
                 # INPUT: gt_file_endpath, f_endpath
                 # OUTPUT: gt_file_endpath, f_endpath, best_alignment, mask_fpath, mask_name
 
