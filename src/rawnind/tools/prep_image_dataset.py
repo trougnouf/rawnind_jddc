@@ -410,10 +410,14 @@ if __name__ == "__main__":
     
     results = []
     try:
+        # Get method name for progress bar
+        method_name = args.alignment_method.upper() if hasattr(args, 'alignment_method') else "PROCESSING"
+        
         results = utilities.mt_runner(
             rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
             args_in,
             num_threads=args.num_threads,
+            progress_desc=f"Method: {method_name}",
         )
 
     except KeyboardInterrupt:

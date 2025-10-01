@@ -516,11 +516,46 @@ def find_best_alignment_hierarchical(
     """Hierarchical coarse-to-fine alignment search."""
     target_img = match_gain(anchor_img, target_img)
     
-    # Multi-scale pyramid
+    # Handle different image sizes by cropping to common region
+    if len(anchor_img.shape) > 2:
+        min_h = min(anchor_img.shape[1], target_img.shape[1])
+        min_w = min(anchor_img.shape[2], target_img.shape[2])
+        
+        # Crop both images to same size from center
+        anchor_h, anchor_w = anchor_img.shape[1], anchor_img.shape[2]
+        target_h, target_w = target_img.shape[1], target_img.shape[2]
+        
+        anchor_y_start = (anchor_h - min_h) // 2
+        anchor_x_start = (anchor_w - min_w) // 2
+        target_y_start = (target_h - min_h) // 2
+        target_x_start = (target_w - min_w) // 2
+        
+        anchor_img = anchor_img[:, anchor_y_start:anchor_y_start+min_h, anchor_x_start:anchor_x_start+min_w]
+        target_img = target_img[:, target_y_start:target_y_start+min_h, target_x_start:target_x_start+min_w]
+    else:
+        min_h = min(anchor_img.shape[0], target_img.shape[0])
+        min_w = min(anchor_img.shape[1], target_img.shape[1])
+        
+        anchor_h, anchor_w = anchor_img.shape
+        target_h, target_w = target_img.shape
+        
+        anchor_y_start = (anchor_h - min_h) // 2
+        anchor_x_start = (anchor_w - min_w) // 2
+        target_y_start = (target_h - min_h) // 2
+        target_x_start = (target_w - min_w) // 2
+        
+        anchor_img = anchor_img[anchor_y_start:anchor_y_start+min_h, anchor_x_start:anchor_x_start+min_w]
+        target_img = target_img[target_y_start:target_y_start+min_h, target_x_start:target_x_start+min_w]
+    
+    # Multi-scale pyramid - start coarse, refine progressively
     scales = [4, 2, 1]
     best_shift = (0, 0)
+    best_loss = float('inf')
     
-    for scale in scales:
+    for i, scale in enumerate(scales):
+        if verbose:
+            print(f"Hierarchical search at scale 1/{scale}")
+            
         if scale > 1:
             # Downsample images
             if len(anchor_img.shape) > 2:
@@ -529,50 +564,65 @@ def find_best_alignment_hierarchical(
             else:
                 anchor_small = anchor_img[::scale, ::scale]
                 target_small = target_img[::scale, ::scale]
-            
-            search_range = max(4, max_shift_search // scale)
-            scale_factor = scale
         else:
             anchor_small = anchor_img
             target_small = target_img
-            search_range = min(8, max_shift_search)  # Fine refinement
-            scale_factor = 1
         
-        # Scale previous estimate
-        scaled_shift = (best_shift[0] * scale_factor, best_shift[1] * scale_factor)
+        # Search range: start broad, narrow down
+        if i == 0:  # First scale - broad search
+            search_range = max(8, max_shift_search // scale)
+            scaled_shift = (0, 0)  # Start from center
+        else:  # Subsequent scales - refine around previous result
+            search_range = max(2, 8 // scale)  # Smaller search window
+            # Scale up previous result to current resolution
+            scaled_shift = (best_shift[0] * scale // scales[i-1], 
+                          best_shift[1] * scale // scales[i-1])
         
         # Local search around scaled estimate
-        best_loss = float('inf')
         current_best = scaled_shift
+        current_best_loss = float('inf')
         
         for dy in range(-search_range, search_range + 1):
             for dx in range(-search_range, search_range + 1):
-                test_shift = (scaled_shift[0] + dy, scaled_shift[1] + dx)
+                # Test shift at current scale
+                test_shift_scaled = (scaled_shift[0] + dy, scaled_shift[1] + dx)
                 
-                # Clamp to valid range
-                test_shift = (
-                    np.clip(test_shift[0], -max_shift_search, max_shift_search),
-                    np.clip(test_shift[1], -max_shift_search, max_shift_search)
-                )
+                # Convert to full-resolution coordinates for clamping
+                test_shift_full = (test_shift_scaled[0] * scales[0] // scale,
+                                 test_shift_scaled[1] * scales[0] // scale)
+                
+                # Skip if outside search bounds
+                if (abs(test_shift_full[0]) > max_shift_search or 
+                    abs(test_shift_full[1]) > max_shift_search):
+                    continue
                 
                 try:
-                    shifted_anchor, shifted_target = shift_images(anchor_small, target_small, 
-                                                                (test_shift[0] // scale_factor, 
-                                                                 test_shift[1] // scale_factor))
+                    shifted_anchor, shifted_target = shift_images(anchor_small, target_small, test_shift_scaled)
                     loss = np_l1(shifted_anchor, shifted_target, avg=True)
                     
-                    if loss < best_loss:
-                        best_loss = loss
-                        current_best = test_shift
+                    if loss < current_best_loss:
+                        current_best_loss = loss
+                        current_best = test_shift_scaled
                         
-                        # Early termination for very good alignment
-                        if loss < 1e-6:
+                        # Reasonable early termination - not too aggressive
+                        if loss < 0.01 and scale == 1:  # Only at finest scale
+                            if verbose:
+                                print(f"Early termination at loss {loss:.6f}")
                             break
                             
                 except (ValueError, IndexError):
                     continue
+            
+            # Break outer loop too if early termination triggered
+            if current_best_loss < 0.01 and scale == 1:
+                break
         
-        best_shift = (current_best[0] // scale_factor, current_best[1] // scale_factor)
+        # Update best shift and loss
+        best_shift = current_best
+        best_loss = current_best_loss
+        
+        if verbose:
+            print(f"Scale 1/{scale}: best_shift={best_shift}, loss={best_loss:.6f}")
     
     if return_loss_too:
         return best_shift, float(best_loss)
@@ -814,7 +864,10 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     mask_name = make_mask_name(
         kwargs["image_set"], kwargs["gt_file_endpath"], kwargs["f_endpath"]
     )
-    print(f"get_best_alignment_and_make_loss_mask: {mask_name=}")
+    # Only print if verbose is enabled
+    verbose = kwargs.get("verbose", False)
+    if verbose:
+        print(f"get_best_alignment_and_make_loss_mask: {mask_name=}")
     loss_mask = make_overexposure_mask(gt_img, gt_metadata["overexposure_lb"])
     # demosaic before finding alignment
     if is_bayer:
@@ -839,7 +892,8 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     # gt_rgb_mean = gt_rgb.mean()
     # gain = match_gain(gt_rgb, f_rgb, return_val=True)
 
-    print(f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}")
+    if verbose:
+        print(f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}")
     gt_img_aligned, target_img_aligned = shift_images(gt_rgb, f_rgb, best_alignment)
     # align the overexposure mask generated from potentially bayer gt
     loss_mask = shift_mask(loss_mask, best_alignment)
@@ -854,9 +908,10 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     #     print(f'get_best_alignment_and_make_loss_mask error {e=}, {kwargs=}, {loss_mask.shape=}, {gt_img.shape=}, {target_img.shape=}, {best_alignment=}, {gt_img_aligned.shape=}, {target_img_aligned.shape=}, {loss_mask.shape=}')
     #     breakpoint()
     #     raise ValueError
-    print(
-        f"{kwargs['image_set']=}: {loss_mask.min()=}, {loss_mask.max()=}, {loss_mask.mean()=}"
-    )
+    if verbose:
+        print(
+            f"{kwargs['image_set']=}: {loss_mask.min()=}, {loss_mask.max()=}, {loss_mask.mean()=}"
+        )
     # save the mask
     masks_dpath = kwargs.get("masks_dpath", MASKS_DPATH)
     os.makedirs(masks_dpath, exist_ok=True)

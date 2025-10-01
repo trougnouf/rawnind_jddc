@@ -83,6 +83,7 @@ def mt_runner(
     ordered: bool = False,
     progress_bar: bool = True,
     starmap: bool = False,
+    progress_desc: str = "Processing",
 ) -> Iterable[Any]:
     """
     fun: function to run
@@ -119,8 +120,15 @@ def mt_runner(
             if progress_bar:
                 ret = []
                 try:
-                    for ares in tqdm.tqdm(amap(fun, argslist), total=len(argslist)):
+                    pbar = tqdm.tqdm(amap(fun, argslist), total=len(argslist), desc=progress_desc, 
+                                   bar_format='{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]',
+                                   position=0, leave=True)
+                    for ares in pbar:
                         ret.append(ares)
+                        # Try to extract filename from result for display
+                        if hasattr(ares, 'get') and 'gt_fpath' in ares:
+                            filename = os.path.basename(ares['gt_fpath']).split('_')[1] if '_' in os.path.basename(ares['gt_fpath']) else os.path.basename(ares['gt_fpath'])[:20]
+                            pbar.set_description(f"{progress_desc}: {filename}")
                 except TypeError as e:
                     print(e)
                     raise RuntimeError
