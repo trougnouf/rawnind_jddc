@@ -25,13 +25,14 @@ import sys
 import logging
 import argparse
 import time
+import yaml
 from functools import lru_cache
 from typing import Dict, List, Tuple, Optional
 
 sys.path.append("..")
 from rawnind.libs import rawproc
 from common.libs import utilities
-
+from pathlib import Path
 from rawnind.libs.rawproc import (
     DATASETS_ROOT,
     DS_DN,
@@ -41,9 +42,10 @@ from rawnind.libs.rawproc import (
     RAWNIND_CONTENT_FPATH,
     LOSS_THRESHOLD,
 )
+RAWNIND_CONTENT_FPATH = Path(RAWNIND_CONTENT_FPATH).resolve()
 
 NUM_THREADS: int = os.cpu_count() // 4 * 3  #
-LOG_FPATH = os.path.join("logs", os.path.basename(__file__) + ".log")
+LOG_FPATH = Path(os.path.join("logs", os.path.basename(__file__) + ".log"))
 HDR_EXT = "tif"
 
 # Performance optimization caches
@@ -361,12 +363,10 @@ if __name__ == "__main__":
     
     crops_time = time.time() - crops_start
     logging.info(f"Crops processing completed in {crops_time:.2f} seconds")
-    
-    utilities.dict_to_yaml(
-        results,
-        content_fpath,
-    )
-    
+    print("trying to write to ",content_fpath.resolve())
+    with content_fpath.open("w", encoding='utf-8') as f:
+        yaml.dump(result, f, allow_unicode=True)
+
     total_time = time.time() - start_time
     logging.info(f"Total processing time: {total_time:.2f} seconds")
     logging.info(f"Average time per image pair: {total_time/len(args_in):.2f} seconds")

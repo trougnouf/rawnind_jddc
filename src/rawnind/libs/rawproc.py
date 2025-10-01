@@ -15,12 +15,15 @@ import torch
 # Optional GPU acceleration
 try:
     import cupy as cp
+    print('Accelerating with CuPy. \n')
     CUPY_AVAILABLE = True
 except ImportError:
     CUPY_AVAILABLE = False
     cp = None
 
 # sys.path.append("..")
+from importlib import resources
+from pathlib import Path
 from common.libs import np_imgops
 from rawnind.libs import raw
 
@@ -31,20 +34,18 @@ KEEPERS_QUANTILE: float = 0.9999
 MAX_SHIFT_SEARCH: int = 128
 GAMMA = 2.2
 DS_DN = "RawNIND"
-DATASETS_ROOT = os.path.join("..", "..", "datasets")
-DS_BASE_DPATH: str = os.path.join(DATASETS_ROOT, DS_DN)
-BAYER_DS_DPATH: str = os.path.join(DS_BASE_DPATH, "src", "Bayer")
-LINREC2020_DS_DPATH: str = os.path.join(DS_BASE_DPATH, "proc", "lin_rec2020")
-MASKS_DPATH = os.path.join(DS_BASE_DPATH, f"masks_{LOSS_THRESHOLD}")
-RAWNIND_CONTENT_FPATH = os.path.join(
-    DS_BASE_DPATH, "RawNIND_masks_and_alignments.yaml"
-)  # used by tools/prep_image_dataset.py and libs/rawds.py
+DATASETS_ROOT = resources.files('rawnind').joinpath('datasets')
+DS_BASE_DPATH: str = DATASETS_ROOT / DS_DN
+BAYER_DS_DPATH: str = DS_BASE_DPATH / "src" / "Bayer"
+LINREC2020_DS_DPATH: str = DS_BASE_DPATH / "proc" / "lin_rec2020"
+MASKS_DPATH = DS_BASE_DPATH / f"masks_{LOSS_THRESHOLD}"
+RAWNIND_CONTENT_FPATH = DS_BASE_DPATH / "RawNIND_masks_and_alignments.yaml" # used by tools/prep_image_dataset.py and libs/rawds.py
 
 NEIGHBORHOOD_SEARCH_WINDOW = 3
-EXTRARAW_DS_DPATH = os.path.join("..", "..", "datasets", "extraraw")
+EXTRARAW_DS_DPATH = DS_BASE_DPATH / "extraraw"
 EXTRARAW_CONTENT_FPATHS = (
-    os.path.join(EXTRARAW_DS_DPATH, "trougnouf", "crops_metadata.yaml"),
-    os.path.join(EXTRARAW_DS_DPATH, "raw-pixls", "crops_metadata.yaml"),
+    EXTRARAW_DS_DPATH / "trougnouf" / "crops_metadata.yaml",
+    EXTRARAW_DS_DPATH / "raw-pixls" / "crops_metadata.yaml",
     # os.path.join(EXTRARAW_DS_DPATH, "SID", "crops_metadata.yaml"), # could be useful for testing
 )
 
