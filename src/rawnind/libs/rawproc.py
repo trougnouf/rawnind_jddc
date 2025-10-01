@@ -51,37 +51,17 @@ def setup_cuda_environment():
                 os.environ['LD_LIBRARY_PATH'] = ':'.join(new_paths)
 
 
-def test_cuda_functionality():
-    """Test if CUDA is actually functional, not just importable."""
-    try:
-        # Set up CUDA environment first (important for multiprocessing workers)
-        setup_cuda_environment()
-        
-        import cupy as cp
-        # Test device count
-        device_count = cp.cuda.runtime.getDeviceCount()
-        if device_count == 0:
-            return False, None
-        
-        # Test basic GPU operations
-        test_array = cp.array([1, 2, 3])
-        result = cp.sum(test_array)
-        
-        # Test memory allocation
-        large_array = cp.zeros((100, 100))
-        _ = cp.mean(large_array)
-        
-        return True, cp
-    except Exception as e:
-        return False, None
 
-# Don't test CUDA at import time - do it at runtime in multiprocessing workers
+
+# Use PyTorch for GPU acceleration instead of CuPy (better multiprocessing support)
 try:
-    import cupy as cp
-    CUPY_IMPORTABLE = True
+    import torch
+    TORCH_AVAILABLE = True
+    CUDA_AVAILABLE = torch.cuda.is_available()
 except ImportError:
-    cp = None
-    CUPY_IMPORTABLE = False
+    torch = None
+    TORCH_AVAILABLE = False
+    CUDA_AVAILABLE = False
 
 # sys.path.append("..")
 from importlib import resources
@@ -645,34 +625,28 @@ def find_best_alignment_gpu(
     return_loss_too: bool = False,
     verbose: bool = False,
 ) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
-    """GPU-accelerated alignment search using CuPy."""
-    # Test CUDA functionality at runtime (important for multiprocessing workers)
-    if not CUPY_IMPORTABLE:
+    """GPU-accelerated alignment search using PyTorch."""
+    # Check if CUDA is available
+    if not CUDA_AVAILABLE:
         if verbose:
-            print("CuPy not available, falling back to FFT search")
-        return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
-    
-    cuda_available, cp_runtime = test_cuda_functionality()
-    if not cuda_available:
-        # Only show CUDA failure message in debug/verbose mode, not during normal processing
-        import logging
-        logging.debug("CUDA functionality test failed, falling back to FFT search")
+            print("CUDA not available, falling back to FFT search")
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     
     try:
         target_img = match_gain(anchor_img, target_img)
         
-        # Transfer to GPU using runtime-tested CuPy
-        anchor_gpu = cp_runtime.asarray(anchor_img)
-        target_gpu = cp_runtime.asarray(target_img)
+        # Convert to PyTorch tensors and move to GPU
+        device = torch.device('cuda')
+        anchor_tensor = torch.from_numpy(anchor_img.astype(np.float32)).to(device)
+        target_tensor = torch.from_numpy(target_img.astype(np.float32)).to(device)
         
-        # Use FFT-based correlation on GPU
-        if len(anchor_img.shape) > 2:
-            anchor_gray = cp_runtime.mean(anchor_gpu, axis=0)
-            target_gray = cp_runtime.mean(target_gpu, axis=0)
+        # Handle multi-channel images
+        if len(anchor_tensor.shape) > 2:
+            anchor_gray = torch.mean(anchor_tensor, dim=0)
+            target_gray = torch.mean(target_tensor, dim=0)
         else:
-            anchor_gray = anchor_gpu
-            target_gray = target_gpu
+            anchor_gray = anchor_tensor
+            target_gray = target_tensor
         
         # Handle different image sizes by cropping to common region
         min_h = min(anchor_gray.shape[0], target_gray.shape[0])
@@ -691,20 +665,22 @@ def find_best_alignment_gpu(
         target_crop = target_gray[target_y_start:target_y_start+min_h, target_x_start:target_x_start+min_w]
         
         # Normalize
-        anchor_crop = (anchor_crop - cp_runtime.mean(anchor_crop)) / (cp_runtime.std(anchor_crop) + 1e-8)
-        target_crop = (target_crop - cp_runtime.mean(target_crop)) / (cp_runtime.std(target_crop) + 1e-8)
+        anchor_crop = (anchor_crop - torch.mean(anchor_crop)) / (torch.std(anchor_crop) + 1e-8)
+        target_crop = (target_crop - torch.mean(target_crop)) / (torch.std(target_crop) + 1e-8)
         
-        # Cross-correlation using CuPy's FFT
-        from cupyx.scipy.signal import correlate as cp_correlate
-        correlation = cp_correlate(anchor_crop, target_crop, mode='same')
+        # FFT-based cross-correlation
+        f_anchor = torch.fft.fft2(anchor_crop)
+        f_target = torch.fft.fft2(target_crop)
+        correlation = torch.fft.ifft2(f_anchor * torch.conj(f_target))
+        correlation = torch.abs(correlation)
         
         # Find peak
-        peak_idx = cp_runtime.argmax(correlation)
-        y_peak, x_peak = cp_runtime.unravel_index(peak_idx, correlation.shape)
+        peak_idx = torch.argmax(correlation)
+        y_peak, x_peak = torch.unravel_index(peak_idx, correlation.shape)
         
         # Convert to shift coordinates
-        shift_y = int(y_peak) - anchor_crop.shape[0] // 2
-        shift_x = int(x_peak) - anchor_crop.shape[1] // 2
+        shift_y = int(y_peak.item()) - anchor_crop.shape[0] // 2
+        shift_x = int(x_peak.item()) - anchor_crop.shape[1] // 2
         
         # Clamp to search range
         shift_y = np.clip(shift_y, -max_shift_search, max_shift_search)
@@ -750,12 +726,10 @@ def find_best_alignment(
             - "fft": Use FFT-based cross-correlation
             - "original": Use original brute-force method
     """
-    start_time = time.time() if verbose else None
-    
     # Method selection
     if method == "auto":
         image_size = anchor_img.shape[-1] * anchor_img.shape[-2]
-        if CUPY_IMPORTABLE and image_size > 512 * 512:
+        if CUDA_AVAILABLE and image_size > 512 * 512:
             method = "gpu"
         elif max_shift_search > 32:
             method = "hierarchical"
@@ -763,6 +737,9 @@ def find_best_alignment(
             method = "fft"
         else:
             method = "hierarchical"
+    
+    # Start timing after method selection
+    start_time = time.time() if verbose else None
     
     # Dispatch to appropriate method
     if method == "gpu":
