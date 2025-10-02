@@ -638,8 +638,8 @@ def find_best_alignment_hierarchical(
 
 
 def find_best_alignment_gpu(
-    anchor_img: np.ndarray,
-    target_img: np.ndarray,
+    anchor_img: Union[np.ndarray, torch.Tensor],
+    target_img: Union[np.ndarray, torch.Tensor],
     max_shift_search: int = MAX_SHIFT_SEARCH,
     return_loss_too: bool = False,
     verbose: bool = False,
@@ -653,6 +653,11 @@ def find_best_alignment_gpu(
         logging.info(f"GPU alignment: No accelerator available (device: {device_type}), falling back to FFT")
         if verbose:
             print(f"No accelerator available (device: {device_type}), falling back to FFT search")
+        # Convert tensors back to numpy for FFT fallback
+        if isinstance(anchor_img, torch.Tensor):
+            anchor_img = anchor_img.cpu().numpy()
+        if isinstance(target_img, torch.Tensor):
+            target_img = target_img.cpu().numpy()
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     
     # Import GPU scheduler
@@ -685,12 +690,42 @@ def find_best_alignment_gpu(
     logging.info(f"GPU alignment: Using {device_type} device ({device_name})")
     
     try:
-        target_img = match_gain(anchor_img, target_img)
-        
-        # Convert to PyTorch tensors and move to accelerator
+        # Get device once
         device = torch.device(get_device_type())
-        anchor_tensor = torch.from_numpy(anchor_img.astype(np.float32)).to(device)
-        target_tensor = torch.from_numpy(target_img.astype(np.float32)).to(device)
+        
+        # Convert inputs to numpy for gain matching (required by match_gain function)
+        if isinstance(anchor_img, torch.Tensor):
+            anchor_np = anchor_img.cpu().numpy()
+        else:
+            anchor_np = anchor_img
+            
+        if isinstance(target_img, torch.Tensor):
+            target_np = target_img.cpu().numpy()
+        else:
+            target_np = target_img
+            
+        # Apply gain matching
+        target_np = match_gain(anchor_np, target_np)
+        
+        # Efficient tensor creation with buffer reuse
+        if scheduler:
+            # Try to get reusable buffers
+            anchor_buffer = scheduler.get_tensor_buffer(anchor_np.shape, torch.float32, device)
+            target_buffer = scheduler.get_tensor_buffer(target_np.shape, torch.float32, device)
+            
+            if anchor_buffer is not None and target_buffer is not None:
+                # Reuse buffers - copy data directly
+                anchor_tensor = anchor_buffer.copy_(torch.from_numpy(anchor_np.astype(np.float32)))
+                target_tensor = target_buffer.copy_(torch.from_numpy(target_np.astype(np.float32)))
+            else:
+                # Create new tensors
+                anchor_tensor = torch.from_numpy(anchor_np.astype(np.float32)).to(device, non_blocking=True)
+                target_tensor = torch.from_numpy(target_np.astype(np.float32)).to(device, non_blocking=True)
+        else:
+            # No scheduler - create tensors directly with non-blocking transfer
+            anchor_tensor = torch.from_numpy(anchor_np.astype(np.float32)).to(device, non_blocking=True)
+            target_tensor = torch.from_numpy(target_np.astype(np.float32)).to(device, non_blocking=True)
+            
         logging.debug(f"GPU alignment: Tensors moved to {device}")
         
         # Handle multi-channel images
@@ -762,6 +797,16 @@ def find_best_alignment_gpu(
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     
     finally:
+        # Return tensor buffers to pool for reuse
+        if scheduler:
+            try:
+                if 'anchor_tensor' in locals():
+                    scheduler.return_tensor_buffer(anchor_tensor)
+                if 'target_tensor' in locals():
+                    scheduler.return_tensor_buffer(target_tensor)
+            except Exception as e:
+                logging.debug(f"Failed to return tensor buffers: {e}")
+        
         # Release GPU memory from scheduler
         if scheduler and required_memory > 0:
             scheduler.release_memory(task_id)
@@ -945,9 +990,27 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     is_multiprocessing = kwargs.get("num_threads", 1) > 1
     verbose_for_alignment = verbose_alignment and not is_multiprocessing
     
-    best_alignment, best_alignment_loss = find_best_alignment(
-        gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
-    )
+    # Convert to shared tensors for GPU processing if using GPU method
+    if alignment_method in ("gpu", "auto") and is_accelerator_available():
+        try:
+            # Convert to shared tensors to avoid pickling overhead
+            gt_tensor = torch.from_numpy(gt_rgb.astype(np.float32))
+            f_tensor = torch.from_numpy(f_rgb.astype(np.float32))
+            gt_tensor.share_memory_()
+            f_tensor.share_memory_()
+            
+            best_alignment, best_alignment_loss = find_best_alignment(
+                gt_tensor, f_tensor, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
+            )
+        except Exception as e:
+            logging.debug(f"Tensor sharing failed, falling back to numpy: {e}")
+            best_alignment, best_alignment_loss = find_best_alignment(
+                gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
+            )
+    else:
+        best_alignment, best_alignment_loss = find_best_alignment(
+            gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
+        )
     rgb_gain = float(match_gain(gt_rgb, f_rgb, return_val=True))
     # gt_rgb_mean = gt_rgb.mean()
     # gain = match_gain(gt_rgb, f_rgb, return_val=True)

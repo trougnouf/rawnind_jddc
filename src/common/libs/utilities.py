@@ -56,6 +56,7 @@ class GPUMemoryScheduler:
         self.active_tasks = {}
         self._initialized = False
         self.shared_state = shared_state  # Shared across processes
+        self._tensor_buffers = {}  # Buffer reuse pool for tensors
     
     def _initialize_gpu_memory(self):
         """Initialize GPU memory tracking (called lazily to avoid fork issues)."""
@@ -93,6 +94,46 @@ class GPUMemoryScheduler:
             self.available_memory = 0
         
         self._initialized = True
+    
+    def get_tensor_buffer(self, shape: tuple, dtype=None, device=None) -> 'torch.Tensor':
+        """Get a reusable tensor buffer to avoid memory allocations."""
+        if not TORCH_AVAILABLE:
+            return None
+            
+        if dtype is None:
+            dtype = torch.float32
+        if device is None:
+            device = torch.device('cpu')
+            
+        buffer_key = (shape, dtype, device)
+        
+        # Try to reuse existing buffer
+        if buffer_key in self._tensor_buffers and len(self._tensor_buffers[buffer_key]) > 0:
+            return self._tensor_buffers[buffer_key].pop()
+        
+        # Create new buffer
+        try:
+            buffer = torch.empty(shape, dtype=dtype, device=device)
+            if device.type == 'cpu':
+                buffer.share_memory_()  # Enable sharing for CPU tensors
+            return buffer
+        except Exception as e:
+            logging.debug(f"Failed to create tensor buffer {shape} on {device}: {e}")
+            return None
+    
+    def return_tensor_buffer(self, tensor: 'torch.Tensor'):
+        """Return a tensor buffer to the pool for reuse."""
+        if not TORCH_AVAILABLE or tensor is None:
+            return
+            
+        buffer_key = (tuple(tensor.shape), tensor.dtype, tensor.device)
+        
+        if buffer_key not in self._tensor_buffers:
+            self._tensor_buffers[buffer_key] = []
+        
+        # Limit buffer pool size to prevent memory bloat
+        if len(self._tensor_buffers[buffer_key]) < 3:
+            self._tensor_buffers[buffer_key].append(tensor)
     
     def estimate_memory_usage(self, height: int, width: int, channels: int = 3, dtype_size: int = 4) -> int:
         """Estimate GPU memory usage for image processing operations.
@@ -257,31 +298,19 @@ def get_gpu_scheduler() -> GPUMemoryScheduler:
 class GPUAwareWorkerWrapper:
     """Picklable wrapper that adds GPU memory management to worker functions."""
     
-    def __init__(self, func: Callable, estimate_memory_func: Optional[Callable] = None):
+    def __init__(self, func: Callable, estimate_memory_func: Optional[Callable] = None, num_processes: int = 1):
         self.func = func
         self.estimate_memory_func = estimate_memory_func
+        self.num_processes = num_processes
     
     def __call__(self, args):
         # Set CPU thread count to avoid oversubscription
         if TORCH_AVAILABLE:
             # Calculate threads per process: total_cores / num_processes
-            # We'll estimate num_processes from the current process count
-            try:
-                import psutil
-                current_process = psutil.Process()
-                parent_process = current_process.parent()
-                if parent_process:
-                    # Count sibling processes (other workers)
-                    sibling_count = len([p for p in parent_process.children() if p.pid != current_process.pid])
-                    threads_per_process = max(1, NUM_THREADS // max(1, sibling_count + 1))
-                else:
-                    threads_per_process = NUM_THREADS
-            except:
-                # Fallback: assume 4 processes
-                threads_per_process = max(1, NUM_THREADS // 4)
-            
+            threads_per_process = max(1, NUM_THREADS // self.num_processes)
             torch.set_num_threads(threads_per_process)
-            logging.debug(f"Set torch threads to {threads_per_process} for worker process {os.getpid()}")
+            logging.debug(f"Set torch threads to {threads_per_process} for worker process {os.getpid()} "
+                         f"({NUM_THREADS} total cores / {self.num_processes} processes)")
         
         # Handle GPU memory scheduling if estimate function provided
         task_id = None
@@ -312,18 +341,19 @@ class GPUAwareWorkerWrapper:
             return self.func(args)
 
 
-def gpu_aware_worker_wrapper(func: Callable, estimate_memory_func: Optional[Callable] = None):
+def gpu_aware_worker_wrapper(func: Callable, estimate_memory_func: Optional[Callable] = None, num_processes: int = 1):
     """Create a picklable wrapper that adds GPU memory management to worker functions.
     
     Args:
         func: The worker function to wrap
         estimate_memory_func: Function to estimate memory usage from args
                              Should return (task_id, memory_estimate) tuple
+        num_processes: Number of worker processes (for CPU thread limiting)
     
     Returns:
         Wrapped function that handles GPU memory scheduling
     """
-    return GPUAwareWorkerWrapper(func, estimate_memory_func)
+    return GPUAwareWorkerWrapper(func, estimate_memory_func, num_processes)
 
 
 def checksum(fpath, htype="sha1"):
@@ -421,65 +451,80 @@ def mt_runner(
         
         # Wrap function with GPU memory management if estimator provided
         if gpu_memory_estimator:
-            wrapped_fun = gpu_aware_worker_wrapper(fun, gpu_memory_estimator)
+            wrapped_fun = gpu_aware_worker_wrapper(fun, gpu_memory_estimator, num_threads)
         else:
-            wrapped_fun = gpu_aware_worker_wrapper(fun)
+            wrapped_fun = gpu_aware_worker_wrapper(fun, None, num_threads)
         
         pool = Pool(num_threads)
-        if starmap:
-            amap = pool.starmap
-            if not ordered:
-                raise NotImplementedError("Unordered starmap")
-        elif ordered:
-            amap = pool.imap
-        else:
-            amap = pool.imap_unordered
-        
-        if ordered:
-            print("mt_runner warning: ordered=True might be slower.")
-            if progress_bar:
-                print(
-                    "mt_runner warning: progress bar NotImplemented for ordered pool."
-                )
-            ret = amap(wrapped_fun, argslist)
-        else:
-            if progress_bar:
-                ret = []
-                try:
-                    # Use a stationary progress bar that sticks to bottom
-                    bar_format = '{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
-                    pbar = tqdm.tqdm(amap(wrapped_fun, argslist), total=len(argslist), desc=progress_desc, 
-                                   bar_format=bar_format, position=0, leave=False, ncols=120, 
-                                   dynamic_ncols=False, file=sys.stdout, mininterval=0.1)
-                    
-                    current_scene = None
-                    current_method = None
-                    
-                    for i, ares in enumerate(pbar):
-                        ret.append(ares)
-                        # Extract scene and method info for display
-                        if hasattr(ares, 'get') and 'gt_fpath' in ares:
-                            # Extract scene from the result
-                            scene_name = ares.get('image_set', 'unknown')
-                            method = ares.get('alignment_method', 'auto')
-                            
-                            # Only update description if scene or method changed to avoid flicker
-                            if scene_name != current_scene or method != current_method:
-                                current_scene = scene_name
-                                current_method = method
-                                desc = f"Scene: {scene_name:<30} Method: {method.upper()}"
-                                pbar.set_description(desc)
-                    
-                    # Clear the progress bar after completion to avoid leaving it on screen
-                    pbar.close()
-                            
-                except TypeError as e:
-                    print(e)
-                    raise RuntimeError
+        try:
+            if starmap:
+                amap = pool.starmap
+                if not ordered:
+                    raise NotImplementedError("Unordered starmap")
+            elif ordered:
+                amap = pool.imap
             else:
-                ret = amap(wrapped_fun, argslist)
-        pool.close()
-        pool.join()
+                amap = pool.imap_unordered
+            
+            if ordered:
+                print("mt_runner warning: ordered=True might be slower.")
+                if progress_bar:
+                    print(
+                        "mt_runner warning: progress bar NotImplemented for ordered pool."
+                    )
+                ret = list(amap(wrapped_fun, argslist))
+            else:
+                if progress_bar:
+                    ret = []
+                    try:
+                        # Use a stationary progress bar that sticks to bottom
+                        bar_format = '{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+                        pbar = tqdm.tqdm(amap(wrapped_fun, argslist), total=len(argslist), desc=progress_desc, 
+                                       bar_format=bar_format, position=0, leave=False, ncols=120, 
+                                       dynamic_ncols=False, file=sys.stdout, mininterval=0.1)
+                        
+                        current_scene = None
+                        current_method = None
+                        
+                        for i, ares in enumerate(pbar):
+                            ret.append(ares)
+                            # Extract scene and method info for display
+                            if hasattr(ares, 'get') and 'gt_fpath' in ares:
+                                # Extract scene from the result
+                                scene_name = ares.get('image_set', 'unknown')
+                                method = ares.get('alignment_method', 'auto')
+                                
+                                # Only update description if scene or method changed to avoid flicker
+                                if scene_name != current_scene or method != current_method:
+                                    current_scene = scene_name
+                                    current_method = method
+                                    desc = f"Scene: {scene_name:<30} Method: {method.upper()}"
+                                    pbar.set_description(desc)
+                        
+                        # Clear the progress bar after completion to avoid leaving it on screen
+                        pbar.close()
+                                
+                    except (TypeError, KeyboardInterrupt) as e:
+                        if isinstance(e, KeyboardInterrupt):
+                            logging.info("Multiprocessing interrupted by user")
+                        else:
+                            logging.error(f"Progress bar error: {e}")
+                        # Re-raise to trigger cleanup
+                        raise
+                else:
+                    ret = list(amap(wrapped_fun, argslist))
+                    
+        except Exception as e:
+            logging.error(f"Multiprocessing error: {e}")
+            # Terminate all worker processes immediately
+            pool.terminate()
+            pool.join()
+            raise
+        else:
+            # Normal cleanup - close pool and wait for workers to finish
+            pool.close()
+            pool.join()
+            
         return ret
 
 
