@@ -49,21 +49,32 @@ for filepath in "$INPUT_DIR"/*; do
 
     filename=$(basename "$filepath")
 
-    # --- Parse the filename ---
-    # Get the type (Bayer or X-Trans) - the part before the first '_'
-    type=$(echo "$filename" | cut -d'_' -f1)
+    # --- Parse the filename using a Regular Expression ---
+    # This regex is designed to handle scene names with multiple underscores.
+    # It captures three parts:
+    # 1. The type (e.g., "Bayer")
+    # 2. The scene name (e.g., "UNK_LucieB_stick_figurine")
+    # 3. The metadata part (everything from "_GT_ISO" or "_ISO" to the end)
+    regex="^([^_]+)_(.*)_((GT_)?ISO.*)$"
 
-    # Get the scene name - the part between the first and second '_'
-    scene=$(echo "$filename" | cut -d'_' -f2)
+    if [[ "$filename" =~ $regex ]]; then
+        # Parsing was successful, extract the captured groups
+        type="${BASH_REMATCH[1]}"
+        scene="${BASH_REMATCH[2]}"
 
-    # Check if parsing was successful
-    if [ -z "$type" ] || [ -z "$scene" ]; then
+        # --- FIX: Clean the scene name ---
+        # The regex's middle group (.*) is "greedy" and might capture a trailing "_GT".
+        # This line removes the "_GT" suffix from the scene name if it exists.
+        scene=${scene%_GT}
+
+    else
+        # If the regex doesn't match, the filename has an unexpected format.
         echo "Warning: Could not parse '$filename'. Skipping."
         continue
     fi
 
     # --- Determine the final destination directory ---
-    # Default destination
+    # Base destination
     dest_dir="$TARGET_DIR/$type/$scene"
 
     # If the filename contains "_GT_", add a "gt" subdirectory
@@ -73,12 +84,14 @@ for filepath in "$INPUT_DIR"/*; do
 
     # --- Create directory and move file ---
     echo "Processing: $filename"
-    
+    echo "  -> To: $dest_dir"
+
     # Create the destination directory tree (-p creates parent dirs as needed)
     mkdir -p "$dest_dir"
 
     # Move the file into its new home
-    mv -v "$filepath" "$dest_dir/"
+    # The -n flag prevents overwriting existing files, just in case.
+    mv -vn "$filepath" "$dest_dir/"
 done
 
 echo "--------------------------------------------------"
