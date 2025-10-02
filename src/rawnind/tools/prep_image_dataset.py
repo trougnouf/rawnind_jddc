@@ -472,7 +472,8 @@ if __name__ == "__main__":
     try:
         # GPU Hybrid Batching (Option #8): Group by GT scene for batch processing
         # This is the optimal parallelism boundary for this dataset!
-        use_gpu_batching = rawproc.is_accelerator_available() and args.num_threads > 1
+        # Uses GPU-accelerated FFT from alignment_backends.py
+        use_gpu_batching = rawproc.is_accelerator_available()
         
         if use_gpu_batching:
             logging.info("Using GPU hybrid batching (Option #8): grouping by GT scene")
@@ -496,11 +497,14 @@ if __name__ == "__main__":
             
             for gt_fpath, scene_args in tqdm(scene_groups.items(), desc=f"Method: {method_name}"):
                 try:
+                    # Extract common parameters from first arg
+                    first_arg = scene_args[0]
                     scene_results = rawproc.process_scene_batch_gpu(
                         scene_args,
                         alignment_method=args.alignment_method,
-                        verbose_alignment=args.verbose_alignment,
-                        num_threads=args.num_threads,
+                        verbose=args.verbose_alignment,
+                        ds_dpath=first_arg['ds_dpath'],
+                        masks_dpath=first_arg['masks_dpath'],
                     )
                     results.extend(scene_results)
                 except Exception as e:
