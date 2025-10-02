@@ -67,12 +67,19 @@ class GPUMemoryScheduler:
                 total_memory = torch.cuda.get_device_properties(device).total_memory
                 # Reserve 20% for system and fragmentation
                 self.available_memory = int(total_memory * 0.8)
-                logging.info(f"GPU memory scheduler initialized: {self.available_memory / 1e9:.1f}GB available")
+                # Only log once per process to avoid spam
+                if not hasattr(self, '_logged_init'):
+                    logging.info(f"GPU memory scheduler initialized: {self.available_memory / 1e9:.1f}GB available (PID: {os.getpid()})")
+                    self._logged_init = True
             else:
                 self.available_memory = 0
-                logging.info("No CUDA available, GPU memory scheduler disabled")
+                if not hasattr(self, '_logged_init'):
+                    logging.info("No CUDA available, GPU memory scheduler disabled")
+                    self._logged_init = True
         except Exception as e:
-            logging.warning(f"Failed to initialize GPU memory scheduler: {e}")
+            if not hasattr(self, '_logged_init'):
+                logging.warning(f"Failed to initialize GPU memory scheduler: {e}")
+                self._logged_init = True
             self.available_memory = 0
         
         self._initialized = True
@@ -107,26 +114,55 @@ class GPUMemoryScheduler:
         with self.memory_lock:
             return self.available_memory >= required_memory
     
-    def acquire_memory(self, task_id: str, required_memory: int) -> bool:
-        """Acquire GPU memory for a task.
+    def acquire_memory(self, task_id: str, required_memory: int, timeout: float = 300.0) -> bool:
+        """Acquire GPU memory for a task, waiting if necessary.
+        
+        Args:
+            task_id: Unique identifier for the task
+            required_memory: Memory required in bytes
+            timeout: Maximum time to wait in seconds
         
         Returns:
-            True if memory was acquired, False otherwise
+            True if memory was acquired, False if timeout or no GPU
         """
         if not self._initialized:
             self._initialize_gpu_memory()
             
         if self.available_memory is None or self.available_memory == 0:
             return False
-            
-        with self.memory_lock:
-            if self.available_memory >= required_memory:
-                self.available_memory -= required_memory
-                self.active_tasks[task_id] = required_memory
-                logging.debug(f"Acquired {required_memory / 1e6:.1f}MB GPU memory for task {task_id}, "
-                            f"{self.available_memory / 1e6:.1f}MB remaining")
-                return True
+        
+        # If memory requirement is too large, reject immediately
+        if required_memory > self.available_memory + sum(self.active_tasks.values()):
+            logging.warning(f"Task {task_id} requires {required_memory / 1e9:.1f}GB but GPU only has "
+                          f"{(self.available_memory + sum(self.active_tasks.values())) / 1e9:.1f}GB total")
             return False
+            
+        start_time = time.time()
+        wait_logged = False
+        
+        while time.time() - start_time < timeout:
+            with self.memory_lock:
+                if self.available_memory >= required_memory:
+                    self.available_memory -= required_memory
+                    self.active_tasks[task_id] = required_memory
+                    if wait_logged:
+                        logging.info(f"Task {task_id} acquired {required_memory / 1e6:.1f}MB GPU memory after waiting")
+                    else:
+                        logging.debug(f"Acquired {required_memory / 1e6:.1f}MB GPU memory for task {task_id}, "
+                                    f"{self.available_memory / 1e6:.1f}MB remaining")
+                    return True
+            
+            # Log waiting message once
+            if not wait_logged:
+                logging.info(f"Task {task_id} waiting for {required_memory / 1e6:.1f}MB GPU memory "
+                           f"({self.available_memory / 1e6:.1f}MB available)")
+                wait_logged = True
+            
+            # Wait a bit before retrying
+            time.sleep(0.1)
+        
+        logging.warning(f"Task {task_id} timed out waiting for GPU memory after {timeout}s")
+        return False
     
     def release_memory(self, task_id: str):
         """Release GPU memory for a completed task."""
@@ -138,12 +174,18 @@ class GPUMemoryScheduler:
                             f"{self.available_memory / 1e6:.1f}MB available")
 
 
-# Global GPU memory scheduler instance
-_gpu_scheduler = GPUMemoryScheduler()
+# Process-local GPU memory scheduler instance
+_gpu_scheduler = None
+_scheduler_lock = threading.Lock()
 
 
 def get_gpu_scheduler() -> GPUMemoryScheduler:
-    """Get the global GPU memory scheduler instance."""
+    """Get the process-local GPU memory scheduler instance."""
+    global _gpu_scheduler
+    if _gpu_scheduler is None:
+        with _scheduler_lock:
+            if _gpu_scheduler is None:
+                _gpu_scheduler = GPUMemoryScheduler()
     return _gpu_scheduler
 
 
