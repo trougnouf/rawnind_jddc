@@ -47,14 +47,15 @@ NUM_THREADS = os.cpu_count()
 
 
 class GPUMemoryScheduler:
-    """Memory-aware GPU task scheduler that prevents OOM errors."""
+    """Memory-aware GPU task scheduler that prevents OOM errors with cross-process coordination."""
     
-    def __init__(self):
+    def __init__(self, shared_state=None):
         self.available_memory = None
         self.memory_lock = threading.Lock()
         self.pending_tasks = queue.Queue()
         self.active_tasks = {}
         self._initialized = False
+        self.shared_state = shared_state  # Shared across processes
     
     def _initialize_gpu_memory(self):
         """Initialize GPU memory tracking (called lazily to avoid fork issues)."""
@@ -67,6 +68,15 @@ class GPUMemoryScheduler:
                 total_memory = torch.cuda.get_device_properties(device).total_memory
                 # Reserve 20% for system and fragmentation
                 self.available_memory = int(total_memory * 0.8)
+                
+                # Initialize shared state if available
+                if self.shared_state is not None:
+                    with self.shared_state.lock:
+                        if not self.shared_state['initialized']:
+                            self.shared_state['total_memory'] = self.available_memory
+                            self.shared_state['allocated_memory'] = 0
+                            self.shared_state['initialized'] = True
+                
                 # Only log once per process to avoid spam
                 if not hasattr(self, '_logged_init'):
                     logging.info(f"GPU memory scheduler initialized: {self.available_memory / 1e9:.1f}GB available (PID: {os.getpid()})")
@@ -141,21 +151,37 @@ class GPUMemoryScheduler:
         wait_logged = False
         
         while time.time() - start_time < timeout:
-            with self.memory_lock:
-                if self.available_memory >= required_memory:
-                    self.available_memory -= required_memory
-                    self.active_tasks[task_id] = required_memory
-                    if wait_logged:
-                        logging.info(f"Task {task_id} acquired {required_memory / 1e6:.1f}MB GPU memory after waiting")
-                    else:
-                        logging.debug(f"Acquired {required_memory / 1e6:.1f}MB GPU memory for task {task_id}, "
-                                    f"{self.available_memory / 1e6:.1f}MB remaining")
-                    return True
+            # Use shared state if available, otherwise fall back to local tracking
+            if self.shared_state is not None:
+                with self.shared_state.lock:
+                    available = self.shared_state['total_memory'] - self.shared_state['allocated_memory']
+                    if available >= required_memory:
+                        self.shared_state['allocated_memory'] += required_memory
+                        self.active_tasks[task_id] = required_memory
+                        if wait_logged:
+                            logging.info(f"Task {task_id} acquired {required_memory / 1e6:.1f}MB GPU memory after waiting")
+                        else:
+                            logging.debug(f"Acquired {required_memory / 1e6:.1f}MB GPU memory for task {task_id}, "
+                                        f"{available - required_memory / 1e6:.1f}MB remaining")
+                        return True
+                    current_available = available
+            else:
+                with self.memory_lock:
+                    if self.available_memory >= required_memory:
+                        self.available_memory -= required_memory
+                        self.active_tasks[task_id] = required_memory
+                        if wait_logged:
+                            logging.info(f"Task {task_id} acquired {required_memory / 1e6:.1f}MB GPU memory after waiting")
+                        else:
+                            logging.debug(f"Acquired {required_memory / 1e6:.1f}MB GPU memory for task {task_id}, "
+                                        f"{self.available_memory / 1e6:.1f}MB remaining")
+                        return True
+                    current_available = self.available_memory
             
             # Log waiting message once
             if not wait_logged:
                 logging.info(f"Task {task_id} waiting for {required_memory / 1e6:.1f}MB GPU memory "
-                           f"({self.available_memory / 1e6:.1f}MB available)")
+                           f"({current_available / 1e6:.1f}MB available)")
                 wait_logged = True
             
             # Wait a bit before retrying
@@ -166,26 +192,65 @@ class GPUMemoryScheduler:
     
     def release_memory(self, task_id: str):
         """Release GPU memory for a completed task."""
-        with self.memory_lock:
-            if task_id in self.active_tasks:
-                memory_amount = self.active_tasks.pop(task_id)
-                self.available_memory += memory_amount
-                logging.debug(f"Released {memory_amount / 1e6:.1f}MB GPU memory for task {task_id}, "
-                            f"{self.available_memory / 1e6:.1f}MB available")
+        if task_id in self.active_tasks:
+            memory_amount = self.active_tasks.pop(task_id)
+            
+            # Update shared state if available
+            if self.shared_state is not None:
+                with self.shared_state.lock:
+                    self.shared_state['allocated_memory'] -= memory_amount
+                    available = self.shared_state['total_memory'] - self.shared_state['allocated_memory']
+                    logging.debug(f"Released {memory_amount / 1e6:.1f}MB GPU memory for task {task_id}, "
+                                f"{available / 1e6:.1f}MB available")
+            else:
+                with self.memory_lock:
+                    self.available_memory += memory_amount
+                    logging.debug(f"Released {memory_amount / 1e6:.1f}MB GPU memory for task {task_id}, "
+                                f"{self.available_memory / 1e6:.1f}MB available")
 
 
-# Process-local GPU memory scheduler instance
+# Shared GPU memory state across processes
+_shared_gpu_memory = None
 _gpu_scheduler = None
 _scheduler_lock = threading.Lock()
 
 
+def _initialize_shared_gpu_memory():
+    """Initialize shared GPU memory tracking across processes."""
+    global _shared_gpu_memory
+    if _shared_gpu_memory is None and TORCH_AVAILABLE:
+        try:
+            # Create shared memory for cross-process coordination
+            manager = mp.Manager()
+            _shared_gpu_memory = manager.dict({
+                'total_memory': 0,
+                'allocated_memory': 0,
+                'initialized': False
+            })
+            _shared_gpu_memory.lock = manager.Lock()
+            logging.info("Shared GPU memory state initialized")
+        except Exception as e:
+            logging.warning(f"Failed to create shared GPU memory state: {e}")
+            _shared_gpu_memory = None
+    return _shared_gpu_memory
+
+
+def _get_shared_gpu_memory():
+    """Get the shared GPU memory state, initializing if needed."""
+    global _shared_gpu_memory
+    if _shared_gpu_memory is None:
+        _shared_gpu_memory = _initialize_shared_gpu_memory()
+    return _shared_gpu_memory
+
+
 def get_gpu_scheduler() -> GPUMemoryScheduler:
-    """Get the process-local GPU memory scheduler instance."""
+    """Get the process-local GPU memory scheduler instance with shared coordination."""
     global _gpu_scheduler
     if _gpu_scheduler is None:
         with _scheduler_lock:
             if _gpu_scheduler is None:
-                _gpu_scheduler = GPUMemoryScheduler()
+                shared_state = _get_shared_gpu_memory()
+                _gpu_scheduler = GPUMemoryScheduler(shared_state)
     return _gpu_scheduler
 
 
@@ -349,6 +414,11 @@ def mt_runner(
                 results.append(fun(args))
         return results
     else:
+        # Initialize shared GPU memory state in main process
+        global _shared_gpu_memory
+        if _shared_gpu_memory is None:
+            _shared_gpu_memory = _initialize_shared_gpu_memory()
+        
         # Wrap function with GPU memory management if estimator provided
         if gpu_memory_estimator:
             wrapped_fun = gpu_aware_worker_wrapper(fun, gpu_memory_estimator)

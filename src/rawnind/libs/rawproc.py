@@ -644,7 +644,7 @@ def find_best_alignment_gpu(
     return_loss_too: bool = False,
     verbose: bool = False,
 ) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
-    """GPU-accelerated alignment search using PyTorch."""
+    """GPU-accelerated alignment search using PyTorch with memory management."""
     import logging
     
     # Check if accelerator is available
@@ -654,6 +654,31 @@ def find_best_alignment_gpu(
         if verbose:
             print(f"No accelerator available (device: {device_type}), falling back to FFT search")
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
+    
+    # Import GPU scheduler
+    try:
+        from common.libs.utilities import get_gpu_scheduler
+        scheduler = get_gpu_scheduler()
+    except ImportError:
+        logging.warning("GPU scheduler not available, proceeding without memory management")
+        scheduler = None
+    
+    # Estimate memory requirements
+    task_id = f"gpu_align_{os.getpid()}_{id(anchor_img)}"
+    required_memory = 0
+    
+    if scheduler:
+        # Estimate memory for tensors and FFT operations
+        h, w = anchor_img.shape[:2]
+        # 2 input tensors + 2 FFT results + correlation result + intermediate tensors
+        # Each tensor: h * w * 4 bytes (float32), FFT roughly doubles memory usage
+        required_memory = h * w * 4 * 6  # Conservative estimate
+        
+        if not scheduler.acquire_memory(task_id, required_memory, timeout=60.0):
+            logging.warning(f"GPU memory not available for alignment, falling back to FFT")
+            if verbose:
+                print("GPU memory not available, falling back to FFT search")
+            return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     
     device_type = get_device_type()
     device_name = get_device_name()
@@ -737,6 +762,10 @@ def find_best_alignment_gpu(
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     
     finally:
+        # Release GPU memory from scheduler
+        if scheduler and required_memory > 0:
+            scheduler.release_memory(task_id)
+            
         # Explicit CUDA memory cleanup
         if get_device_type() == 'cuda':
             try:
