@@ -31,5 +31,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gpu = [
-    "cupy-cuda12x>=13.0.0",  # GPU acceleration for image alignment
+    "cupy-cuda12x>=13.0.0",
 ]
+
+

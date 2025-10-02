@@ -194,8 +194,9 @@ def raw_fpath_to_mono_img_and_metadata(
             metadata["sizes"]["raw_height"],
             metadata["sizes"]["raw_width"],
         ), f"{mono_img.shape[1:]=}, {metadata["sizes"]=}"
-        metadata["RGBG_pattern"] = whole_image_raw_pattern[:2, :2]
-        set_bayer_pattern_name(metadata)
+        # Keep original pattern size - don't force to 2x2 for X-Trans
+        # metadata["RGBG_pattern"] = whole_image_raw_pattern[:2, :2]  # Old Bayer-only code
+        # set_bayer_pattern_name(metadata)  # Pattern already set earlier
         return mono_img, whole_image_raw_pattern
 
     def set_bayer_pattern_name(metadata: dict):
@@ -207,25 +208,36 @@ def raw_fpath_to_mono_img_and_metadata(
     def ensure_correct_shape(
         mono_img: np.ndarray, metadata: dict, whole_image_raw_pattern: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Ensure dimension % 4 == 0."""
+        """Ensure dimension % pattern_size == 0 (4 for Bayer, 6 for X-Trans)."""
         _, h, w = mono_img.shape
         assert (metadata["sizes"]["raw_height"], metadata["sizes"]["raw_width"]) == (
             h,
             w,
         )
+        # Determine pattern size from CFA pattern
+        pattern_shape = metadata["RGBG_pattern"].shape
+        if pattern_shape == (2, 2):
+            pattern_size = 2  # Bayer uses 2x2, but we ensure % 4 for processing
+            divisor = 4
+        elif pattern_shape == (6, 6):
+            pattern_size = 6  # X-Trans uses 6x6
+            divisor = 6
+        else:
+            raise ValueError(f"Unsupported pattern shape: {pattern_shape}")
+        
         # crop raw width/height if bigger than width/height
-        if h % 4 > 0:
-            mono_img = mono_img[:, : -(h % 4)]
-            metadata["sizes"]["raw_height"] -= h % 4
-            metadata["sizes"]["height"] -= h % 4
-            metadata["sizes"]["iheight"] -= h % 4
-        if w % 4 > 0:
-            mono_img = mono_img[:, :, : -(w % 4)]
-            metadata["sizes"]["raw_width"] -= w % 4
-            metadata["sizes"]["width"] -= w % 4
-            metadata["sizes"]["iwidth"] -= w % 4
+        if h % divisor > 0:
+            mono_img = mono_img[:, : -(h % divisor)]
+            metadata["sizes"]["raw_height"] -= h % divisor
+            metadata["sizes"]["height"] -= h % divisor
+            metadata["sizes"]["iheight"] -= h % divisor
+        if w % divisor > 0:
+            mono_img = mono_img[:, :, : -(w % divisor)]
+            metadata["sizes"]["raw_width"] -= w % divisor
+            metadata["sizes"]["width"] -= w % divisor
+            metadata["sizes"]["iwidth"] -= w % divisor
 
-        assert not (mono_img.shape[1] % 4 or mono_img.shape[2] % 4), mono_img.shape
+        assert not (mono_img.shape[1] % divisor or mono_img.shape[2] % divisor), mono_img.shape
         return mono_img, whole_image_raw_pattern
 
     # step 1: get raw data and metadata
@@ -271,16 +283,35 @@ def raw_fpath_to_mono_img_and_metadata(
     set_bayer_pattern_name(metadata)
 
     whole_image_raw_pattern = rawpy_img.raw_colors
-    assert_correct_metadata = (
-        metadata["RGBG_pattern"] == whole_image_raw_pattern[:2, :2]
-    )
-    assert (
-        assert_correct_metadata
-        if isinstance(assert_correct_metadata, bool)
-        else assert_correct_metadata.all()
-    ), (
-        f"Bayer pattern decoding did not match ({fpath=}, {metadata['RGBG_pattern']=}, {whole_image_raw_pattern[:2, :2]=})"
-    )
+    
+    # Handle both Bayer (2x2) and X-Trans (6x6) patterns
+    pattern_shape = metadata["RGBG_pattern"].shape
+    if pattern_shape == (2, 2):
+        # Bayer pattern
+        assert_correct_metadata = (
+            metadata["RGBG_pattern"] == whole_image_raw_pattern[:2, :2]
+        )
+        assert (
+            assert_correct_metadata
+            if isinstance(assert_correct_metadata, bool)
+            else assert_correct_metadata.all()
+        ), (
+            f"Bayer pattern decoding did not match ({fpath=}, {metadata['RGBG_pattern']=}, {whole_image_raw_pattern[:2, :2]=})"
+        )
+    elif pattern_shape == (6, 6):
+        # X-Trans pattern
+        assert_correct_metadata = (
+            metadata["RGBG_pattern"] == whole_image_raw_pattern[:6, :6]
+        )
+        assert (
+            assert_correct_metadata
+            if isinstance(assert_correct_metadata, bool)
+            else assert_correct_metadata.all()
+        ), (
+            f"X-Trans pattern decoding did not match ({fpath=}, {metadata['RGBG_pattern']=}, {whole_image_raw_pattern[:6, :6]=})"
+        )
+    else:
+        raise ValueError(f"Unsupported CFA pattern shape: {pattern_shape}")
     for a_wb in ("daylight", "camera"):
         metadata[f"{a_wb}_whitebalance_norm"] = np.array(
             metadata[f"{a_wb}_whitebalance"], dtype=np.float32
@@ -297,7 +328,9 @@ def raw_fpath_to_mono_img_and_metadata(
     mono_img, whole_image_raw_pattern = rm_empty_borders(
         mono_img, metadata, whole_image_raw_pattern, crop_all=crop_all
     )
-    if force_rggb:
+    # Only convert to RGGB for Bayer patterns, skip for X-Trans
+    pattern_shape = metadata["RGBG_pattern"].shape
+    if force_rggb and pattern_shape == (2, 2):
         mono_img, whole_image_raw_pattern = mono_any_to_mono_rggb(
             mono_img, metadata, whole_image_raw_pattern
         )
@@ -610,6 +643,196 @@ ConversionResult = NamedTuple(
 
 def is_xtrans(fpath) -> bool:
     return fpath.lower().endswith(".raf")
+
+
+# ============================================================================
+# CFA-AWARE FFT PHASE CORRELATION FOR ALIGNMENT
+# ============================================================================
+
+def extract_bayer_channels(img: np.ndarray, pattern: np.ndarray) -> dict[str, np.ndarray]:
+    """Extract 4 Bayer channels via strided slicing.
+    
+    Args:
+        img: Mosaiced RAW image [1, H, W]
+        pattern: 2x2 Bayer pattern array (values 0=R, 1=G, 2=B, 3=G)
+        
+    Returns:
+        Dict with keys 'R', 'G1', 'G2', 'B' containing downsampled channel arrays
+    """
+    values = img[0]
+    
+    # RawPy pattern encoding: 0=R, 1=G, 2=B, 3=G
+    color_map = {0: 'R', 1: 'G', 2: 'B', 3: 'G'}
+    positions = {}
+    
+    for row in range(2):
+        for col in range(2):
+            color_code = pattern[row, col]
+            color = color_map[color_code]
+            
+            if color == 'G':
+                key = 'G1' if 'G1' not in positions else 'G2'
+            else:
+                key = color
+            
+            positions[key] = (row, col)
+    
+    # Extract channels via strided slicing
+    channels = {}
+    for key, (row, col) in positions.items():
+        channels[key] = values[row::2, col::2].copy()
+    
+    return channels
+
+
+def extract_xtrans_channels(img: np.ndarray, pattern: np.ndarray) -> dict[str, np.ndarray]:
+    """Extract 3 X-Trans channels via representative pixel sampling.
+    
+    Uses representative pixel sampling (one pixel per 6x6 block) to preserve
+    spatial phase information for FFT correlation.
+    
+    Args:
+        img: Mosaiced RAW image [1, H, W]
+        pattern: 6x6 X-Trans pattern array
+        
+    Returns:
+        Dict with keys 'R', 'G', 'B' containing downsampled channel arrays
+    """
+    values = img[0]
+    h, w = values.shape
+    pattern_h, pattern_w = pattern.shape
+    
+    sampled_h = h // pattern_h
+    sampled_w = w // pattern_w
+    
+    # Find first occurrence of each color (representative position)
+    color_map = {0: 'R', 1: 'G', 2: 'B'}
+    representatives = {}
+    
+    for color_code in [0, 1, 2]:
+        mask = (pattern == color_code)
+        positions = np.argwhere(mask)
+        if len(positions) > 0:
+            representatives[color_map[color_code]] = tuple(positions[0])
+    
+    # Extract channels by sampling representative pixel from each block
+    channels = {}
+    for color, (rep_y, rep_x) in representatives.items():
+        dense = np.zeros((sampled_h, sampled_w), dtype=values.dtype)
+        
+        for i in range(sampled_h):
+            for j in range(sampled_w):
+                block_y = i * pattern_h + rep_y
+                block_x = j * pattern_w + rep_x
+                if block_y < h and block_x < w:
+                    dense[i, j] = values[block_y, block_x]
+        
+        channels[color] = dense
+    
+    return channels
+
+
+def _fft_phase_correlate_single(anchor_ch: np.ndarray, target_ch: np.ndarray) -> tuple[int, int]:
+    """Single-channel FFT phase correlation (hot path).
+    
+    Performance-critical function with minimal branching.
+    
+    Args:
+        anchor_ch: Reference channel [H, W]
+        target_ch: Target channel [H, W]
+        
+    Returns:
+        (dy, dx): Detected shift in pixels
+    """
+    from scipy import signal
+    
+    # Normalize to zero mean
+    anchor_norm = anchor_ch - anchor_ch.mean()
+    target_norm = target_ch - target_ch.mean()
+    
+    # FFT cross-correlation
+    correlation = signal.fftconvolve(anchor_norm, target_norm[::-1, ::-1], mode='same')
+    
+    # Find peak
+    peak_idx = np.unravel_index(np.argmax(correlation), correlation.shape)
+    center = np.array(correlation.shape) // 2
+    
+    # Convert to shift (displacement convention)
+    shift = np.array(peak_idx) - center
+    
+    return int(shift[0]), int(shift[1])
+
+
+def fft_phase_correlate_cfa(
+    anchor: np.ndarray,
+    target: np.ndarray, 
+    anchor_metadata: dict,
+    method: Literal["median", "mean"] = "median",
+    verbose: bool = False
+) -> tuple[tuple[int, int], list[tuple[int, int]]]:
+    """CFA-aware FFT phase correlation for RAW image alignment.
+    
+    Extracts color channels from mosaiced CFA data and performs FFT phase
+    correlation on each channel independently. Combines results via median
+    or mean to produce robust shift estimate.
+    
+    Args:
+        anchor: Reference RAW image [1, H, W]
+        target: Target RAW image to align [1, H, W]
+        anchor_metadata: Metadata dict containing 'RGBG_pattern'
+        method: 'median' or 'mean' for combining channel shifts
+        verbose: Print per-channel shift detections
+        
+    Returns:
+        shift: (dy, dx) tuple - final combined shift estimate
+        channel_shifts: List of per-channel (dy, dx) detections
+    """
+    pattern = anchor_metadata['RGBG_pattern']
+    pattern_shape = pattern.shape
+    
+    # Auto-detect CFA type and extract channels
+    if pattern_shape == (2, 2):
+        # Bayer CFA
+        channels_anchor = extract_bayer_channels(anchor, pattern)
+        channels_target = extract_bayer_channels(target, pattern)
+        scale_factor = 2
+    elif pattern_shape == (6, 6):
+        # X-Trans CFA
+        channels_anchor = extract_xtrans_channels(anchor, pattern)
+        channels_target = extract_xtrans_channels(target, pattern)
+        scale_factor = 6
+    else:
+        raise ValueError(f"Unsupported CFA pattern shape: {pattern_shape}")
+    
+    # Correlate each channel pair
+    channel_shifts = []
+    for color in channels_anchor.keys():
+        ch_anchor = channels_anchor[color]
+        ch_target = channels_target[color]
+        
+        # Detect shift at downsampled resolution
+        dy_down, dx_down = _fft_phase_correlate_single(ch_anchor, ch_target)
+        
+        # Scale back to full resolution
+        dy = dy_down * scale_factor
+        dx = dx_down * scale_factor
+        
+        channel_shifts.append((dy, dx))
+        
+        if verbose:
+            print(f"  {color:3s}: ({dy:3d}, {dx:3d})")
+    
+    # Combine channel results
+    if method == "median":
+        dy_final = int(np.median([s[0] for s in channel_shifts]))
+        dx_final = int(np.median([s[1] for s in channel_shifts]))
+    elif method == "mean":
+        dy_final = int(np.mean([s[0] for s in channel_shifts]))
+        dx_final = int(np.mean([s[1] for s in channel_shifts]))
+    else:
+        raise ValueError(f"Unknown method: {method}")
+    
+    return (dy_final, dx_final), channel_shifts
 
 
 def xtrans_fpath_to_OpenEXR(

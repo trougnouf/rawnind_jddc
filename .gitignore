@@ -2,3 +2,10 @@
 uv.lock
 **/*/__pycache__
 **/*/*.egg-info
+
+# Backup files
+*~
+*.bak
+
+# Setup documentation (local only)
+SETUP_COMPLETE.md

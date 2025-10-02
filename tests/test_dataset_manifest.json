@@ -1,0 +1,92 @@
+{
+  "scenes": [
+    {
+      "scene_name": "2pilesofplates",
+      "cfa_type": "Bayer",
+      "camera_make": "Unknown",
+      "camera_model": "Unknown",
+      "extension": ".arw",
+      "gt_file": "Bayer/2pilesofplates/gt/Bayer_2pilesofplates_GT_ISO100_sha1=854554a34b339413462eb1538d4cb0fa95d468b5.arw",
+      "noisy_files": [
+        "Bayer/2pilesofplates/Bayer_2pilesofplates_ISO400_sha1=6637f1f7485046ba8e6e09978bd26b91042568e6.arw",
+        "Bayer/2pilesofplates/Bayer_2pilesofplates_ISO640_sha1=e11074913f99cdc64f7f41368a5bc99421a4ad23.arw",
+        "Bayer/2pilesofplates/Bayer_2pilesofplates_ISO1250_sha1=9121efbd50e2f2392665cb17b435b2526df8e9ae.arw"
+      ],
+      "num_gt": 2,
+      "num_noisy": 12
+    },
+    {
+      "scene_name": "7D-1",
+      "cfa_type": "Bayer",
+      "camera_make": "Unknown",
+      "camera_model": "Unknown",
+      "extension": ".cr2",
+      "gt_file": "Bayer/7D-1/gt/Bayer_7D-1_GT_ISO100_sha1=22aef4a5b4038e241082741117827f364ce6a5ac.cr2",
+      "noisy_files": [
+        "Bayer/7D-1/Bayer_7D-1_ISO3200_sha1=61536b7de6506deb768693f6e495af67fc8d2562.cr2",
+        "Bayer/7D-1/Bayer_7D-1_ISO800_sha1=11d2f7ac51732304c1ed32e352f3dd080f546c4b.cr2",
+        "Bayer/7D-1/Bayer_7D-1_ISO400_sha1=ce125be3071119883a0e7118069bdf59d14af465.cr2"
+      ],
+      "num_gt": 1,
+      "num_noisy": 7
+    },
+    {
+      "scene_name": "7D-3",
+      "cfa_type": "Bayer",
+      "camera_make": "Unknown",
+      "camera_model": "Unknown",
+      "extension": ".cr2",
+      "gt_file": "Bayer/7D-3/gt/Bayer_7D-3_GT_ISO100_sha1=5e34c7445cac7688bb424b6cda45eb5bc99754e6.cr2",
+      "noisy_files": [
+        "Bayer/7D-3/Bayer_7D-3_ISO3200_sha1=707954565ffd48baace9e6dd657c6b457c70c901.cr2",
+        "Bayer/7D-3/Bayer_7D-3_ISO400_sha1=f3cc41768299a394f4138d3037ee876bc2cadd8d.cr2",
+        "Bayer/7D-3/Bayer_7D-3_ISO200_sha1=4fde516584e8164ed7902a9deab3fcf48ea1a184.cr2"
+      ],
+      "num_gt": 1,
+      "num_noisy": 7
+    },
+    {
+      "scene_name": "7D-4",
+      "cfa_type": "Bayer",
+      "camera_make": "Unknown",
+      "camera_model": "Unknown",
+      "extension": ".cr2",
+      "gt_file": "Bayer/7D-4/gt/Bayer_7D-4_GT_ISO100_sha1=5f31b10c650b223efe1976f4ae9918569a5405bc.cr2",
+      "noisy_files": [
+        "Bayer/7D-4/Bayer_7D-4_ISO6400_sha1=bb347402248f011a89476db3fb6a26ffa5d5e4e3.cr2",
+        "Bayer/7D-4/Bayer_7D-4_ISO400_sha1=b9aa817e7b674aea7d19b00c47b9d2f866d8a9a1.cr2",
+        "Bayer/7D-4/Bayer_7D-4_ISO3200_sha1=b70bafbaf80d779b15dbbc4083403b735ed44999.cr2"
+      ],
+      "num_gt": 1,
+      "num_noisy": 7
+    },
+    {
+      "scene_name": "7D-5",
+      "cfa_type": "Bayer",
+      "camera_make": "Unknown",
+      "camera_model": "Unknown",
+      "extension": ".cr2",
+      "gt_file": "Bayer/7D-5/gt/Bayer_7D-5_GT_ISO100_sha1=c09e3a170d3769297724a5a8e5e222b2d1d803d4.cr2",
+      "noisy_files": [
+        "Bayer/7D-5/Bayer_7D-5_ISO200_sha1=85de82eb3878875da75d883147812830837f704d.cr2",
+        "Bayer/7D-5/Bayer_7D-5_ISO12800_sha1=fb68e8acf13d69286cc3cc97c7b9ccc64bfdb2e9.cr2",
+        "Bayer/7D-5/Bayer_7D-5_ISO400_sha1=87786a6393b08b96adfb37817087eca3d2f6a331.cr2"
+      ],
+      "num_gt": 1,
+      "num_noisy": 7
+    }
+  ],
+  "summary": {
+    "total_scenes": 5,
+    "by_cfa": {
+      "Bayer": 5
+    },
+    "by_extension": {
+      ".arw": 1,
+      ".cr2": 4
+    },
+    "by_camera": {
+      "Unknown Unknown": 5
+    }
+  }
+}
