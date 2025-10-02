@@ -45,7 +45,7 @@ from rawnind.libs.rawproc import (
 )
 RAWNIND_CONTENT_FPATH = Path(RAWNIND_CONTENT_FPATH).resolve()
 
-NUM_THREADS: int = os.cpu_count() // 4 * 3
+NUM_THREADS: int = os.cpu_count() - 1
 LOG_FPATH = Path(os.path.join("logs", os.path.basename(__file__) + ".log"))
 HDR_EXT = "tif"
 
@@ -79,9 +79,9 @@ def get_args() -> argparse.Namespace:
         help="Alignment method to use (auto=automatically select best method)",
     )
     parser.add_argument(
-        "--verbose_alignment",
+        "--verbose",
         action="store_true",
-        help="Enable verbose output for alignment operations",
+        help="Enable verbose output",
     )
     parser.add_argument(
         "--benchmark",
@@ -250,7 +250,7 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
         for arg in sample_args:
             test_arg = arg.copy()
             test_arg["alignment_method"] = method
-            test_arg["verbose_alignment"] = False
+            test_arg["verbose"] = False
             test_args.append(test_arg)
         
         try:
@@ -321,6 +321,11 @@ if __name__ == "__main__":
         cached_results = []
     else:
         cached_results = utilities.load_yaml(content_fpath, error_on_404=True)
+    
+    total_image_sets = 0
+    total_gt_files_count = 0
+    total_matched_pairs = 0
+    
     for ds_dpath in (bayer_ds_dpath, linrec_ds_dpath):
         if not os.path.isdir(ds_dpath):
             continue
@@ -370,23 +375,31 @@ if __name__ == "__main__":
                                 DATASETS_ROOT, args.dataset, f"masks_{LOSS_THRESHOLD}"
                             ),
                             "alignment_method": args.alignment_method,
-                            "verbose_alignment": args.verbose_alignment,
+                            "verbose": args.verbose,
                             "num_threads": args.num_threads,
                         }
                     )
             
             if total_gt_files > 0:
-                logging.info(f"Image set '{image_set}': {total_gt_files} GT files, {matched_pairs} valid pairs")
+                total_image_sets += 1
+                total_gt_files_count += total_gt_files
+                total_matched_pairs += matched_pairs
                 
-                # Log detailed pairing information for debugging
-                if matched_pairs > 0:
-                    logging.debug(f"Detailed pairs for '{image_set}':")
-                    pair_count = 0
-                    for arg in args_in[-matched_pairs:]:  # Get the pairs we just added
-                        pair_count += 1
-                        gt_name = os.path.basename(arg['gt_file_endpath'])
-                        f_name = os.path.basename(arg['f_endpath'])
-                        logging.debug(f"  Pair {pair_count}: GT={gt_name} <-> Noisy={f_name}")
+                if args.verbose:
+                    logging.info(f"Image set '{image_set}': {total_gt_files} GT files, {matched_pairs} valid pairs")
+                    
+                    # Log detailed pairing information for debugging
+                    if matched_pairs > 0:
+                        logging.debug(f"Detailed pairs for '{image_set}':")
+                        pair_count = 0
+                        for arg in args_in[-matched_pairs:]:  # Get the pairs we just added
+                            pair_count += 1
+                            gt_name = os.path.basename(arg['gt_file_endpath'])
+                            f_name = os.path.basename(arg['f_endpath'])
+                            logging.debug(f"  Pair {pair_count}: GT={gt_name} <-> Noisy={f_name}")
+    
+    if not args.verbose:
+        logging.info(f"Found {total_image_sets} image sets with {total_gt_files_count} GT files and {total_matched_pairs} valid pairs")
 
     # Run benchmark if requested
     if args.benchmark and len(args_in) > 0:

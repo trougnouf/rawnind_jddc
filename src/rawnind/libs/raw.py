@@ -31,7 +31,6 @@ except ImportError:
         OPENEXR_PROVIDER = "OpenEXR"
     except ImportError:
         raise ImportError("OpenImageIO or OpenEXR must be installed")
-print("\n Using ", OPENEXR_PROVIDER)
 # import multiprocessing
 # multiprocessing.set_start_method('spawn')
 import cv2

@@ -115,6 +115,12 @@ def mt_runner(
     if num_threads is None:
         num_threads = NUM_THREADS
     
+    # Check if verbose flag is set in argslist
+    verbose = False
+    if argslist and len(argslist) > 0:
+        if isinstance(argslist[0], dict) and 'verbose' in argslist[0]:
+            verbose = argslist[0]['verbose']
+    
     # Set multiprocessing start method to spawn for CUDA compatibility
     if TORCH_AVAILABLE:
         try:
@@ -167,8 +173,8 @@ def mt_runner(
                         
                         for i, ares in enumerate(pbar):
                             ret.append(ares)
-                            # Extract scene and method info for display
-                            if hasattr(ares, 'get') and 'gt_fpath' in ares:
+                            # Extract scene and method info for display (only in verbose mode)
+                            if verbose and hasattr(ares, 'get') and 'gt_fpath' in ares:
                                 # Extract scene from the result
                                 scene_name = ares.get('image_set', 'unknown')
                                 method = ares.get('alignment_method', 'auto')
