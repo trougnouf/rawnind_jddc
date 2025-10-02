@@ -162,11 +162,11 @@ def mt_runner(
                 if progress_bar:
                     ret = []
                     try:
-                        # Use a stationary progress bar that sticks to bottom
+                        # Use a stationary progress bar that updates in place
                         bar_format = '{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
                         pbar = tqdm.tqdm(amap(fun, argslist), total=len(argslist), desc=progress_desc, 
-                                       bar_format=bar_format, position=0, leave=False, ncols=120, 
-                                       dynamic_ncols=False, file=sys.stdout, mininterval=0.1)
+                                       bar_format=bar_format, position=0, leave=True, 
+                                       dynamic_ncols=True, file=sys.stderr, mininterval=0.05)
                         
                         current_scene = None
                         current_method = None
@@ -175,9 +175,9 @@ def mt_runner(
                             ret.append(ares)
                             # Extract scene and method info for display (only in verbose mode)
                             if verbose and hasattr(ares, 'get') and 'gt_fpath' in ares:
-                                # Extract scene from the result
+                                # Extract scene and actual method used from the result
                                 scene_name = ares.get('image_set', 'unknown')
-                                method = ares.get('alignment_method', 'auto')
+                                method = ares.get('alignment_method', 'unknown')
                                 
                                 # Only update description if scene or method changed to avoid flicker
                                 if scene_name != current_scene or method != current_method:
@@ -186,7 +186,7 @@ def mt_runner(
                                     desc = f"Scene: {scene_name:<30} Method: {method.upper()}"
                                     pbar.set_description(desc)
                         
-                        # Clear the progress bar after completion to avoid leaving it on screen
+                        # Don't close the progress bar - leave it on screen showing final state
                         pbar.close()
                                 
                     except (TypeError, KeyboardInterrupt) as e:

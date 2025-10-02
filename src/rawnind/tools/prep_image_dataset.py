@@ -404,20 +404,19 @@ if __name__ == "__main__":
     # Run benchmark if requested
     if args.benchmark and len(args_in) > 0:
         run_alignment_benchmark(args_in, num_samples=min(5, len(args_in)))
-        logging.info("Benchmark completed. Proceeding with normal processing...")
+        logging.info("Benchmark completed. Exiting.")
+        sys.exit(0)
     
     logging.info(f"Processing {len(args_in)} image pairs...")
-    logging.info(f"Using alignment method: {args.alignment_method}")
     processing_start = time.time()
     
     results = []
     try:
-        method_name = args.alignment_method.upper() if hasattr(args, 'alignment_method') else "PROCESSING"
         results = utilities.mt_runner(
             rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
             args_in,
             num_threads=args.num_threads,
-            progress_desc=f"Method: {method_name}",
+            progress_desc="Processing",
         )
 
     except KeyboardInterrupt:

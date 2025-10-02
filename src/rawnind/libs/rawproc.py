@@ -616,6 +616,9 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
             method="median", return_loss_too=True, verbose=False
         )
         
+        # Track actual method used (for bayer, always FFT-CFA)
+        actual_method = "fft_cfa"
+        
         # NOW demosaic only for loss mask computation
         gt_rgb = raw.demosaic(gt_img, gt_metadata)
         f_rgb = raw.demosaic(f_img, f_metadata)
@@ -636,6 +639,9 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         best_alignment, best_alignment_loss = find_best_alignment(
             gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
         )
+        
+        # Track actual method used (resolve 'auto' to 'fft')
+        actual_method = "fft" if alignment_method == "auto" else alignment_method
     rgb_gain = float(match_gain(gt_rgb, f_rgb, return_val=True))
     # gt_rgb_mean = gt_rgb.mean()
     # gain = match_gain(gt_rgb, f_rgb, return_val=True)
@@ -669,7 +675,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         "gt_fpath": gt_fpath,
         "f_fpath": f_fpath,
         "image_set": kwargs["image_set"],
-        "alignment_method": alignment_method,
+        "alignment_method": actual_method,
         "best_alignment": list(best_alignment),
         "best_alignment_loss": best_alignment_loss,
         "mask_fpath": mask_fpath,
