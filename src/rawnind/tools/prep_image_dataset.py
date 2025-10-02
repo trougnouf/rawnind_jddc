@@ -64,7 +64,7 @@ def cached_listdir(directory: str) -> List[str]:
     return os.listdir(directory) if os.path.exists(directory) else []
 
 @lru_cache(maxsize=64)
-def cached_exists(filepath: str) -> booe” concept and was trying to align everything to everything…
+def cached_exists(filepath: str) -> bool:
     return os.path.exists(filepath)
 
 
