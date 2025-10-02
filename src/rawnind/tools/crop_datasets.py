@@ -229,6 +229,7 @@ def crop_paired_dataset(ds_base_dpath: str):
 
 
 if __name__ == "__main__":
+    os.makedirs(os.path.dirname(LOG_FPATH), exist_ok=True)
     logging.basicConfig(
         filename=LOG_FPATH,
         format="%(message)s",
