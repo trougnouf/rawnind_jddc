@@ -422,7 +422,7 @@ if __name__ == "__main__":
 
     # Run benchmark if requested
     if args.benchmark and len(args_in) > 0:
-        run_alignment_benchmark(args_in, num_samples=min(5, len(args_in)))
+        run_alignment_benchmark(args_in)
         logging.info("Benchmark completed. Exiting.")
         sys.exit(0)
     
