@@ -64,9 +64,48 @@ def cached_listdir(directory: str) -> List[str]:
     return os.listdir(directory) if os.path.exists(directory) else []
 
 @lru_cache(maxsize=64)
-def cached_exists(filepath: str) -> bool:
-    """Cached file existence check."""
+def cached_exists(filepath: str) -> booe” concept and was trying to align everything to everything…
     return os.path.exists(filepath)
+
+
+def estimate_gpu_memory_for_alignment(kwargs: dict) -> Tuple[str, int]:
+    """Estimate GPU memory usage for image alignment operations.
+    
+    Args:
+        kwargs: Dictionary containing image_set, gt_file_endpath, f_endpath
+        
+    Returns:
+        Tuple of (task_id, estimated_memory_bytes)
+    """
+    # Create unique task ID from the image paths
+    task_id = f"{kwargs['image_set']}-{kwargs['gt_file_endpath']}-{kwargs['f_endpath']}"
+    
+    # Try to get actual image dimensions if possible
+    try:
+        gt_fpath = os.path.join(kwargs["ds_dpath"], kwargs["image_set"], kwargs["gt_file_endpath"])
+        
+        # Estimate image dimensions based on common sizes
+        # For RAW images, typical sizes are 4K, 6K, 8K
+        if "4k" in gt_fpath.lower() or "4096" in gt_fpath.lower():
+            height, width = 4096, 4096
+        elif "6k" in gt_fpath.lower() or "6144" in gt_fpath.lower():
+            height, width = 6144, 6144
+        elif "8k" in gt_fpath.lower() or "8192" in gt_fpath.lower():
+            height, width = 8192, 8192
+        else:
+            # Default assumption for high-res images
+            height, width = 4096, 4096
+            
+        # Use the GPU scheduler's memory estimation
+        scheduler = utilities.get_gpu_scheduler()
+        estimated_memory = scheduler.estimate_memory_usage(height, width, channels=3)
+        
+        return task_id, estimated_memory
+        
+    except Exception as e:
+        logging.debug(f"Could not estimate memory for {task_id}: {e}")
+        # Fallback: assume 4K image needs ~1.2GB
+        return task_id, int(1.2e9)
 
 """
 #align images needs: bayer_gt_fpath, profiledrgb_gt_fpath, profiledrgb_noisy_fpath
@@ -274,11 +313,12 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
             test_args.append(test_arg)
         
         try:
-            # Run the alignment
+            # Run the alignment with GPU memory management
             method_results = utilities.mt_runner(
                 rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
                 test_args,
                 num_threads=min(os.cpu_count(), len(test_args)),  # Use all available cores for benchmarking
+                gpu_memory_estimator=estimate_gpu_memory_for_alignment,
             )
             
             elapsed = time.time() - start_time
@@ -438,6 +478,7 @@ if __name__ == "__main__":
             args_in,
             num_threads=args.num_threads,
             progress_desc=f"Method: {method_name}",
+            gpu_memory_estimator=estimate_gpu_memory_for_alignment,
         )
 
     except KeyboardInterrupt:

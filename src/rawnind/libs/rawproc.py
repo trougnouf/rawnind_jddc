@@ -735,6 +735,16 @@ def find_best_alignment_gpu(
         if verbose:
             print(f"GPU alignment failed: {type(e).__name__}: {e}, falling back to FFT search")
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
+    
+    finally:
+        # Explicit CUDA memory cleanup
+        if get_device_type() == 'cuda':
+            try:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                logging.debug("GPU alignment: CUDA memory cleaned up")
+            except Exception as cleanup_error:
+                logging.debug(f"GPU alignment: CUDA cleanup warning: {cleanup_error}")
 
 
 def find_best_alignment(

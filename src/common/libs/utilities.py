@@ -6,7 +6,9 @@ import sys
 import logging
 import random
 from typing import Callable, Union, Iterable, Optional, List, Any
-from multiprocessing import Pool
+import asyncio
+import threading
+import queue
 import tqdm
 import json
 import csv
@@ -16,6 +18,17 @@ import datetime
 import unittest
 import pickle
 import atexit  # restart_program()
+
+# Use torch.multiprocessing for proper tensor sharing
+try:
+    import torch
+    import torch.multiprocessing as mp
+    from torch.multiprocessing import Pool
+    TORCH_AVAILABLE = True
+except ImportError:
+    from multiprocessing import Pool
+    import multiprocessing as mp
+    TORCH_AVAILABLE = False
 
 
 try:
@@ -31,6 +44,179 @@ import yaml
 
 # sys.path += ['..', '.']
 NUM_THREADS = os.cpu_count()
+
+
+class GPUMemoryScheduler:
+    """Memory-aware GPU task scheduler that prevents OOM errors."""
+    
+    def __init__(self):
+        self.available_memory = None
+        self.memory_lock = threading.Lock()
+        self.pending_tasks = queue.Queue()
+        self.active_tasks = {}
+        self._initialized = False
+    
+    def _initialize_gpu_memory(self):
+        """Initialize GPU memory tracking (called lazily to avoid fork issues)."""
+        if self._initialized or not TORCH_AVAILABLE:
+            return
+            
+        try:
+            if torch.cuda.is_available():
+                device = torch.cuda.current_device()
+                total_memory = torch.cuda.get_device_properties(device).total_memory
+                # Reserve 20% for system and fragmentation
+                self.available_memory = int(total_memory * 0.8)
+                logging.info(f"GPU memory scheduler initialized: {self.available_memory / 1e9:.1f}GB available")
+            else:
+                self.available_memory = 0
+                logging.info("No CUDA available, GPU memory scheduler disabled")
+        except Exception as e:
+            logging.warning(f"Failed to initialize GPU memory scheduler: {e}")
+            self.available_memory = 0
+        
+        self._initialized = True
+    
+    def estimate_memory_usage(self, height: int, width: int, channels: int = 3, dtype_size: int = 4) -> int:
+        """Estimate GPU memory usage for image processing operations.
+        
+        Args:
+            height, width, channels: Image dimensions
+            dtype_size: Bytes per element (4 for float32)
+            
+        Returns:
+            Estimated memory usage in bytes
+        """
+        # Base memory for 2 input images
+        base_memory = 2 * height * width * channels * dtype_size
+        
+        # FFT operations typically need 4-6x the input size for intermediates
+        # Add padding, complex numbers, and workspace
+        estimated_memory = base_memory * 6
+        
+        return estimated_memory
+    
+    def can_acquire_memory(self, required_memory: int) -> bool:
+        """Check if enough GPU memory is available."""
+        if not self._initialized:
+            self._initialize_gpu_memory()
+            
+        if self.available_memory is None or self.available_memory == 0:
+            return False
+            
+        with self.memory_lock:
+            return self.available_memory >= required_memory
+    
+    def acquire_memory(self, task_id: str, required_memory: int) -> bool:
+        """Acquire GPU memory for a task.
+        
+        Returns:
+            True if memory was acquired, False otherwise
+        """
+        if not self._initialized:
+            self._initialize_gpu_memory()
+            
+        if self.available_memory is None or self.available_memory == 0:
+            return False
+            
+        with self.memory_lock:
+            if self.available_memory >= required_memory:
+                self.available_memory -= required_memory
+                self.active_tasks[task_id] = required_memory
+                logging.debug(f"Acquired {required_memory / 1e6:.1f}MB GPU memory for task {task_id}, "
+                            f"{self.available_memory / 1e6:.1f}MB remaining")
+                return True
+            return False
+    
+    def release_memory(self, task_id: str):
+        """Release GPU memory for a completed task."""
+        with self.memory_lock:
+            if task_id in self.active_tasks:
+                memory_amount = self.active_tasks.pop(task_id)
+                self.available_memory += memory_amount
+                logging.debug(f"Released {memory_amount / 1e6:.1f}MB GPU memory for task {task_id}, "
+                            f"{self.available_memory / 1e6:.1f}MB available")
+
+
+# Global GPU memory scheduler instance
+_gpu_scheduler = GPUMemoryScheduler()
+
+
+def get_gpu_scheduler() -> GPUMemoryScheduler:
+    """Get the global GPU memory scheduler instance."""
+    return _gpu_scheduler
+
+
+class GPUAwareWorkerWrapper:
+    """Picklable wrapper that adds GPU memory management to worker functions."""
+    
+    def __init__(self, func: Callable, estimate_memory_func: Optional[Callable] = None):
+        self.func = func
+        self.estimate_memory_func = estimate_memory_func
+    
+    def __call__(self, args):
+        # Set CPU thread count to avoid oversubscription
+        if TORCH_AVAILABLE:
+            # Calculate threads per process: total_cores / num_processes
+            # We'll estimate num_processes from the current process count
+            try:
+                import psutil
+                current_process = psutil.Process()
+                parent_process = current_process.parent()
+                if parent_process:
+                    # Count sibling processes (other workers)
+                    sibling_count = len([p for p in parent_process.children() if p.pid != current_process.pid])
+                    threads_per_process = max(1, NUM_THREADS // max(1, sibling_count + 1))
+                else:
+                    threads_per_process = NUM_THREADS
+            except:
+                # Fallback: assume 4 processes
+                threads_per_process = max(1, NUM_THREADS // 4)
+            
+            torch.set_num_threads(threads_per_process)
+            logging.debug(f"Set torch threads to {threads_per_process} for worker process {os.getpid()}")
+        
+        # Handle GPU memory scheduling if estimate function provided
+        task_id = None
+        if self.estimate_memory_func and TORCH_AVAILABLE:
+            try:
+                task_id, memory_estimate = self.estimate_memory_func(args)
+                scheduler = get_gpu_scheduler()
+                
+                # Try to acquire GPU memory
+                if scheduler.acquire_memory(task_id, memory_estimate):
+                    try:
+                        result = self.func(args)
+                        return result
+                    finally:
+                        scheduler.release_memory(task_id)
+                else:
+                    # GPU memory not available, function should handle fallback
+                    logging.debug(f"GPU memory not available for task {task_id}, function will handle fallback")
+                    result = self.func(args)
+                    return result
+            except Exception as e:
+                if task_id:
+                    get_gpu_scheduler().release_memory(task_id)
+                logging.error(f"Error in GPU-aware worker: {e}")
+                raise
+        else:
+            # No GPU memory management, just run the function
+            return self.func(args)
+
+
+def gpu_aware_worker_wrapper(func: Callable, estimate_memory_func: Optional[Callable] = None):
+    """Create a picklable wrapper that adds GPU memory management to worker functions.
+    
+    Args:
+        func: The worker function to wrap
+        estimate_memory_func: Function to estimate memory usage from args
+                             Should return (task_id, memory_estimate) tuple
+    
+    Returns:
+        Wrapped function that handles GPU memory scheduling
+    """
+    return GPUAwareWorkerWrapper(func, estimate_memory_func)
 
 
 def checksum(fpath, htype="sha1"):
@@ -84,14 +270,35 @@ def mt_runner(
     progress_bar: bool = True,
     starmap: bool = False,
     progress_desc: str = "Processing",
+    gpu_memory_estimator: Optional[Callable] = None,
 ) -> Iterable[Any]:
     """
-    fun: function to run
-    starmap: expand arguments (not compatible with ordered=False)
+    Multiprocessing runner with GPU memory management and proper tensor sharing.
+    
+    Args:
+        fun: function to run
+        argslist: list of arguments to pass to function
+        num_threads: number of worker processes
+        ordered: whether to preserve order (slower)
+        progress_bar: show progress bar
+        starmap: expand arguments (not compatible with ordered=False)
+        progress_desc: description for progress bar
+        gpu_memory_estimator: function to estimate GPU memory usage from args
+                             Should return (task_id, memory_estimate) tuple
     """
     if num_threads is None:
         num_threads = NUM_THREADS
+    
+    # Set multiprocessing start method to spawn for CUDA compatibility
+    if TORCH_AVAILABLE:
+        try:
+            mp.set_start_method('spawn', force=True)
+        except RuntimeError:
+            # Start method already set
+            pass
+    
     if num_threads == 1:
+        # Single-threaded execution
         results = []
         for args in argslist:
             if starmap:
@@ -100,6 +307,12 @@ def mt_runner(
                 results.append(fun(args))
         return results
     else:
+        # Wrap function with GPU memory management if estimator provided
+        if gpu_memory_estimator:
+            wrapped_fun = gpu_aware_worker_wrapper(fun, gpu_memory_estimator)
+        else:
+            wrapped_fun = gpu_aware_worker_wrapper(fun)
+        
         pool = Pool(num_threads)
         if starmap:
             amap = pool.starmap
@@ -109,20 +322,21 @@ def mt_runner(
             amap = pool.imap
         else:
             amap = pool.imap_unordered
+        
         if ordered:
             print("mt_runner warning: ordered=True might be slower.")
             if progress_bar:
                 print(
                     "mt_runner warning: progress bar NotImplemented for ordered pool."
                 )
-            ret = amap(fun, argslist)
+            ret = amap(wrapped_fun, argslist)
         else:
             if progress_bar:
                 ret = []
                 try:
                     # Use a stationary progress bar that sticks to bottom
                     bar_format = '{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
-                    pbar = tqdm.tqdm(amap(fun, argslist), total=len(argslist), desc=progress_desc, 
+                    pbar = tqdm.tqdm(amap(wrapped_fun, argslist), total=len(argslist), desc=progress_desc, 
                                    bar_format=bar_format, position=0, leave=False, ncols=120, 
                                    dynamic_ncols=False, file=sys.stdout, mininterval=0.1)
                     
@@ -151,7 +365,7 @@ def mt_runner(
                     print(e)
                     raise RuntimeError
             else:
-                ret = amap(fun, argslist)
+                ret = amap(wrapped_fun, argslist)
         pool.close()
         pool.join()
         return ret
