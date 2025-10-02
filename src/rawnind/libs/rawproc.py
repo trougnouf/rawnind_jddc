@@ -513,130 +513,6 @@ def find_best_alignment_fft(
     return best_shift
 
 
-def find_best_alignment_hierarchical(
-    anchor_img: np.ndarray,
-    target_img: np.ndarray,
-    max_shift_search: int = MAX_SHIFT_SEARCH,
-    return_loss_too: bool = False,
-    verbose: bool = False,
-) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
-    """Hierarchical coarse-to-fine alignment search."""
-    target_img = match_gain(anchor_img, target_img)
-    
-    # Handle different image sizes by cropping to common region
-    if len(anchor_img.shape) > 2:
-        min_h = min(anchor_img.shape[1], target_img.shape[1])
-        min_w = min(anchor_img.shape[2], target_img.shape[2])
-        
-        # Crop both images to same size from center
-        anchor_h, anchor_w = anchor_img.shape[1], anchor_img.shape[2]
-        target_h, target_w = target_img.shape[1], target_img.shape[2]
-        
-        anchor_y_start = (anchor_h - min_h) // 2
-        anchor_x_start = (anchor_w - min_w) // 2
-        target_y_start = (target_h - min_h) // 2
-        target_x_start = (target_w - min_w) // 2
-        
-        anchor_img = anchor_img[:, anchor_y_start:anchor_y_start+min_h, anchor_x_start:anchor_x_start+min_w]
-        target_img = target_img[:, target_y_start:target_y_start+min_h, target_x_start:target_x_start+min_w]
-    else:
-        min_h = min(anchor_img.shape[0], target_img.shape[0])
-        min_w = min(anchor_img.shape[1], target_img.shape[1])
-        
-        anchor_h, anchor_w = anchor_img.shape
-        target_h, target_w = target_img.shape
-        
-        anchor_y_start = (anchor_h - min_h) // 2
-        anchor_x_start = (anchor_w - min_w) // 2
-        target_y_start = (target_h - min_h) // 2
-        target_x_start = (target_w - min_w) // 2
-        
-        anchor_img = anchor_img[anchor_y_start:anchor_y_start+min_h, anchor_x_start:anchor_x_start+min_w]
-        target_img = target_img[target_y_start:target_y_start+min_h, target_x_start:target_x_start+min_w]
-    
-    # Multi-scale pyramid - start coarse, refine progressively
-    scales = [4, 2, 1]
-    best_shift = (0, 0)
-    best_loss = float('inf')
-    
-    for i, scale in enumerate(scales):
-        if verbose:
-            print(f"Hierarchical search at scale 1/{scale}")
-            
-        if scale > 1:
-            # Downsample images
-            if len(anchor_img.shape) > 2:
-                anchor_small = anchor_img[:, ::scale, ::scale]
-                target_small = target_img[:, ::scale, ::scale]
-            else:
-                anchor_small = anchor_img[::scale, ::scale]
-                target_small = target_img[::scale, ::scale]
-        else:
-            anchor_small = anchor_img
-            target_small = target_img
-        
-        # Search range: start broad, narrow down
-        if i == 0:  # First scale - broad search
-            search_range = max(8, max_shift_search // scale)
-            scaled_shift = (0, 0)  # Start from center
-        else:  # Subsequent scales - refine around previous result
-            search_range = max(2, 8 // scale)  # Smaller search window
-            # Scale up previous result to current resolution
-            scaled_shift = (best_shift[0] * scale // scales[i-1], 
-                          best_shift[1] * scale // scales[i-1])
-        
-        # Local search around scaled estimate
-        current_best = scaled_shift
-        current_best_loss = float('inf')
-        
-        for dy in range(-search_range, search_range + 1):
-            for dx in range(-search_range, search_range + 1):
-                # Test shift at current scale
-                test_shift_scaled = (scaled_shift[0] + dy, scaled_shift[1] + dx)
-                
-                # Convert to full-resolution coordinates for clamping
-                test_shift_full = (test_shift_scaled[0] * scales[0] // scale,
-                                 test_shift_scaled[1] * scales[0] // scale)
-                
-                # Skip if outside search bounds
-                if (abs(test_shift_full[0]) > max_shift_search or 
-                    abs(test_shift_full[1]) > max_shift_search):
-                    continue
-                
-                try:
-                    shifted_anchor, shifted_target = shift_images(anchor_small, target_small, test_shift_scaled)
-                    loss = np_l1(shifted_anchor, shifted_target, avg=True)
-                    
-                    if loss < current_best_loss:
-                        current_best_loss = loss
-                        current_best = test_shift_scaled
-                        
-                        # Reasonable early termination - not too aggressive
-                        if loss < 0.01 and scale == 1:  # Only at finest scale
-                            if verbose:
-                                print(f"Early termination at loss {loss:.6f}")
-                            break
-                            
-                except (ValueError, IndexError):
-                    continue
-            
-            # Break outer loop too if early termination triggered
-            if current_best_loss < 0.01 and scale == 1:
-                break
-        
-        # Update best shift and loss
-        best_shift = current_best
-        best_loss = current_best_loss
-        
-        if verbose:
-            print(f"Scale 1/{scale}: best_shift={best_shift}, loss={best_loss:.6f}")
-    
-    if return_loss_too:
-        return best_shift, float(best_loss)
-    
-    return best_shift
-
-
 def find_best_alignment(
     anchor_img: np.ndarray,
     target_img: np.ndarray,
@@ -652,14 +528,10 @@ def find_best_alignment(
         method: Alignment method to use:
             - "auto": Automatically select best method (defaults to FFT for accuracy+speed)
             - "gpu": Use GPU-accelerated FFT (same as "fft", kept for compatibility)
-            - "hierarchical": Use hierarchical coarse-to-fine search (NOT recommended for RAW/CFA data)
-            - "fft": Use FFT-based phase correlation (RECOMMENDED: 17x faster + perfect accuracy)
+            - "fft": Use FFT-based phase correlation (RECOMMENDED)
             - "original": Use original brute-force method (slow, for reference only)
     
-    Note: FFT is now the default for "auto" because benchmarks show:
-        - 17.3x speedup over hierarchical
-        - Perfect pixel-accurate alignment
-        - Works correctly on RAW/Bayer CFA data (hierarchical has 2-10px errors due to downsampling)
+    Note: FFT is now the default for "auto" for best accuracy and speed.
     """
     # Method selection
     if method == "auto":
@@ -674,8 +546,6 @@ def find_best_alignment(
     # Note: "gpu" method now maps to FFT (removed old GPU implementation)
     if method == "gpu" or method == "fft":
         result = find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
-    elif method == "hierarchical":
-        result = find_best_alignment_hierarchical(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     elif method == "original":
         result = find_best_alignment_original(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     else:
@@ -817,7 +687,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         is_multiprocessing = kwargs.get("num_threads", 1) > 1
         verbose_for_alignment = verbose_alignment and not is_multiprocessing
         
-        # For RGB images, use old alignment method (hierarchical/fft on RGB)
+        # For RGB images, use alignment method on RGB
         best_alignment, best_alignment_loss = find_best_alignment(
             gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
         )

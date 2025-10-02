@@ -4,8 +4,7 @@ Tests for alignment_backends module - TDD approach
 Tests validate:
 1. Interface compatibility with working baseline (commit 5e06838)
 2. Correctness of alignment on known test cases
-3. CPU and GPU backends produce identical results
-4. Proper handling of edge cases
+3. Proper handling of edge cases
 """
 import numpy as np
 import pytest
@@ -13,7 +12,6 @@ import pytest
 # Will implement alignment_backends module to pass these tests
 # from src.rawnind.libs.alignment_backends import (
 #     find_best_alignment_cpu,
-#     find_best_alignment_gpu,
 #     get_alignment_backend
 # )
 
@@ -67,20 +65,7 @@ class TestAlignmentInterface:
 
 
 class TestCPUBackend:
-    """Test CPU-only backend (Option #9)"""
-    
-    def test_hierarchical_search_convergence(self):
-        """Test that hierarchical search converges to local minimum"""
-        # Create image with gradient - should have clear minimum
-        y, x = np.ogrid[0:100, 0:100]
-        img1 = ((x - 50)**2 + (y - 50)**2).astype(np.float32)
-        img2 = ((x - 55)**2 + (y - 48)**2).astype(np.float32)
-        
-        # Should find alignment close to (2, -5) due to gradient structure
-        # shift = find_best_alignment_cpu(img1, img2, max_shift_search=20)
-        # assert abs(shift[0] - 2) <= 3, f"Y-shift should be close to 2, got {shift[0]}"
-        # assert abs(shift[1] - (-5)) <= 3, f"X-shift should be close to -5, got {shift[1]}"
-        pytest.skip("Implementation pending")
+    """Test CPU-only backend"""
     
     def test_max_shift_constraint(self):
         """Test that search respects max_shift_search parameter"""
@@ -94,53 +79,16 @@ class TestCPUBackend:
         pytest.skip("Implementation pending")
 
 
-class TestGPUBackend:
-    """Test GPU backend (Option #8 - Scene-batching)"""
-    
-    def test_gpu_matches_cpu_simple(self):
-        """Test that GPU backend produces same result as CPU for simple case"""
-        if not _gpu_available():
-            pytest.skip("GPU not available")
-            
-        np.random.seed(42)
-        img = np.random.rand(100, 100).astype(np.float32)
-        
-        # cpu_shift = find_best_alignment_cpu(img, img, max_shift_search=10)
-        # gpu_shift = find_best_alignment_gpu(img, img, max_shift_search=10)
-        # assert cpu_shift == gpu_shift, f"CPU {cpu_shift} != GPU {gpu_shift}"
-        pytest.skip("Implementation pending")
-    
-    def test_gpu_batch_processing(self):
-        """Test that GPU can process multiple alignments in batch"""
-        if not _gpu_available():
-            pytest.skip("GPU not available")
-            
-        np.random.seed(42)
-        gt_img = np.random.rand(100, 100).astype(np.float32)
-        noisy_imgs = [np.random.rand(100, 100).astype(np.float32) for _ in range(5)]
-        
-        # Should be able to align all noisy images to GT in one batch
-        # shifts = find_best_alignment_gpu_batch(gt_img, noisy_imgs, max_shift_search=10)
-        # assert len(shifts) == 5, "Should return 5 shifts"
-        # assert all(isinstance(s, tuple) and len(s) == 2 for s in shifts)
-        pytest.skip("Implementation pending")
+
 
 
 class TestBackendSelection:
     """Test automatic backend selection"""
     
-    def test_get_backend_cpu_fallback(self):
-        """Test that CPU backend is returned when GPU unavailable"""
-        # backend = get_alignment_backend(prefer_gpu=True)
-        # # Should return a callable
+    def test_get_backend_returns_callable(self):
+        """Test that backend is returned as callable"""
+        # backend = get_alignment_backend()
         # assert callable(backend), "Backend should be callable"
-        pytest.skip("Implementation pending")
-    
-    def test_get_backend_explicit_cpu(self):
-        """Test that CPU backend is returned when explicitly requested"""
-        # backend = get_alignment_backend(prefer_gpu=False)
-        # assert callable(backend), "Backend should be callable"
-        # # Verify it's actually CPU backend by checking function name or module
         pytest.skip("Implementation pending")
 
 
@@ -172,16 +120,6 @@ class TestEdgeCases:
         # shift2 = find_best_alignment_cpu(img_float64, img_float64, max_shift_search=10)
         # shift3 = find_best_alignment_cpu(img_uint16, img_uint16, max_shift_search=10)
         pytest.skip("Implementation pending")
-
-
-# Helper functions
-def _gpu_available():
-    """Check if GPU is available for testing"""
-    try:
-        import torch
-        return torch.cuda.is_available()
-    except ImportError:
-        return False
 
 
 if __name__ == "__main__":

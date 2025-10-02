@@ -68,44 +68,6 @@ def cached_exists(filepath: str) -> bool:
     return os.path.exists(filepath)
 
 
-def estimate_gpu_memory_for_alignment(kwargs: dict) -> Tuple[str, int]:
-    """Estimate GPU memory usage for image alignment operations.
-    
-    Args:
-        kwargs: Dictionary containing image_set, gt_file_endpath, f_endpath
-        
-    Returns:
-        Tuple of (task_id, estimated_memory_bytes)
-    """
-    # Create unique task ID from the image paths
-    task_id = f"{kwargs['image_set']}-{kwargs['gt_file_endpath']}-{kwargs['f_endpath']}"
-    
-    # Try to get actual image dimensions if possible
-    try:
-        gt_fpath = os.path.join(kwargs["ds_dpath"], kwargs["image_set"], kwargs["gt_file_endpath"])
-        
-        # Estimate image dimensions based on common sizes
-        # For RAW images, typical sizes are 4K, 6K, 8K
-        if "4k" in gt_fpath.lower() or "4096" in gt_fpath.lower():
-            height, width = 4096, 4096
-        elif "6k" in gt_fpath.lower() or "6144" in gt_fpath.lower():
-            height, width = 6144, 6144
-        elif "8k" in gt_fpath.lower() or "8192" in gt_fpath.lower():
-            height, width = 8192, 8192
-        else:
-            # Default assumption for high-res images
-            height, width = 4096, 4096
-            
-        # Use the GPU scheduler's memory estimation
-        scheduler = utilities.get_gpu_scheduler()
-        estimated_memory = scheduler.estimate_memory_usage(height, width, channels=3)
-        
-        return task_id, estimated_memory
-        
-    except Exception as e:
-        logging.debug(f"Could not estimate memory for {task_id}: {e}")
-        # Fallback: assume 4K image needs ~1.2GB
-        return task_id, int(1.2e9)
 
 """
 #align images needs: bayer_gt_fpath, profiledrgb_gt_fpath, profiledrgb_noisy_fpath
@@ -129,7 +91,7 @@ def get_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--alignment_method",
-        choices=["auto", "gpu", "hierarchical", "fft", "original"],
+        choices=["auto", "gpu", "fft", "original"],
         default="auto",
         help="Alignment method to use (auto=automatically select best method)",
     )
@@ -318,7 +280,6 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
                 rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
                 test_args,
                 num_threads=min(os.cpu_count(), len(test_args)),  # Use all available cores for benchmarking
-                gpu_memory_estimator=estimate_gpu_memory_for_alignment,
             )
             
             elapsed = time.time() - start_time
@@ -470,50 +431,15 @@ if __name__ == "__main__":
     
     results = []
     try:
-        # GPU Hybrid Batching (Option #8): Group by GT scene for batch processing
-        # This is the optimal parallelism boundary for this dataset!
-        # Uses GPU-accelerated FFT from alignment_backends.py
-        use_gpu_batching = rawproc.is_accelerator_available()
+        # Use traditional per-pair multiprocessing
+        method_name = args.alignment_method.upper() if hasattr(args, 'alignment_method') else "PROCESSING"
         
-        if use_gpu_batching:
-            logging.info("Using GPU hybrid batching (Option #8): grouping by GT scene")
-            
-            # Group args by GT file
-            from collections import defaultdict
-            scene_groups = defaultdict(list)
-            for arg in args_in:
-                gt_key = arg['gt_file_endpath']
-                scene_groups[gt_key].append(arg)
-            
-            logging.info(f"Grouped {len(args_in)} pairs into {len(scene_groups)} GT scenes")
-            logging.info(f"Scene sizes: min={min(len(v) for v in scene_groups.values())}, "
-                        f"max={max(len(v) for v in scene_groups.values())}, "
-                        f"avg={len(args_in)/len(scene_groups):.1f}")
-            
-            # Process each scene with GPU batching (scenes processed sequentially)
-            # Within each scene, all noisy images are batched on GPU
-            method_name = "GPU_BATCH"
-            from tqdm import tqdm
-            
-            for gt_fpath, scene_args in tqdm(scene_groups.items(), desc=f"Method: {method_name}"):
-                try:
-                    # Extract common parameters from first arg
-                    first_arg = scene_args[0]
-                    scene_results = rawproc.process_scene_batch_gpu(
-                        scene_args,
-                        alignment_method=args.alignment_method,
-                        verbose=args.verbose_alignment,
-                        ds_dpath=first_arg['ds_dpath'],
-                        masks_dpath=first_arg['masks_dpath'],
-                    )
-                    results.extend(scene_results)
-                except Exception as e:
-                    logging.error(f"Error processing scene {gt_fpath}: {e}")
-                    import traceback
-                    traceback.print_exc()
-        else:
-            # Fallback: traditional per-pair multiprocessing
-            logging.info("Using traditional per-pair processing")
+        results = utilities.mt_runner(
+            rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
+            args_in,
+            num_threads=args.num_threads,
+            progress_desc=f"Method: {method_name}",
+        )
             method_name = args.alignment_method.upper() if hasattr(args, 'alignment_method') else "PROCESSING"
             
             results = utilities.mt_runner(
@@ -521,7 +447,6 @@ if __name__ == "__main__":
                 args_in,
                 num_threads=args.num_threads,
                 progress_desc=f"Method: {method_name}",
-                gpu_memory_estimator=estimate_gpu_memory_for_alignment,
             )
 
     except KeyboardInterrupt:
