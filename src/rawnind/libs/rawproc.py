@@ -479,6 +479,8 @@ def find_best_alignment(
     
     Note: FFT is now the default for "auto" for best accuracy and speed.
     """
+    from rawnind.libs.alignment_backends import find_best_alignment_bruteforce_rgb
+    
     # Method selection
     if method == "auto":
         # Always prefer FFT: fastest + most accurate method
@@ -492,7 +494,7 @@ def find_best_alignment(
     if method == "fft":
         result = find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     elif method == "original":
-        result = find_best_alignment_original(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
+        result = find_best_alignment_bruteforce_rgb(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     else:
         raise ValueError(f"Unknown alignment method: {method}")
     
@@ -505,61 +507,6 @@ def find_best_alignment(
     
     return result
 
-
-def find_best_alignment_original(
-    anchor_img: np.ndarray,
-    target_img: np.ndarray,
-    max_shift_search: int = MAX_SHIFT_SEARCH,
-    return_loss_too: bool = False,
-    verbose: bool = False,
-) -> Union[tuple, tuple]:
-    """Original brute-force alignment search (for comparison/fallback)."""
-    target_img = match_gain(anchor_img, target_img)
-    assert np.isclose(anchor_img.mean(), target_img.mean(), atol=1e-07), (
-        f"{anchor_img.mean()=}, {target_img.mean()=}"
-    )
-    # current_best_shift: tuple[int, int] = (0, 0)  # python bw compat 2022-11-10
-    # shifts_losses: dict[tuple[int, int], float] = {# python bw compat 2022-11-10
-    current_best_shift: tuple = (0, 0)  # python bw compat 2022-11-10
-    shifts_losses: dict = {  # python bw compat 2022-11-10
-        current_best_shift: np_l1(anchor_img, target_img, avg=True)
-    }
-    if verbose:
-        print(f"{shifts_losses=}")
-
-    def explore_neighbors(
-        initial_shift: tuple[int, int],
-        shifts_losses: dict[tuple[int, int], float] = shifts_losses,
-        anchor_img: np.ndarray = anchor_img,
-        target_img: np.ndarray = target_img,
-        search_window=NEIGHBORHOOD_SEARCH_WINDOW,
-    ) -> None:
-        """Explore initial_shift's neighbors and update shifts_losses."""
-        for yshift in range(-search_window, search_window + 1, 1):
-            for xshift in range(-search_window, search_window + 1, 1):
-                current_shift = (initial_shift[0] + yshift, initial_shift[1] + xshift)
-                if current_shift in shifts_losses:
-                    continue
-                shifts_losses[current_shift] = np_l1(
-                    *shift_images(anchor_img, target_img, current_shift)
-                )
-                if verbose:
-                    print(f"{current_shift=}, {shifts_losses[current_shift]}")
-
-    while (
-        min(shifts_losses.values()) > 0
-        and abs(current_best_shift[0]) + abs(current_best_shift[1]) < max_shift_search
-    ):
-        explore_neighbors(current_best_shift)
-        new_best_shift = min(shifts_losses, key=shifts_losses.get)
-        if new_best_shift == current_best_shift:
-            if return_loss_too:
-                return new_best_shift, float(min(shifts_losses.values()))
-            return new_best_shift
-        current_best_shift = new_best_shift
-    if return_loss_too:
-        return current_best_shift, float(min(shifts_losses.values()))
-    return current_best_shift
 
 
 @lru_cache(maxsize=32)  # Cache recently loaded images
@@ -602,6 +549,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     
     # Get alignment method from kwargs (used in both branches)
     alignment_method = kwargs.get("alignment_method", "auto")
+    benchmark_mode = kwargs.get("benchmark_mode", False)
     
     # NEW WORKFLOW: Align on RAW first using FFT (avoids wasteful demosaicing)
     # For RAW/Bayer images, use CFA-aware FFT alignment directly on mosaiced data
@@ -609,19 +557,45 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         raw_gain = float(match_gain(gt_img, f_img, return_val=True))
         rgb_xyz_matrix = gt_metadata["rgb_xyz_matrix"].tolist()
         
-        # Align on RAW using CFA-aware FFT (FAST AND ACCURATE!)
-        from rawnind.libs.alignment_backends import find_best_alignment_fft_cfa
-        best_alignment, best_alignment_loss = find_best_alignment_fft_cfa(
-            gt_img, f_img, gt_metadata, 
-            method="median", return_loss_too=True, verbose=False
-        )
+        verbose_alignment = kwargs.get("verbose_alignment", False)
+        is_multiprocessing = kwargs.get("num_threads", 1) > 1
+        verbose_for_alignment = verbose_alignment and not is_multiprocessing
         
-        # Track actual method used (for bayer, always FFT-CFA)
-        actual_method = "fft_cfa"
-        
-        # NOW demosaic only for loss mask computation
-        gt_rgb = raw.demosaic(gt_img, gt_metadata)
-        f_rgb = raw.demosaic(f_img, f_metadata)
+        # Check if user requested "original" method - requires demosaicing first
+        if alignment_method == "original":
+            # Demosaic first for brute-force alignment
+            gt_rgb = raw.demosaic(gt_img, gt_metadata)
+            f_rgb = raw.demosaic(f_img, f_metadata)
+            
+            # Use brute-force alignment on RGB
+            if benchmark_mode:
+                import time
+                align_start = time.perf_counter()
+            best_alignment, best_alignment_loss = find_best_alignment(
+                gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
+            )
+            if benchmark_mode:
+                alignment_time = time.perf_counter() - align_start
+            actual_method = "original"
+        else:
+            # Default: Align on RAW using CFA-aware FFT (FAST AND ACCURATE!)
+            from rawnind.libs.alignment_backends import find_best_alignment_fft_cfa
+            if benchmark_mode:
+                import time
+                align_start = time.perf_counter()
+            best_alignment, best_alignment_loss = find_best_alignment_fft_cfa(
+                gt_img, f_img, gt_metadata, 
+                method="median", return_loss_too=True, verbose=False
+            )
+            if benchmark_mode:
+                alignment_time = time.perf_counter() - align_start
+            
+            # Track actual method used (for bayer with auto/fft, use FFT-CFA)
+            actual_method = "fft_cfa"
+            
+            # NOW demosaic only for loss mask computation
+            gt_rgb = raw.demosaic(gt_img, gt_metadata)
+            f_rgb = raw.demosaic(f_img, f_metadata)
     else:
         # For already-demosaiced images (.exr, .tif), use old method
         gt_rgb = gt_img
@@ -636,9 +610,14 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         verbose_for_alignment = verbose_alignment and not is_multiprocessing
         
         # For RGB images, use alignment method on RGB
+        if benchmark_mode:
+            import time
+            align_start = time.perf_counter()
         best_alignment, best_alignment_loss = find_best_alignment(
             gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
         )
+        if benchmark_mode:
+            alignment_time = time.perf_counter() - align_start
         
         # Track actual method used (resolve 'auto' to 'fft')
         actual_method = "fft" if alignment_method == "auto" else alignment_method
@@ -671,7 +650,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     os.makedirs(masks_dpath, exist_ok=True)
     mask_fpath = os.path.join(masks_dpath, mask_name)
     np_imgops.np_to_img(loss_mask, mask_fpath, precision=8)
-    return {
+    result = {
         "gt_fpath": gt_fpath,
         "f_fpath": f_fpath,
         "image_set": kwargs["image_set"],
@@ -687,6 +666,9 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         "rgb_gain": rgb_gain,
         # "gt_rgb_mean": gt_rgb_mean,
     }
+    if benchmark_mode:
+        result["alignment_time"] = alignment_time
+    return result
 
 
 def camRGB_to_lin_rec2020_images(
