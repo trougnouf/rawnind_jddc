@@ -160,3 +160,145 @@ def find_best_alignment_fft_cfa(
         return shift, float(loss)
     
     return shift
+
+
+def find_best_alignment_bruteforce_rgb(
+    anchor_img: np.ndarray,
+    target_img: np.ndarray,
+    max_shift_search: int = MAX_SHIFT_SEARCH,
+    return_loss_too: bool = False,
+    verbose: bool = False,
+) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
+    """
+    Brute-force alignment search on RGB/demosaiced images.
+    
+    Original neighborhood search method from initial codebase.
+    Uses L1 loss minimization with iterative neighbor exploration.
+    Slow but deterministic - primarily kept for reference/comparison.
+    
+    Args:
+        anchor_img: Reference RGB image
+        target_img: Target RGB image to align
+        max_shift_search: Maximum shift to search (Manhattan distance)
+        return_loss_too: If True, return loss along with shift
+        verbose: Print shift exploration details
+        
+    Returns:
+        shift: (dy, dx) tuple
+        OR (shift, loss) if return_loss_too=True
+    """
+    target_img = match_gain(anchor_img, target_img)
+    assert np.isclose(anchor_img.mean(), target_img.mean(), atol=1e-07), (
+        f"{anchor_img.mean()=}, {target_img.mean()=}"
+    )
+    current_best_shift: tuple = (0, 0)
+    shifts_losses: dict = {
+        current_best_shift: np_l1(anchor_img, target_img, avg=True)
+    }
+    if verbose:
+        print(f"{shifts_losses=}")
+
+    def explore_neighbors(
+        initial_shift: tuple[int, int],
+        shifts_losses: dict[tuple[int, int], float] = shifts_losses,
+        anchor_img: np.ndarray = anchor_img,
+        target_img: np.ndarray = target_img,
+        search_window=NEIGHBORHOOD_SEARCH_WINDOW,
+    ) -> None:
+        """Explore initial_shift's neighbors and update shifts_losses."""
+        for yshift in range(-search_window, search_window + 1, 1):
+            for xshift in range(-search_window, search_window + 1, 1):
+                current_shift = (initial_shift[0] + yshift, initial_shift[1] + xshift)
+                if current_shift in shifts_losses:
+                    continue
+                shifts_losses[current_shift] = np_l1(
+                    *shift_images(anchor_img, target_img, current_shift)
+                )
+                if verbose:
+                    print(f"{current_shift=}, {shifts_losses[current_shift]}")
+
+    while (
+        min(shifts_losses.values()) > 0
+        and abs(current_best_shift[0]) + abs(current_best_shift[1]) < max_shift_search
+    ):
+        explore_neighbors(current_best_shift)
+        new_best_shift = min(shifts_losses, key=shifts_losses.get)
+        if new_best_shift == current_best_shift:
+            if return_loss_too:
+                return new_best_shift, float(min(shifts_losses.values()))
+            return new_best_shift
+        current_best_shift = new_best_shift
+    if return_loss_too:
+        return current_best_shift, float(min(shifts_losses.values()))
+    return current_best_shift
+
+
+def find_best_alignment_bruteforce_rgb(
+    anchor_img: np.ndarray,
+    target_img: np.ndarray,
+    max_shift_search: int = MAX_SHIFT_SEARCH,
+    return_loss_too: bool = False,
+    verbose: bool = False,
+) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
+    """
+    Brute-force alignment search on RGB/demosaiced images.
+    
+    Original neighborhood search method from initial codebase.
+    Uses L1 loss minimization with iterative neighbor exploration.
+    Slow but deterministic - primarily kept for reference/comparison.
+    
+    Args:
+        anchor_img: Reference RGB image
+        target_img: Target RGB image to align
+        max_shift_search: Maximum shift to search (Manhattan distance)
+        return_loss_too: If True, return loss along with shift
+        verbose: Print shift exploration details
+        
+    Returns:
+        shift: (dy, dx) tuple
+        OR (shift, loss) if return_loss_too=True
+    """
+    target_img = match_gain(anchor_img, target_img)
+    assert np.isclose(anchor_img.mean(), target_img.mean(), atol=1e-07), (
+        f"{anchor_img.mean()=}, {target_img.mean()=}"
+    )
+    current_best_shift: tuple = (0, 0)
+    shifts_losses: dict = {
+        current_best_shift: np_l1(anchor_img, target_img, avg=True)
+    }
+    if verbose:
+        print(f"{shifts_losses=}")
+
+    def explore_neighbors(
+        initial_shift: tuple[int, int],
+        shifts_losses: dict[tuple[int, int], float] = shifts_losses,
+        anchor_img: np.ndarray = anchor_img,
+        target_img: np.ndarray = target_img,
+        search_window=NEIGHBORHOOD_SEARCH_WINDOW,
+    ) -> None:
+        """Explore initial_shift's neighbors and update shifts_losses."""
+        for yshift in range(-search_window, search_window + 1, 1):
+            for xshift in range(-search_window, search_window + 1, 1):
+                current_shift = (initial_shift[0] + yshift, initial_shift[1] + xshift)
+                if current_shift in shifts_losses:
+                    continue
+                shifts_losses[current_shift] = np_l1(
+                    *shift_images(anchor_img, target_img, current_shift)
+                )
+                if verbose:
+                    print(f"{current_shift=}, {shifts_losses[current_shift]}")
+
+    while (
+        min(shifts_losses.values()) > 0
+        and abs(current_best_shift[0]) + abs(current_best_shift[1]) < max_shift_search
+    ):
+        explore_neighbors(current_best_shift)
+        new_best_shift = min(shifts_losses, key=shifts_losses.get)
+        if new_best_shift == current_best_shift:
+            if return_loss_too:
+                return new_best_shift, float(min(shifts_losses.values()))
+            return new_best_shift
+        current_best_shift = new_best_shift
+    if return_loss_too:
+        return current_best_shift, float(min(shifts_losses.values()))
+    return current_best_shift

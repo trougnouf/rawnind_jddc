@@ -192,10 +192,16 @@ def shift_images(
     """
     anchor_img_out = anchor_img
     target_img_out = target_img
+    anchor_is_bayer = anchor_img.shape[0] == 4
     target_is_bayer = target_img.shape[0] == 4
-    if anchor_img.shape[0] == 4:
-        raise NotImplementedError("shift_images: Bayer anchor_img is not implemented.")
-    target_shift_divisor = target_is_bayer + 1
+    
+    # Bayer-to-Bayer shift: treat like RGB-to-RGB (no resolution mismatch)
+    if anchor_is_bayer and target_is_bayer:
+        target_shift_divisor = 1
+    elif anchor_is_bayer and not target_is_bayer:
+        raise NotImplementedError("shift_images: Bayer anchor with RGB target not implemented.")
+    else:
+        target_shift_divisor = target_is_bayer + 1
     if shift[0] > 0:  # y
         anchor_img_out = anchor_img_out[..., shift[0] :, :]
         target_img_out = target_img_out[
@@ -352,6 +358,51 @@ def make_overexposure_mask(
 #     print(f'{reject_threshold=}')
 #     loss_mask[loss_map >= reject_threshold] = 0.
 #     return loss_mask# if not return map else (loss_mask, loss_map)
+
+
+def make_loss_mask_bayer(
+    anchor_img: np.ndarray,
+    target_img: np.ndarray,
+    loss_threshold: float = LOSS_THRESHOLD,
+    keepers_quantile: float = KEEPERS_QUANTILE,
+    verbose: bool = False,
+) -> np.ndarray:
+    """Return a loss mask between two (aligned) raw Bayer images.
+    
+    Operates directly on raw Bayer data (4 channels: R, G1, G2, B) without demosaicing.
+    Computes L1 loss per-channel and sums to create a spatial loss map.
+    
+    Args:
+        anchor_img: Ground truth Bayer image (4, H, W)
+        target_img: Target Bayer image (4, H, W)
+        loss_threshold: Maximum acceptable loss
+        keepers_quantile: Quantile threshold for rejecting high-loss regions
+        verbose: Print debug info
+        
+    Returns:
+        loss_mask: Binary mask (H, W) where 1=use, 0=ignore
+    """
+    target_matched = match_gain(anchor_img, target_img)
+    
+    loss_map = np_l1(
+        gamma(anchor_img), gamma(target_matched), avg=False
+    )
+    loss_map = loss_map.sum(axis=0)
+    
+    loss_mask = np.ones_like(loss_map)
+    reject_threshold = min(loss_threshold, np.quantile(loss_map, keepers_quantile))
+    if reject_threshold == 0:
+        reject_threshold = 1.0
+    if verbose:
+        print(f"{reject_threshold=}")
+    loss_mask[loss_map >= reject_threshold] = 0.0
+    
+    loss_mask = scipy.ndimage.binary_opening(loss_mask.astype(np.uint8)).astype(
+        np.float32
+    )
+    return loss_mask
+
+
 def make_loss_mask(
     anchor_img: np.ndarray,
     target_img: np.ndarray,
@@ -593,9 +644,9 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
             # Track actual method used (for bayer with auto/fft, use FFT-CFA)
             actual_method = "fft_cfa"
             
-            # NOW demosaic only for loss mask computation
-            gt_rgb = raw.demosaic(gt_img, gt_metadata)
-            f_rgb = raw.demosaic(f_img, f_metadata)
+            # Skip demosaicing - will compute loss mask on raw Bayer data
+            gt_rgb = None
+            f_rgb = None
     else:
         # For already-demosaiced images (.exr, .tif), use old method
         gt_rgb = gt_img
@@ -621,22 +672,40 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         
         # Track actual method used (resolve 'auto' to 'fft')
         actual_method = "fft" if alignment_method == "auto" else alignment_method
-    rgb_gain = float(match_gain(gt_rgb, f_rgb, return_val=True))
-    # gt_rgb_mean = gt_rgb.mean()
-    # gain = match_gain(gt_rgb, f_rgb, return_val=True)
-
-    if verbose:
-        print(f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}")
-    gt_img_aligned, target_img_aligned = shift_images(gt_rgb, f_rgb, best_alignment)
-    # align the overexposure mask generated from potentially bayer gt
-    loss_mask = shift_mask(loss_mask, best_alignment)
-    # add content anomalies between two images to the loss mask
-    # try:
-    assert gt_img_aligned.shape == target_img_aligned.shape, (
-        f"{gt_img_aligned.shape=} is not equal to {target_img_aligned.shape} ({best_alignemnt=}, {loss_mask.shape=}, {kwargs=})"
-    )
-
-    loss_mask = make_loss_mask(gt_img_aligned, target_img_aligned) * loss_mask
+    
+    # Branch: Bayer FFT path vs RGB path
+    if is_bayer and actual_method == "fft_cfa":
+        # Bayer FFT path: operate on raw data, no demosaicing
+        rgb_gain = None  # Not applicable for raw path
+        
+        if verbose:
+            print(f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}")
+        
+        # Shift raw Bayer images
+        gt_img_aligned, target_img_aligned = shift_images(gt_img, f_img, best_alignment)
+        loss_mask = shift_mask(loss_mask, best_alignment)
+        
+        assert gt_img_aligned.shape == target_img_aligned.shape, (
+            f"{gt_img_aligned.shape=} is not equal to {target_img_aligned.shape} ({best_alignment=}, {loss_mask.shape=}, {kwargs=})"
+        )
+        
+        # Compute loss mask directly on raw Bayer data
+        loss_mask = make_loss_mask_bayer(gt_img_aligned, target_img_aligned) * loss_mask
+    else:
+        # RGB path (original method or non-Bayer images)
+        rgb_gain = float(match_gain(gt_rgb, f_rgb, return_val=True))
+        
+        if verbose:
+            print(f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}")
+        
+        gt_img_aligned, target_img_aligned = shift_images(gt_rgb, f_rgb, best_alignment)
+        loss_mask = shift_mask(loss_mask, best_alignment)
+        
+        assert gt_img_aligned.shape == target_img_aligned.shape, (
+            f"{gt_img_aligned.shape=} is not equal to {target_img_aligned.shape} ({best_alignment=}, {loss_mask.shape=}, {kwargs=})"
+        )
+        
+        loss_mask = make_loss_mask(gt_img_aligned, target_img_aligned) * loss_mask
     # except ValueError as e:
     #     print(f'get_best_alignment_and_make_loss_mask error {e=}, {kwargs=}, {loss_mask.shape=}, {gt_img.shape=}, {target_img.shape=}, {best_alignment=}, {gt_img_aligned.shape=}, {target_img_aligned.shape=}, {loss_mask.shape=}')
     #     breakpoint()

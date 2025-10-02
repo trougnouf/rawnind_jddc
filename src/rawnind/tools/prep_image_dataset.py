@@ -223,7 +223,7 @@ def fetch_crops_list(image_set, gt_fpath, f_fpath, is_bayer, ds_base_dpath):
     return crops
 
 
-def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
+def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 20) -> None:
     """Run performance benchmarks comparing different alignment methods."""
     import random
     
@@ -234,7 +234,7 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
         
     num_samples = min(num_samples, len(args_in))
     sample_args = random.sample(args_in, num_samples)
-    methods = ["fft"]
+    methods = ["fft", "original"]
     
     logging.info(f"Running alignment benchmarks on {len(sample_args)} samples...")
     logging.info(f"Methods to test: {methods}")
@@ -251,6 +251,7 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
             test_arg = arg.copy()
             test_arg["alignment_method"] = method
             test_arg["verbose"] = False
+            test_arg["benchmark_mode"] = True  # Enable timing instrumentation
             test_args.append(test_arg)
         
         try:
@@ -261,27 +262,45 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
             )
             
             elapsed = time.time() - start_time
+            
+            # Extract alignment-only timing from results (per-sample averages, since parallel execution)
+            alignment_times = [r["alignment_time"] for r in method_results if "alignment_time" in r]
+            avg_alignment_time = sum(alignment_times) / len(alignment_times) if alignment_times else 0
+            
             results[method] = {
                 "time": elapsed,
                 "avg_time_per_sample": elapsed / len(sample_args),
+                "avg_alignment_time_per_sample": avg_alignment_time,
                 "success": True,
                 "results": method_results
             }
             
-            logging.info(f"Method '{method}': {elapsed:.2f}s total, {elapsed/len(sample_args):.2f}s per sample")
+            logging.info(f"Method '{method}': {elapsed:.2f}s total ({elapsed/len(sample_args):.2f}s/sample), alignment only: {avg_alignment_time:.2f}s/sample")
             
         except Exception as e:
             logging.error(f"Method '{method}' failed: {e}")
             results[method] = {"success": False, "error": str(e)}
     
     # Print comparison
-    logging.info("\n=== BENCHMARK RESULTS ===")
+    logging.info("\n=== BENCHMARK RESULTS (Total Pipeline Time) ===")
     baseline_time = results.get("original", {}).get("time", 1.0)
     
     for method, result in results.items():
         if result.get("success"):
             speedup = baseline_time / result["time"] if result["time"] > 0 else float('inf')
             logging.info(f"{method:>12}: {result['time']:6.2f}s ({speedup:5.1f}x speedup)")
+        else:
+            logging.info(f"{method:>12}: FAILED - {result.get('error', 'Unknown error')}")
+    
+    # Print alignment-only comparison (per-sample averages)
+    logging.info("\n=== BENCHMARK RESULTS (Alignment Only, per sample) ===")
+    baseline_align_time = results.get("original", {}).get("avg_alignment_time_per_sample", 1.0)
+    
+    for method, result in results.items():
+        if result.get("success") and "avg_alignment_time_per_sample" in result:
+            align_time = result["avg_alignment_time_per_sample"]
+            speedup = baseline_align_time / align_time if align_time > 0 else float('inf')
+            logging.info(f"{method:>12}: {align_time:6.2f}s ({speedup:5.1f}x speedup)")
         else:
             logging.info(f"{method:>12}: FAILED - {result.get('error', 'Unknown error')}")
 
