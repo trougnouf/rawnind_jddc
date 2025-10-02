@@ -290,9 +290,9 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
         
     num_samples = min(num_samples, len(args_in))
     sample_args = random.sample(args_in, num_samples)
-    methods = ["original", "hierarchical", "fft"]
+    methods = ["fft"]
     
-    if rawproc.CUPY_IMPORTABLE:
+    if rawproc.is_accelerator_available():
         methods.append("gpu")
     
     logging.info(f"Running alignment benchmarks on {len(sample_args)} samples...")
@@ -470,16 +470,55 @@ if __name__ == "__main__":
     
     results = []
     try:
-        # Get method name for progress bar
-        method_name = args.alignment_method.upper() if hasattr(args, 'alignment_method') else "PROCESSING"
+        # GPU Hybrid Batching (Option #8): Group by GT scene for batch processing
+        # This is the optimal parallelism boundary for this dataset!
+        use_gpu_batching = rawproc.is_accelerator_available() and args.num_threads > 1
         
-        results = utilities.mt_runner(
-            rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
-            args_in,
-            num_threads=args.num_threads,
-            progress_desc=f"Method: {method_name}",
-            gpu_memory_estimator=estimate_gpu_memory_for_alignment,
-        )
+        if use_gpu_batching:
+            logging.info("Using GPU hybrid batching (Option #8): grouping by GT scene")
+            
+            # Group args by GT file
+            from collections import defaultdict
+            scene_groups = defaultdict(list)
+            for arg in args_in:
+                gt_key = arg['gt_file_endpath']
+                scene_groups[gt_key].append(arg)
+            
+            logging.info(f"Grouped {len(args_in)} pairs into {len(scene_groups)} GT scenes")
+            logging.info(f"Scene sizes: min={min(len(v) for v in scene_groups.values())}, "
+                        f"max={max(len(v) for v in scene_groups.values())}, "
+                        f"avg={len(args_in)/len(scene_groups):.1f}")
+            
+            # Process each scene with GPU batching (scenes processed sequentially)
+            # Within each scene, all noisy images are batched on GPU
+            method_name = "GPU_BATCH"
+            from tqdm import tqdm
+            
+            for gt_fpath, scene_args in tqdm(scene_groups.items(), desc=f"Method: {method_name}"):
+                try:
+                    scene_results = rawproc.process_scene_batch_gpu(
+                        scene_args,
+                        alignment_method=args.alignment_method,
+                        verbose_alignment=args.verbose_alignment,
+                        num_threads=args.num_threads,
+                    )
+                    results.extend(scene_results)
+                except Exception as e:
+                    logging.error(f"Error processing scene {gt_fpath}: {e}")
+                    import traceback
+                    traceback.print_exc()
+        else:
+            # Fallback: traditional per-pair multiprocessing
+            logging.info("Using traditional per-pair processing")
+            method_name = args.alignment_method.upper() if hasattr(args, 'alignment_method') else "PROCESSING"
+            
+            results = utilities.mt_runner(
+                rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
+                args_in,
+                num_threads=args.num_threads,
+                progress_desc=f"Method: {method_name}",
+                gpu_memory_estimator=estimate_gpu_memory_for_alignment,
+            )
 
     except KeyboardInterrupt:
         logging.error(f"prep_image_dataset.py interrupted. Saving results.")

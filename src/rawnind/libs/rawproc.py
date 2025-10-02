@@ -970,44 +970,40 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     if verbose:
         print(f"get_best_alignment_and_make_loss_mask: {mask_name=}")
     loss_mask = make_overexposure_mask(gt_img, gt_metadata["overexposure_lb"])
-    # demosaic before finding alignment
+    
+    # Get alignment method from kwargs (used in both branches)
+    alignment_method = kwargs.get("alignment_method", "auto")
+    
+    # NEW WORKFLOW: Align on RAW first using FFT (avoids wasteful demosaicing)
+    # For RAW/Bayer images, use CFA-aware FFT alignment directly on mosaiced data
     if is_bayer:
         raw_gain = float(match_gain(gt_img, f_img, return_val=True))
+        rgb_xyz_matrix = gt_metadata["rgb_xyz_matrix"].tolist()
+        
+        # Align on RAW using CFA-aware FFT (FAST AND ACCURATE!)
+        from rawnind.libs.alignment_backends import find_best_alignment_fft_cfa
+        best_alignment, best_alignment_loss = find_best_alignment_fft_cfa(
+            gt_img, f_img, gt_metadata, 
+            method="median", return_loss_too=True, verbose=False
+        )
+        
+        # NOW demosaic only for loss mask computation
         gt_rgb = raw.demosaic(gt_img, gt_metadata)
         f_rgb = raw.demosaic(f_img, f_metadata)
-        rgb_xyz_matrix = gt_metadata["rgb_xyz_matrix"].tolist()
-
     else:
+        # For already-demosaiced images (.exr, .tif), use old method
         gt_rgb = gt_img
         f_rgb = f_img
         rgb_xyz_matrix = None
         raw_gain = None
-    # Get alignment method and verbose setting from kwargs
-    alignment_method = kwargs.get("alignment_method", "auto")
-    verbose_alignment = kwargs.get("verbose_alignment", False)
-    
-    # Disable verbose during multiprocessing to avoid spam, only enable for single-threaded debug
-    is_multiprocessing = kwargs.get("num_threads", 1) > 1
-    verbose_for_alignment = verbose_alignment and not is_multiprocessing
-    
-    # Convert to shared tensors for GPU processing if using GPU method
-    if alignment_method in ("gpu", "auto") and is_accelerator_available():
-        try:
-            # Convert to shared tensors to avoid pickling overhead
-            gt_tensor = torch.from_numpy(gt_rgb.astype(np.float32))
-            f_tensor = torch.from_numpy(f_rgb.astype(np.float32))
-            gt_tensor.share_memory_()
-            f_tensor.share_memory_()
-            
-            best_alignment, best_alignment_loss = find_best_alignment(
-                gt_tensor, f_tensor, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
-            )
-        except Exception as e:
-            logging.debug(f"Tensor sharing failed, falling back to numpy: {e}")
-            best_alignment, best_alignment_loss = find_best_alignment(
-                gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
-            )
-    else:
+        
+        verbose_alignment = kwargs.get("verbose_alignment", False)
+        
+        # Disable verbose during multiprocessing to avoid spam
+        is_multiprocessing = kwargs.get("num_threads", 1) > 1
+        verbose_for_alignment = verbose_alignment and not is_multiprocessing
+        
+        # For RGB images, use old alignment method (hierarchical/fft on RGB)
         best_alignment, best_alignment_loss = find_best_alignment(
             gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
         )
@@ -1056,6 +1052,152 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         "rgb_gain": rgb_gain,
         # "gt_rgb_mean": gt_rgb_mean,
     }
+
+
+def process_scene_batch_gpu(scene_args_list: list[dict], **batch_kwargs) -> list[dict]:
+    """
+    GPU-accelerated batch processing for ONE GT scene with multiple noisy images.
+    
+    This implements Option #8: batch all noisy images for a single GT scene together on GPU.
+    Natural batching (avg 8 noisy/GT), avoids multiprocessing+CUDA fork poisoning.
+    
+    Args:
+        scene_args_list: List of args dicts for one GT scene, all with same gt_file_endpath
+        batch_kwargs: Additional kwargs (verbose, masks_dpath, etc.)
+        
+    Returns:
+        List of result dicts, one per (GT, noisy) pair
+    """
+    if not scene_args_list:
+        return []
+    
+    # All pairs should have same GT
+    gt_fpath = scene_args_list[0]['gt_file_endpath']
+    assert all(args['gt_file_endpath'] == gt_fpath for args in scene_args_list), \
+        "process_scene_batch_gpu: All pairs must have same GT image"
+    
+    verbose = batch_kwargs.get('verbose', False)
+    alignment_method = batch_kwargs.get('alignment_method', 'auto')
+    
+    if verbose:
+        print(f"\nProcessing GT scene: {gt_fpath} with {len(scene_args_list)} noisy images")
+    
+    # Build full paths
+    ds_dpath = batch_kwargs.get("ds_dpath", os.path.join(os.path.dirname(__file__), "..", "datasets", "RawNIND"))
+    image_set = scene_args_list[0]['image_set']
+    gt_full_path = os.path.join(ds_dpath, image_set, gt_fpath)
+    
+    # Load GT once - handle errors gracefully
+    try:
+        gt_img, gt_metadata = img_fpath_to_np_mono_flt_and_metadata(gt_full_path)
+        is_bayer = not (gt_full_path.endswith(".exr") or gt_full_path.endswith(".tif"))
+    except Exception as e:
+        if verbose:
+            print(f"  Error loading GT {gt_full_path}: {e}")
+            print(f"  Falling back to single-pair processing for this scene")
+        # Fallback to single-pair processing
+        results = []
+        for args in scene_args_list:
+            try:
+                result = get_best_alignment_compute_gain_and_make_loss_mask(
+                    **args, **batch_kwargs
+                )
+                results.append(result)
+            except Exception as e2:
+                if verbose:
+                    print(f"  Error processing pair: {e2}")
+                continue
+        return results
+    
+    if not is_bayer:
+        # For non-Bayer images, fallback to single-pair processing
+        results = []
+        for args in scene_args_list:
+            result = get_best_alignment_compute_gain_and_make_loss_mask(
+                **args, **batch_kwargs
+            )
+            results.append(result)
+        return results
+    
+    # Load all noisy images for this GT - handle errors gracefully
+    target_imgs = []
+    target_metadatas = []
+    valid_args = []
+    for args in scene_args_list:
+        try:
+            f_full_path = os.path.join(ds_dpath, args['image_set'], args['f_endpath'])
+            f_img, f_metadata = img_fpath_to_np_mono_flt_and_metadata(f_full_path)
+            target_imgs.append(f_img)
+            target_metadatas.append(f_metadata)
+            valid_args.append(args)
+        except Exception as e:
+            if verbose:
+                print(f"  Error loading noisy image {args['f_endpath']}: {e}")
+            continue
+    
+    if not valid_args:
+        return []
+    
+    scene_args_list = valid_args  # Update to only process valid pairs
+    
+    # GPU batch alignment on RAW
+    from rawnind.libs.alignment_backends import find_best_alignment_fft_cfa_batch
+    alignments_and_losses = find_best_alignment_fft_cfa_batch(
+        gt_img, target_imgs, gt_metadata,
+        method="median", return_loss_too=True, verbose=verbose, use_gpu=True
+    )
+    
+    # Process each pair individually for demosaicing and loss mask
+    results = []
+    for i, (args, f_img, f_metadata, (best_alignment, best_alignment_loss)) in enumerate(
+        zip(scene_args_list, target_imgs, target_metadatas, alignments_and_losses)
+    ):
+        # Extract mask name
+        mask_name = f"{args['image_set']}_{os.path.basename(args['gt_file_endpath']).split('.')[0]}_{os.path.basename(args['f_endpath']).split('.')[0]}.png"
+        
+        # Compute gains
+        raw_gain = float(match_gain(gt_img, f_img, return_val=True))
+        rgb_xyz_matrix = gt_metadata["rgb_xyz_matrix"].tolist()
+        
+        # Demosaic for loss mask computation
+        gt_rgb = raw.demosaic(gt_img, gt_metadata)
+        f_rgb = raw.demosaic(f_img, f_metadata)
+        rgb_gain = float(match_gain(gt_rgb, f_rgb, return_val=True))
+        
+        # Align RGB images and create loss mask
+        loss_mask = make_overexposure_mask(gt_img, gt_metadata["overexposure_lb"])
+        gt_img_aligned, target_img_aligned = shift_images(gt_rgb, f_rgb, best_alignment)
+        loss_mask = shift_mask(loss_mask, best_alignment)
+        loss_mask = make_loss_mask(gt_img_aligned, target_img_aligned) * loss_mask
+        
+        # Save mask
+        masks_dpath = batch_kwargs.get("masks_dpath", MASKS_DPATH)
+        os.makedirs(masks_dpath, exist_ok=True)
+        mask_fpath = os.path.join(masks_dpath, mask_name)
+        np_imgops.np_to_img(loss_mask, mask_fpath, precision=8)
+        
+        # Build result dict
+        result = {
+            "gt_fpath": args['gt_file_endpath'],
+            "f_fpath": args['f_endpath'],
+            "image_set": args["image_set"],
+            "alignment_method": "fft_gpu_batch",
+            "best_alignment": list(best_alignment),
+            "best_alignment_loss": best_alignment_loss,
+            "mask_fpath": mask_fpath,
+            "mask_mean": float(loss_mask.mean()),
+            "is_bayer": is_bayer,
+            "rgb_xyz_matrix": rgb_xyz_matrix,
+            "overexposure_lb": gt_metadata["overexposure_lb"],
+            "raw_gain": raw_gain,
+            "rgb_gain": rgb_gain,
+        }
+        results.append(result)
+        
+        if verbose and i % 5 == 0:
+            print(f"  Processed {i+1}/{len(scene_args_list)} images for this GT")
+    
+    return results
 
 
 def camRGB_to_lin_rec2020_images(
