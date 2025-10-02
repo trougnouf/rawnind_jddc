@@ -28,9 +28,14 @@ import time
 import yaml
 from functools import lru_cache
 import re
+import multiprocessing
 
 # Configure logging to show GPU diagnostics
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Set multiprocessing start method to spawn to avoid CUDA fork poisoning
+if __name__ == '__main__':
+    multiprocessing.set_start_method('spawn', force=True)
 from typing import Dict, List, Tuple, Optional
 
 sys.path.append("..")

@@ -53,26 +53,34 @@ def setup_cuda_environment():
 
 
 
-import os
 import torch
 
-# Set environment variable to avoid fork poisoning in multiprocessing
-os.environ.setdefault('PYTORCH_NVML_BASED_CUDA_CHECK', '1')
+# GPU acceleration setup - defer CUDA initialization to avoid fork poisoning
+_device_info = None
 
-# GPU acceleration setup
-ACCELERATOR_AVAILABLE = torch.cuda.is_available() or (hasattr(torch.backends, 'mps') and torch.backends.mps.is_available())
-if torch.cuda.is_available():
-    DEVICE_TYPE = 'cuda'
-    DEVICE_COUNT = torch.cuda.device_count()
-    DEVICE_NAME = torch.cuda.get_device_name(0)
-elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-    DEVICE_TYPE = 'mps'
-    DEVICE_COUNT = 1
-    DEVICE_NAME = "Apple Silicon GPU"
-else:
-    DEVICE_TYPE = 'cpu'
-    DEVICE_COUNT = 0
-    DEVICE_NAME = "CPU"
+def get_device_info():
+    """Get device info, called lazily to avoid fork poisoning."""
+    global _device_info
+    if _device_info is None:
+        if torch.cuda.is_available():
+            _device_info = ('cuda', torch.cuda.device_count(), torch.cuda.get_device_name(0))
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            _device_info = ('mps', 1, "Apple Silicon GPU")
+        else:
+            _device_info = ('cpu', 0, "CPU")
+    return _device_info
+
+def get_device_type():
+    return get_device_info()[0]
+
+def get_device_count():
+    return get_device_info()[1]
+
+def get_device_name():
+    return get_device_info()[2]
+
+def is_accelerator_available():
+    return get_device_type() != 'cpu'
 
 # sys.path.append("..")
 from importlib import resources
@@ -640,19 +648,22 @@ def find_best_alignment_gpu(
     import logging
     
     # Check if accelerator is available
-    if not ACCELERATOR_AVAILABLE:
-        logging.info(f"GPU alignment: No accelerator available (device: {DEVICE_TYPE}), falling back to FFT")
+    if not is_accelerator_available():
+        device_type = get_device_type()
+        logging.info(f"GPU alignment: No accelerator available (device: {device_type}), falling back to FFT")
         if verbose:
-            print(f"No accelerator available (device: {DEVICE_TYPE}), falling back to FFT search")
+            print(f"No accelerator available (device: {device_type}), falling back to FFT search")
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     
-    logging.info(f"GPU alignment: Using {DEVICE_TYPE} device ({DEVICE_NAME})")
+    device_type = get_device_type()
+    device_name = get_device_name()
+    logging.info(f"GPU alignment: Using {device_type} device ({device_name})")
     
     try:
         target_img = match_gain(anchor_img, target_img)
         
         # Convert to PyTorch tensors and move to accelerator
-        device = torch.device(DEVICE_TYPE)
+        device = torch.device(get_device_type())
         anchor_tensor = torch.from_numpy(anchor_img.astype(np.float32)).to(device)
         target_tensor = torch.from_numpy(target_img.astype(np.float32)).to(device)
         logging.debug(f"GPU alignment: Tensors moved to {device}")
@@ -719,7 +730,8 @@ def find_best_alignment_gpu(
         return best_shift
         
     except Exception as e:
-        logging.warning(f"GPU alignment failed on {DEVICE_TYPE}: {type(e).__name__}: {e}")
+        device_type = get_device_type()
+        logging.warning(f"GPU alignment failed on {device_type}: {type(e).__name__}: {e}")
         if verbose:
             print(f"GPU alignment failed: {type(e).__name__}: {e}, falling back to FFT search")
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
@@ -747,7 +759,7 @@ def find_best_alignment(
     # Method selection
     if method == "auto":
         image_size = anchor_img.shape[-1] * anchor_img.shape[-2]
-        if ACCELERATOR_AVAILABLE and image_size > 512 * 512:
+        if is_accelerator_available() and image_size > 512 * 512:
             method = "gpu"
         elif max_shift_search > 32:
             method = "hierarchical"
