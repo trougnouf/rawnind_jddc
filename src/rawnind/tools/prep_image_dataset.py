@@ -28,6 +28,9 @@ import time
 import yaml
 from functools import lru_cache
 import re
+
+# Configure logging to show GPU diagnostics
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 from typing import Dict, List, Tuple, Optional
 
 sys.path.append("..")

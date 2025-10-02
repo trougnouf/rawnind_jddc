@@ -53,15 +53,26 @@ def setup_cuda_environment():
 
 
 
-# Use PyTorch for GPU acceleration instead of CuPy (better multiprocessing support)
-try:
-    import torch
-    TORCH_AVAILABLE = True
-    CUDA_AVAILABLE = torch.cuda.is_available()
-except ImportError:
-    torch = None
-    TORCH_AVAILABLE = False
-    CUDA_AVAILABLE = False
+import os
+import torch
+
+# Set environment variable to avoid fork poisoning in multiprocessing
+os.environ.setdefault('PYTORCH_NVML_BASED_CUDA_CHECK', '1')
+
+# GPU acceleration setup
+ACCELERATOR_AVAILABLE = torch.cuda.is_available() or (hasattr(torch.backends, 'mps') and torch.backends.mps.is_available())
+if torch.cuda.is_available():
+    DEVICE_TYPE = 'cuda'
+    DEVICE_COUNT = torch.cuda.device_count()
+    DEVICE_NAME = torch.cuda.get_device_name(0)
+elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+    DEVICE_TYPE = 'mps'
+    DEVICE_COUNT = 1
+    DEVICE_NAME = "Apple Silicon GPU"
+else:
+    DEVICE_TYPE = 'cpu'
+    DEVICE_COUNT = 0
+    DEVICE_NAME = "CPU"
 
 # sys.path.append("..")
 from importlib import resources
@@ -626,19 +637,25 @@ def find_best_alignment_gpu(
     verbose: bool = False,
 ) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
     """GPU-accelerated alignment search using PyTorch."""
-    # Check if CUDA is available
-    if not CUDA_AVAILABLE:
+    import logging
+    
+    # Check if accelerator is available
+    if not ACCELERATOR_AVAILABLE:
+        logging.info(f"GPU alignment: No accelerator available (device: {DEVICE_TYPE}), falling back to FFT")
         if verbose:
-            print("CUDA not available, falling back to FFT search")
+            print(f"No accelerator available (device: {DEVICE_TYPE}), falling back to FFT search")
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
+    
+    logging.info(f"GPU alignment: Using {DEVICE_TYPE} device ({DEVICE_NAME})")
     
     try:
         target_img = match_gain(anchor_img, target_img)
         
-        # Convert to PyTorch tensors and move to GPU
-        device = torch.device('cuda')
+        # Convert to PyTorch tensors and move to accelerator
+        device = torch.device(DEVICE_TYPE)
         anchor_tensor = torch.from_numpy(anchor_img.astype(np.float32)).to(device)
         target_tensor = torch.from_numpy(target_img.astype(np.float32)).to(device)
+        logging.debug(f"GPU alignment: Tensors moved to {device}")
         
         # Handle multi-channel images
         if len(anchor_tensor.shape) > 2:
@@ -702,6 +719,7 @@ def find_best_alignment_gpu(
         return best_shift
         
     except Exception as e:
+        logging.warning(f"GPU alignment failed on {DEVICE_TYPE}: {type(e).__name__}: {e}")
         if verbose:
             print(f"GPU alignment failed: {type(e).__name__}: {e}, falling back to FFT search")
         return find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
@@ -729,7 +747,7 @@ def find_best_alignment(
     # Method selection
     if method == "auto":
         image_size = anchor_img.shape[-1] * anchor_img.shape[-2]
-        if CUDA_AVAILABLE and image_size > 512 * 512:
+        if ACCELERATOR_AVAILABLE and image_size > 512 * 512:
             method = "gpu"
         elif max_shift_search > 32:
             method = "hierarchical"
