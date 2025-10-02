@@ -132,8 +132,9 @@ def mt_runner(
             else:
                 results.append(fun(args))
         return results
-    else:
-        pool = Pool(num_threads)
+    
+    # Use context manager for automatic cleanup of pool resources
+    with Pool(num_threads) as pool:
         try:
             if starmap:
                 amap = pool.starmap
@@ -194,14 +195,8 @@ def mt_runner(
                     
         except Exception as e:
             logging.error(f"Multiprocessing error: {e}")
-            # Terminate all worker processes immediately
-            pool.terminate()
-            pool.join()
+            # Context manager will handle cleanup
             raise
-        else:
-            # Normal cleanup - close pool and wait for workers to finish
-            pool.close()
-            pool.join()
             
         return ret
 

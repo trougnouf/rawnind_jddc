@@ -20,67 +20,14 @@ def _is_multiprocessing_worker():
     except:
         return False
 
-# Optional GPU acceleration - test at runtime, not import time
-def setup_cuda_environment():
-    """Set up CUDA environment for multiprocessing workers."""
-    import os
-    import sys
-    
-    # Try to detect virtual environment CUDA libraries
-    venv_path = getattr(sys, 'prefix', None)
-    if venv_path:
-        cuda_lib_paths = [
-            os.path.join(venv_path, 'lib', 'python*', 'site-packages', 'nvidia', '*', 'lib'),
-            os.path.join(venv_path, 'lib'),
-        ]
-        
-        # Add to LD_LIBRARY_PATH if not already there
-        current_ld_path = os.environ.get('LD_LIBRARY_PATH', '')
-        new_paths = []
-        
-        for path_pattern in cuda_lib_paths:
-            import glob
-            for path in glob.glob(path_pattern):
-                if os.path.isdir(path) and path not in current_ld_path:
-                    new_paths.append(path)
-        
-        if new_paths:
-            if current_ld_path:
-                os.environ['LD_LIBRARY_PATH'] = ':'.join(new_paths) + ':' + current_ld_path
-            else:
-                os.environ['LD_LIBRARY_PATH'] = ':'.join(new_paths)
+
 
 
 
 
 import torch
 
-# GPU acceleration setup - defer CUDA initialization to avoid fork poisoning
-_device_info = None
 
-def get_device_info():
-    """Get device info, called lazily to avoid fork poisoning."""
-    global _device_info
-    if _device_info is None:
-        if torch.cuda.is_available():
-            _device_info = ('cuda', torch.cuda.device_count(), torch.cuda.get_device_name(0))
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            _device_info = ('mps', 1, "Apple Silicon GPU")
-        else:
-            _device_info = ('cpu', 0, "CPU")
-    return _device_info
-
-def get_device_type():
-    return get_device_info()[0]
-
-def get_device_count():
-    return get_device_info()[1]
-
-def get_device_name():
-    return get_device_info()[2]
-
-def is_accelerator_available():
-    return get_device_type() != 'cpu'
 
 # sys.path.append("..")
 from importlib import resources
@@ -527,7 +474,6 @@ def find_best_alignment(
     Args:
         method: Alignment method to use:
             - "auto": Automatically select best method (defaults to FFT for accuracy+speed)
-            - "gpu": Use GPU-accelerated FFT (same as "fft", kept for compatibility)
             - "fft": Use FFT-based phase correlation (RECOMMENDED)
             - "original": Use original brute-force method (slow, for reference only)
     
@@ -543,8 +489,7 @@ def find_best_alignment(
     start_time = time.time() if verbose else None
     
     # Dispatch to appropriate method
-    # Note: "gpu" method now maps to FFT (removed old GPU implementation)
-    if method == "gpu" or method == "fft":
+    if method == "fft":
         result = find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
     elif method == "original":
         result = find_best_alignment_original(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
@@ -736,152 +681,6 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         "rgb_gain": rgb_gain,
         # "gt_rgb_mean": gt_rgb_mean,
     }
-
-
-def process_scene_batch_gpu(scene_args_list: list[dict], **batch_kwargs) -> list[dict]:
-    """
-    GPU-accelerated batch processing for ONE GT scene with multiple noisy images.
-    
-    This implements Option #8: batch all noisy images for a single GT scene together on GPU.
-    Natural batching (avg 8 noisy/GT), avoids multiprocessing+CUDA fork poisoning.
-    
-    Args:
-        scene_args_list: List of args dicts for one GT scene, all with same gt_file_endpath
-        batch_kwargs: Additional kwargs (verbose, masks_dpath, etc.)
-        
-    Returns:
-        List of result dicts, one per (GT, noisy) pair
-    """
-    if not scene_args_list:
-        return []
-    
-    # All pairs should have same GT
-    gt_fpath = scene_args_list[0]['gt_file_endpath']
-    assert all(args['gt_file_endpath'] == gt_fpath for args in scene_args_list), \
-        "process_scene_batch_gpu: All pairs must have same GT image"
-    
-    verbose = batch_kwargs.get('verbose', False)
-    alignment_method = batch_kwargs.get('alignment_method', 'auto')
-    
-    if verbose:
-        print(f"\nProcessing GT scene: {gt_fpath} with {len(scene_args_list)} noisy images")
-    
-    # Build full paths
-    ds_dpath = batch_kwargs.get("ds_dpath", os.path.join(os.path.dirname(__file__), "..", "datasets", "RawNIND"))
-    image_set = scene_args_list[0]['image_set']
-    gt_full_path = os.path.join(ds_dpath, image_set, gt_fpath)
-    
-    # Load GT once - handle errors gracefully
-    try:
-        gt_img, gt_metadata = img_fpath_to_np_mono_flt_and_metadata(gt_full_path)
-        is_bayer = not (gt_full_path.endswith(".exr") or gt_full_path.endswith(".tif"))
-    except Exception as e:
-        if verbose:
-            print(f"  Error loading GT {gt_full_path}: {e}")
-            print(f"  Falling back to single-pair processing for this scene")
-        # Fallback to single-pair processing
-        results = []
-        for args in scene_args_list:
-            try:
-                result = get_best_alignment_compute_gain_and_make_loss_mask(
-                    **args, **batch_kwargs
-                )
-                results.append(result)
-            except Exception as e2:
-                if verbose:
-                    print(f"  Error processing pair: {e2}")
-                continue
-        return results
-    
-    if not is_bayer:
-        # For non-Bayer images, fallback to single-pair processing
-        results = []
-        for args in scene_args_list:
-            result = get_best_alignment_compute_gain_and_make_loss_mask(
-                **args, **batch_kwargs
-            )
-            results.append(result)
-        return results
-    
-    # Load all noisy images for this GT - handle errors gracefully
-    target_imgs = []
-    target_metadatas = []
-    valid_args = []
-    for args in scene_args_list:
-        try:
-            f_full_path = os.path.join(ds_dpath, args['image_set'], args['f_endpath'])
-            f_img, f_metadata = img_fpath_to_np_mono_flt_and_metadata(f_full_path)
-            target_imgs.append(f_img)
-            target_metadatas.append(f_metadata)
-            valid_args.append(args)
-        except Exception as e:
-            if verbose:
-                print(f"  Error loading noisy image {args['f_endpath']}: {e}")
-            continue
-    
-    if not valid_args:
-        return []
-    
-    scene_args_list = valid_args  # Update to only process valid pairs
-    
-    # GPU batch alignment on RAW
-    from rawnind.libs.alignment_backends import find_best_alignment_fft_cfa_batch
-    alignments_and_losses = find_best_alignment_fft_cfa_batch(
-        gt_img, target_imgs, gt_metadata,
-        method="median", return_loss_too=True, verbose=verbose, use_gpu=True
-    )
-    
-    # Process each pair individually for demosaicing and loss mask
-    results = []
-    for i, (args, f_img, f_metadata, (best_alignment, best_alignment_loss)) in enumerate(
-        zip(scene_args_list, target_imgs, target_metadatas, alignments_and_losses)
-    ):
-        # Extract mask name
-        mask_name = f"{args['image_set']}_{os.path.basename(args['gt_file_endpath']).split('.')[0]}_{os.path.basename(args['f_endpath']).split('.')[0]}.png"
-        
-        # Compute gains
-        raw_gain = float(match_gain(gt_img, f_img, return_val=True))
-        rgb_xyz_matrix = gt_metadata["rgb_xyz_matrix"].tolist()
-        
-        # Demosaic for loss mask computation
-        gt_rgb = raw.demosaic(gt_img, gt_metadata)
-        f_rgb = raw.demosaic(f_img, f_metadata)
-        rgb_gain = float(match_gain(gt_rgb, f_rgb, return_val=True))
-        
-        # Align RGB images and create loss mask
-        loss_mask = make_overexposure_mask(gt_img, gt_metadata["overexposure_lb"])
-        gt_img_aligned, target_img_aligned = shift_images(gt_rgb, f_rgb, best_alignment)
-        loss_mask = shift_mask(loss_mask, best_alignment)
-        loss_mask = make_loss_mask(gt_img_aligned, target_img_aligned) * loss_mask
-        
-        # Save mask
-        masks_dpath = batch_kwargs.get("masks_dpath", MASKS_DPATH)
-        os.makedirs(masks_dpath, exist_ok=True)
-        mask_fpath = os.path.join(masks_dpath, mask_name)
-        np_imgops.np_to_img(loss_mask, mask_fpath, precision=8)
-        
-        # Build result dict
-        result = {
-            "gt_fpath": args['gt_file_endpath'],
-            "f_fpath": args['f_endpath'],
-            "image_set": args["image_set"],
-            "alignment_method": "fft_gpu_batch",
-            "best_alignment": list(best_alignment),
-            "best_alignment_loss": best_alignment_loss,
-            "mask_fpath": mask_fpath,
-            "mask_mean": float(loss_mask.mean()),
-            "is_bayer": is_bayer,
-            "rgb_xyz_matrix": rgb_xyz_matrix,
-            "overexposure_lb": gt_metadata["overexposure_lb"],
-            "raw_gain": raw_gain,
-            "rgb_gain": rgb_gain,
-        }
-        results.append(result)
-        
-        if verbose and i % 5 == 0:
-            print(f"  Processed {i+1}/{len(scene_args_list)} images for this GT")
-    
-    return results
 
 
 def camRGB_to_lin_rec2020_images(

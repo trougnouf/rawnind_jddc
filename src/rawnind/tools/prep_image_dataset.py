@@ -28,14 +28,6 @@ import time
 import yaml
 from functools import lru_cache
 import re
-import multiprocessing
-
-# Configure logging to show GPU diagnostics
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Set multiprocessing start method to spawn to avoid CUDA fork poisoning
-if __name__ == '__main__':
-    multiprocessing.set_start_method('spawn', force=True)
 from typing import Dict, List, Tuple, Optional
 
 sys.path.append("..")
@@ -53,11 +45,10 @@ from rawnind.libs.rawproc import (
 )
 RAWNIND_CONTENT_FPATH = Path(RAWNIND_CONTENT_FPATH).resolve()
 
-NUM_THREADS: int = os.cpu_count() // 4 * 3  #
+NUM_THREADS: int = os.cpu_count() // 4 * 3
 LOG_FPATH = Path(os.path.join("logs", os.path.basename(__file__) + ".log"))
 HDR_EXT = "tif"
 
-# Performance optimization caches
 @lru_cache(maxsize=256)
 def cached_listdir(directory: str) -> List[str]:
     """Cached directory listing to avoid repeated filesystem calls."""
@@ -66,14 +57,6 @@ def cached_listdir(directory: str) -> List[str]:
 @lru_cache(maxsize=64)
 def cached_exists(filepath: str) -> bool:
     return os.path.exists(filepath)
-
-
-
-"""
-#align images needs: bayer_gt_fpath, profiledrgb_gt_fpath, profiledrgb_noisy_fpath
-align_images needs: image_set, gt_file_endpath, f_endpath
-outputs gt_rgb_fpath, f_bayer_fpath, f_rgb_fpath, best_alignment, mask_fpath
-"""
 
 
 def get_args() -> argparse.Namespace:
@@ -91,7 +74,7 @@ def get_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--alignment_method",
-        choices=["auto", "gpu", "fft", "original"],
+        choices=["auto", "fft", "original"],
         default="auto",
         help="Alignment method to use (auto=automatically select best method)",
     )
@@ -160,7 +143,6 @@ def files_match_same_scene(gt_file: str, noisy_file: str) -> bool:
     noisy_scene = extract_scene_identifier(noisy_file)
     
     return gt_scene == noisy_scene and gt_scene != ""
-
 
 
 def fetch_crops_list(image_set, gt_fpath, f_fpath, is_bayer, ds_base_dpath):
@@ -254,9 +236,6 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
     sample_args = random.sample(args_in, num_samples)
     methods = ["fft"]
     
-    if rawproc.is_accelerator_available():
-        methods.append("gpu")
-    
     logging.info(f"Running alignment benchmarks on {len(sample_args)} samples...")
     logging.info(f"Methods to test: {methods}")
     
@@ -275,7 +254,6 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
             test_args.append(test_arg)
         
         try:
-            # Run the alignment with GPU memory management
             method_results = utilities.mt_runner(
                 rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
                 test_args,
@@ -309,6 +287,7 @@ def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 5) -> None:
 
 
 if __name__ == "__main__":
+    LOG_FPATH.parent.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         filename=LOG_FPATH,
         format="%(message)s",
@@ -347,16 +326,15 @@ if __name__ == "__main__":
             continue
         for image_set in os.listdir(ds_dpath):
             if ds_dpath == linrec_ds_dpath and image_set in os.listdir(bayer_ds_dpath):
-                continue  # avoid duplicate, use bayer if available
-            in_image_set_dpath: str = os.path.join(ds_dpath, image_set)
-            gt_files_endpaths: list[str] = [
+                continue
+            in_image_set_dpath = os.path.join(ds_dpath, image_set)
+            gt_files_endpaths = [
                 os.path.join("gt", fn)
                 for fn in os.listdir(os.path.join(in_image_set_dpath, "gt"))
             ]
-            noisy_files_endpaths: list[str] = os.listdir(in_image_set_dpath)
+            noisy_files_endpaths = os.listdir(in_image_set_dpath)
             noisy_files_endpaths.remove("gt")
 
-            # Statistics for logging
             total_gt_files = 0
             matched_pairs = 0
             
@@ -368,24 +346,17 @@ if __name__ == "__main__":
                     
                 total_gt_files += 1
                 
-                # FIXED: Pair GT files with noisy files from the same scene directory
-                # GT files are in gt/ subdirectory, noisy files are directly in scene directory
                 for noisy_file in noisy_files_endpaths:
-                    # Skip if it's a directory (like 'gt') or unwanted files
                     noisy_file_path = os.path.join(in_image_set_dpath, noisy_file)
                     if os.path.isdir(noisy_file_path) or noisy_file.endswith(".xmp") or noisy_file.endswith("darktable_exported"):
                         continue
                         
-                    f_endpath = noisy_file  # noisy files are directly in scene directory
+                    f_endpath = noisy_file
                     
-                    # Check if this GT and noisy file are from the same scene
                     if not files_match_same_scene(gt_file_endpath, f_endpath):
                         continue
                         
-                    # Check if result is already cached
-                    if find_cached_result(
-                        ds_dpath, image_set, gt_file_endpath, f_endpath, cached_results
-                    ):
+                    if find_cached_result(ds_dpath, image_set, gt_file_endpath, f_endpath, cached_results):
                         continue
                         
                     matched_pairs += 1
@@ -416,9 +387,6 @@ if __name__ == "__main__":
                         gt_name = os.path.basename(arg['gt_file_endpath'])
                         f_name = os.path.basename(arg['f_endpath'])
                         logging.debug(f"  Pair {pair_count}: GT={gt_name} <-> Noisy={f_name}")
-                        
-                # INPUT: gt_file_endpath, f_endpath
-                # OUTPUT: gt_file_endpath, f_endpath, best_alignment, mask_fpath, mask_name
 
     # Run benchmark if requested
     if args.benchmark and len(args_in) > 0:
@@ -431,23 +399,13 @@ if __name__ == "__main__":
     
     results = []
     try:
-        # Use traditional per-pair multiprocessing
         method_name = args.alignment_method.upper() if hasattr(args, 'alignment_method') else "PROCESSING"
-        
         results = utilities.mt_runner(
             rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
             args_in,
             num_threads=args.num_threads,
             progress_desc=f"Method: {method_name}",
         )
-            method_name = args.alignment_method.upper() if hasattr(args, 'alignment_method') else "PROCESSING"
-            
-            results = utilities.mt_runner(
-                rawproc.get_best_alignment_compute_gain_and_make_loss_mask,
-                args_in,
-                num_threads=args.num_threads,
-                progress_desc=f"Method: {method_name}",
-            )
 
     except KeyboardInterrupt:
         logging.error(f"prep_image_dataset.py interrupted. Saving results.")
@@ -462,7 +420,7 @@ if __name__ == "__main__":
     crops_start = time.time()
     logging.info(f"Processing crops for {len(results)} results...")
     
-    for result in results:  # FIXME
+    for result in results:
         result["crops"] = fetch_crops_list(
             result["image_set"],
             result["gt_fpath"],
@@ -473,7 +431,7 @@ if __name__ == "__main__":
     
     crops_time = time.time() - crops_start
     logging.info(f"Crops processing completed in {crops_time:.2f} seconds")
-    print("trying to write to ",content_fpath.resolve())
+    logging.info(f"Writing results to {content_fpath.resolve()}")
     with content_fpath.open("w", encoding='utf-8') as f:
         yaml.dump(results, f, allow_unicode=True)
 

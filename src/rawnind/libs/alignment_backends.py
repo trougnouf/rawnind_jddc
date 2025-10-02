@@ -1,9 +1,7 @@
 """
 Image alignment backends for RawNIND dataset preparation.
 
-This module provides CPU and GPU backends for aligning noisy RAW images to clean ground truth.
-The key innovation is GPU scene-batching (Option #8): batch-process all noisy images for a 
-single GT scene on GPU, avoiding multiprocessing+CUDA fork poisoning issues.
+This module provides alignment backends for noisy RAW images to clean ground truth.
 
 Key insight: Alignment operates directly on RAW/mosaiced data using CFA-aware FFT.
 This avoids wasteful demosaicing just to produce shift metadata.
@@ -13,19 +11,12 @@ from typing import Union, Tuple, Optional, List, Literal
 
 try:
     import torch
-    _GPU_AVAILABLE = torch.cuda.is_available()
 except ImportError:
     torch = None
-    _GPU_AVAILABLE = False
 
 # Constants
 MAX_SHIFT_SEARCH = 128
 NEIGHBORHOOD_SEARCH_WINDOW = 3
-
-
-def _gpu_available() -> bool:
-    """Check if GPU acceleration is available."""
-    return _GPU_AVAILABLE
 
 
 def np_l1(img1: np.ndarray, img2: np.ndarray, avg=True) -> Union[float, np.ndarray]:
@@ -169,29 +160,3 @@ def find_best_alignment_fft_cfa(
         return shift, float(loss)
     
     return shift
-
-
-def get_alignment_backend(
-    backend: str = "auto",
-    batch_mode: bool = False,
-) -> callable:
-    """
-    Get the appropriate CFA-aware FFT alignment backend function.
-    
-    All backends use FFT-based alignment directly on RAW/mosaiced data.
-    Hierarchical methods are deprecated (fundamentally broken on RAW data).
-    
-    Args:
-        backend: "auto", "cpu", or "gpu" (currently "gpu" also uses CPU FFT)
-        batch_mode: If True, return batch-capable function
-        
-    Returns:
-        Alignment function with signature:
-            (anchor_raw, target_raw(s), anchor_metadata, method, return_loss_too, verbose) -> results
-    """
-    if backend == "auto":
-        backend = "gpu" if _gpu_available() else "cpu"
-    
-    # Note: GPU and CPU both use the same FFT implementation for now
-    # GPU batch processing using PyTorch FFT is TODO
-    return find_best_alignment_fft_cfa
