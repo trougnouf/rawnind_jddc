@@ -1,18 +1,19 @@
+# Corrected test_reserve_extdata.yaml
 test_reserve:
-  - 7D-2 # Canon EOS 7D
-  - Vaxt-i-trad  # Canon EOS 6D
-  - Pen-pile  # Panasonic DMC-GH1
-  - MuseeL-vases-A7C # Sony A7C
-  - D60-1  # Canon EOS D60
-  - MuseeL-Saint-Pierre-C500D # Canon EOS C500D
-  - TitusToys  # Sony A7C
-  - boardgames_top  # Sony A7C
-  - Laura_Lemons_platformer  # Sony A7C
-  - MuseeL-bluebirds-A7C  # Sony A7C
+  - TEST_7D-2 # Canon EOS 7D
+  - TEST_Vaxt-i-trad  # Canon EOS 6D
+  - TEST_Pen-pile  # Panasonic DMC-GH1
+  - TEST_MuseeL-vases-A7C # Sony A7C
+  - TEST_D60-1  # Canon EOS D60
+  - TEST_MuseeL-Saint-Pierre-C500D # Canon EOS C500D
+  - TEST_TitusToys  # Sony A7C
+  - TEST_boardgames_top  # Sony A7C
+  - TEST_Laura_Lemons_platformer  # Sony A7C
+  - TEST_MuseeL-bluebirds-A7C  # Sony A7C
 # LucieB test (Canon EOS M100, not included in general trainings)
-  - LucieB_bw_drawing1
-  - LucieB_bw_drawing2
-  - LucieB_board
-  - LucieB_painted_wallpaper
-  - LucieB_painted_plants
-  - LucieB_groceries
+  - UNK_TEST_LucieB_bw_drawing1
+  - UNK_TEST_LucieB_bw_drawing2
+  - UNK_TEST_LucieB_board
+  - UNK_TEST_LucieB_painted_wallpaper
+  - UNK_TEST_LucieB_painted_plants
+  - UNK_TEST_LucieB_groceries
