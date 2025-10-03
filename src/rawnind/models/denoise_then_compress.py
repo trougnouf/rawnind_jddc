@@ -5,6 +5,7 @@ from typing import Literal, Optional
 import torch
 
 from rawnind.libs import rawproc
+
 # sys.path.append("..")
 from . import raw_denoiser, manynets_compression
 

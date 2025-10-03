@@ -5,14 +5,16 @@ FINDING: shift=(dy,dx) represents NEGATIVE of physical content displacement.
 - If content moves DOWN by 2, shift = (-2, ?)
 - If content moves RIGHT by 3, shift = (?, -3)
 """
+
 import numpy as np
 import sys
+
 sys.path.append("src")
 from rawnind.libs.rawproc import shift_images
 
-print("="*80)
+print("=" * 80)
 print("SHIFT CONVENTION TEST")
-print("="*80)
+print("=" * 80)
 print()
 
 # Create test image with distinct pattern
@@ -31,7 +33,7 @@ print(target_down_3[0])
 print()
 
 print("Testing different shift values with shift_images:")
-for test_shift in [(0,0), (3,0), (-3,0), (2,0), (-2,0)]:
+for test_shift in [(0, 0), (3, 0), (-3, 0), (2, 0), (-2, 0)]:
     anchor_out, target_out = shift_images(img, target_down_3, test_shift)
     loss = np.abs(anchor_out - target_out).mean()
     print(f"  shift={test_shift}: loss={loss:.6f}, output_shape={anchor_out.shape}")
@@ -41,14 +43,14 @@ print("✓ RESULT: shift=(-3,0) gives loss=0 when content rolled DOWN by 3")
 print("  → Convention: shift = NEGATIVE of displacement")
 print()
 
-# Test 2: Roll content RIGHT by 2 pixels  
+# Test 2: Roll content RIGHT by 2 pixels
 target_right_2 = np.roll(img, 2, axis=2)
 print("Target 2: Content rolled RIGHT by 2 (squares now at cols 4 and 9):")
 print(target_right_2[0])
 print()
 
 print("Testing different shift values:")
-for test_shift in [(0,0), (0,2), (0,-2), (0,3), (0,-3)]:
+for test_shift in [(0, 0), (0, 2), (0, -2), (0, 3), (0, -3)]:
     anchor_out, target_out = shift_images(img, target_right_2, test_shift)
     loss = np.abs(anchor_out - target_out).mean()
     print(f"  shift={test_shift}: loss={loss:.6f}, output_shape={anchor_out.shape}")
@@ -65,7 +67,7 @@ print(target_dr[0])
 print()
 
 print("Testing combined shift:")
-for test_shift in [(0,0), (3,2), (-3,-2), (3,-2), (-3,2)]:
+for test_shift in [(0, 0), (3, 2), (-3, -2), (3, -2), (-3, 2)]:
     anchor_out, target_out = shift_images(img, target_dr, test_shift)
     loss = np.abs(anchor_out - target_out).mean()
     print(f"  shift={test_shift}: loss={loss:.6f}, output_shape={anchor_out.shape}")
@@ -75,9 +77,9 @@ print("✓ RESULT: shift=(-3,-2) gives loss=0 when content rolled DOWN by 3, RIG
 print("  → Convention confirmed: shift = NEGATIVE of displacement vector")
 print()
 
-print("="*80)
+print("=" * 80)
 print("SUMMARY: SHIFT CONVENTION")
-print("="*80)
+print("=" * 80)
 print("shift=(dy, dx) in rawproc means:")
 print("  - dy = NEGATIVE of vertical content displacement")
 print("  - dx = NEGATIVE of horizontal content displacement")
@@ -88,4 +90,4 @@ print()
 print("This convention likely reflects camera motion rather than content motion:")
 print("  - Positive shift = camera moved up/left (content appears down/right)")
 print("  - Negative shift = camera moved down/right (content appears up/left)")
-print("="*80)
+print("=" * 80)

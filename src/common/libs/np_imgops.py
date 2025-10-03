@@ -13,6 +13,7 @@ import numpy as np
 
 try:
     import OpenImageIO as oiio
+
     TIFF_PROVIDER = "OpenImageIO"
 except ImportError:
     TIFF_PROVIDER = "OpenCV"

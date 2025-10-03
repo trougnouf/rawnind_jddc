@@ -9,6 +9,8 @@ from rawnind.libs import rawproc
 """
 # U-Net with transposed convolutions (consistent shape) and concatenations rather than additions.
 """
+
+
 class Denoiser(nn.Module):
     def __init__(self, in_channels: int):
         super().__init__()
