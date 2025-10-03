@@ -223,7 +223,7 @@ def fetch_crops_list(image_set, gt_fpath, f_fpath, is_bayer, ds_base_dpath):
     return crops
 
 
-def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 20) -> None:
+def run_alignment_benchmark(args_in: List[Dict], num_samples: int = 100) -> None:
     """Run performance benchmarks comparing different alignment methods."""
     import random
     

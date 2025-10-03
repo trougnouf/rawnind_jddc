@@ -107,12 +107,21 @@ def test_alignment_comparison():
         print(f"      Detected shift: {shift_fft}")
         
         # Compute MAE/MSE on aligned RAW data
-        gt_aligned, noisy_aligned = shift_images(gt_raw, noisy_raw, shift_fft)
-        mae_fft_raw = compute_mae(gt_aligned, noisy_aligned)
-        mse_fft_raw = compute_mse(gt_aligned, noisy_aligned)
+        gt_raw_aligned, noisy_raw_aligned = shift_images(gt_raw, noisy_raw, shift_fft)
+        mae_fft_raw = compute_mae(gt_raw_aligned, noisy_raw_aligned)
+        mse_fft_raw = compute_mse(gt_raw_aligned, noisy_raw_aligned)
         
-        print(f"      MAE (on RAW): {mae_fft_raw:.6f}")
-        print(f"      MSE (on RAW): {mse_fft_raw:.6f}")
+        print(f"      MAE (RAW): {mae_fft_raw:.6f}")
+        print(f"      MSE (RAW): {mse_fft_raw:.6f}")
+        
+        # Also compute in RGB domain (demosaic the aligned raw images)
+        gt_rgb_fft = raw.demosaic(gt_raw_aligned, gt_meta)
+        noisy_rgb_fft = raw.demosaic(noisy_raw_aligned, noisy_meta)
+        mae_fft_rgb = compute_mae(gt_rgb_fft, noisy_rgb_fft)
+        mse_fft_rgb = compute_mse(gt_rgb_fft, noisy_rgb_fft)
+        
+        print(f"      MAE (RGB): {mae_fft_rgb:.6f}")
+        print(f"      MSE (RGB): {mse_fft_rgb:.6f}")
         
         # ===== METHOD 2: Bruteforce-RGB on demosaiced data =====
         print("\n  [2] Bruteforce-RGB (demosaics first, then searches)")
@@ -134,8 +143,16 @@ def test_alignment_comparison():
         mae_bruteforce_rgb = compute_mae(gt_rgb_aligned, noisy_rgb_aligned)
         mse_bruteforce_rgb = compute_mse(gt_rgb_aligned, noisy_rgb_aligned)
         
-        print(f"      MAE (on RGB): {mae_bruteforce_rgb:.6f}")
-        print(f"      MSE (on RGB): {mse_bruteforce_rgb:.6f}")
+        print(f"      MAE (RGB): {mae_bruteforce_rgb:.6f}")
+        print(f"      MSE (RGB): {mse_bruteforce_rgb:.6f}")
+        
+        # Also compute in RAW domain (apply shift to original raw images)
+        gt_raw_bruteforce_aligned, noisy_raw_bruteforce_aligned = shift_images(gt_raw, noisy_raw, shift_bruteforce)
+        mae_bruteforce_raw = compute_mae(gt_raw_bruteforce_aligned, noisy_raw_bruteforce_aligned)
+        mse_bruteforce_raw = compute_mse(gt_raw_bruteforce_aligned, noisy_raw_bruteforce_aligned)
+        
+        print(f"      MAE (RAW): {mae_bruteforce_raw:.6f}")
+        print(f"      MSE (RAW): {mse_bruteforce_raw:.6f}")
         
         # ===== COMPARISON =====
         if shift_fft == shift_bruteforce:
@@ -152,20 +169,28 @@ def test_alignment_comparison():
             'bruteforce_shift': shift_bruteforce,
             'fft_mae_raw': mae_fft_raw,
             'fft_mse_raw': mse_fft_raw,
+            'fft_mae_rgb': mae_fft_rgb,
+            'fft_mse_rgb': mse_fft_rgb,
+            'bruteforce_mae_raw': mae_bruteforce_raw,
+            'bruteforce_mse_raw': mse_bruteforce_raw,
             'bruteforce_mae_rgb': mae_bruteforce_rgb,
             'bruteforce_mse_rgb': mse_bruteforce_rgb,
         })
     
     # Print summary
-    print("\n" + "="*80)
+    print("\n" + "="*120)
     print("SUMMARY TABLE")
-    print("="*80)
-    print(f"{'Test':<30} {'Method':<15} {'Shift':<12} {'MAE':<12} {'MSE':<12}")
-    print("-" * 80)
+    print("="*120)
+    print(f"{'Test':<30} {'Method':<15} {'Shift':<12} {'MAE(RAW)':<12} {'MSE(RAW)':<12} {'MAE(RGB)':<12} {'MSE(RGB)':<12}")
+    print("-" * 120)
     
     for r in results:
-        print(f"{r['name']:<30} {'FFT-CFA':<15} {str(r['fft_shift']):<12} {r['fft_mae_raw']:<12.6f} {r['fft_mse_raw']:<12.6f}")
-        print(f"{'':<30} {'Bruteforce-RGB':<15} {str(r['bruteforce_shift']):<12} {r['bruteforce_mae_rgb']:<12.6f} {r['bruteforce_mse_rgb']:<12.6f}")
+        print(f"{r['name']:<30} {'FFT-CFA':<15} {str(r['fft_shift']):<12} "
+              f"{r['fft_mae_raw']:<12.6f} {r['fft_mse_raw']:<12.6f} "
+              f"{r['fft_mae_rgb']:<12.6f} {r['fft_mse_rgb']:<12.6f}")
+        print(f"{'':<30} {'Bruteforce-RGB':<15} {str(r['bruteforce_shift']):<12} "
+              f"{r['bruteforce_mae_raw']:<12.6f} {r['bruteforce_mse_raw']:<12.6f} "
+              f"{r['bruteforce_mae_rgb']:<12.6f} {r['bruteforce_mse_rgb']:<12.6f}")
         print()
 
 
