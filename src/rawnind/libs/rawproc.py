@@ -1,19 +1,15 @@
+import os
 import shutil
 import subprocess
-from typing import Union
-import sys
-import os
 import unittest
-import random
-import logging
-import numpy as np
-import torch
-import scipy.ndimage
+from typing import Union
+
 import colour  # colour-science, needed for the PQ OETF(-1) transfer function
-import torchvision
+import numpy as np
+import scipy.ndimage
+import torch
 
-
-sys.path.append("..")
+# sys.path.append("..")
 from common.libs import np_imgops
 from rawnind.libs import raw
 
@@ -76,9 +72,9 @@ def scenelin_to_pq(
     """
     if isinstance(img, np.ndarray):
         # in develop branch: oetf_BT2100_PQ
-        return colour.models.rgb.transfer_functions.itur_bt_2100.oetf_PQ_BT2100(img)
+        return colour.models.rgb.transfer_functions.itur_bt_2100.oetf_BT2100_PQ(img)
     elif isinstance(img, torch.Tensor):
-        # translation of colour.models.rgb.transfer_functions.itur_bt_2100.oetf_PQ_BT2100
+        # translation of colour.models.rgb.transfer_functions.itur_bt_2100.oetf_BT2100_PQ
         # into PyTorch
         def spow(a, p):
             a_p = torch.sign(a) * torch.abs(a) ** p
@@ -126,7 +122,7 @@ def scenelin_to_pq(
 
 
 def pq_to_scenelin(
-    img: Union[np.ndarray, torch.Tensor]
+    img: Union[np.ndarray, torch.Tensor],
 ) -> Union[np.ndarray, torch.Tensor]:
     """
     PQ non-linear to scene linear signal, inverse opto-electronic transfer function (OETF^-1).
@@ -210,9 +206,9 @@ def shift_images(
             anchor_img_out = anchor_img_out[..., 1:]
             target_img_out = target_img_out[..., 1:]
     # try:
-    assert shape_is_compatible(
-        anchor_img_out.shape, target_img_out.shape
-    ), f"{anchor_img_out.shape=}, {target_img_out.shape=}"
+    assert shape_is_compatible(anchor_img_out.shape, target_img_out.shape), (
+        f"{anchor_img_out.shape=}, {target_img_out.shape=}"
+    )
     # except AssertionError as e:
     #    print(e)
     #    breakpoint()
@@ -386,9 +382,9 @@ def find_best_alignment(
 ) -> Union[tuple, tuple]:  # python bw compat 2022-11-10
     """Find best alignment (minimal loss) between anchor_img and target_img."""
     target_img = match_gain(anchor_img, target_img)
-    assert np.isclose(
-        anchor_img.mean(), target_img.mean(), atol=1e-07
-    ), f"{anchor_img.mean()=}, {target_img.mean()=}"
+    assert np.isclose(anchor_img.mean(), target_img.mean(), atol=1e-07), (
+        f"{anchor_img.mean()=}, {target_img.mean()=}"
+    )
     # current_best_shift: tuple[int, int] = (0, 0)  # python bw compat 2022-11-10
     # shifts_losses: dict[tuple[int, int], float] = {# python bw compat 2022-11-10
     current_best_shift: tuple = (0, 0)  # python bw compat 2022-11-10
@@ -490,9 +486,9 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     loss_mask = shift_mask(loss_mask, best_alignment)
     # add content anomalies between two images to the loss mask
     # try:
-    assert (
-        gt_img_aligned.shape == target_img_aligned.shape
-    ), f"{gt_img_aligned.shape=} is not equal to {target_img_aligned.shape} ({best_alignemnt=}, {loss_mask.shape=}, {kwargs=})"
+    assert gt_img_aligned.shape == target_img_aligned.shape, (
+        f"{gt_img_aligned.shape=} is not equal to {target_img_aligned.shape} ({best_alignemnt=}, {loss_mask.shape=}, {kwargs=})"
+    )
 
     loss_mask = make_loss_mask(gt_img_aligned, target_img_aligned) * loss_mask
     # except ValueError as e:

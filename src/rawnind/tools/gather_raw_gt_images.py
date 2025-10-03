@@ -7,6 +7,7 @@ python tools/gather_raw_gt_images.py --orig_name trougnouf --orig_dpath /orb/Pic
 eg update:
 python tools/gather_raw_gt_images.py --overwrite --orig_name trougnouf --orig_dpath '/orb/Pictures/ITookAPicture/2022/'
 """
+
 import os
 import sys
 import argparse

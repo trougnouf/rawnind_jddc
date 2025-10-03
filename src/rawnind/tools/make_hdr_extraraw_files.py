@@ -88,6 +88,6 @@ if __name__ == "__main__":
     )
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     args = get_args()
-    logging.info(f'# python {" ".join(sys.argv)}')
+    logging.info(f"# python {' '.join(sys.argv)}")
     logging.info(f"# {args=}")
     proc_dataset(dataset=args.dataset, num_threads=args.num_threads)

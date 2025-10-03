@@ -81,9 +81,9 @@ class BM3D_Denoiser(raw_denoiser.Denoiser):
 architectures = {"bm3d": BM3D_Denoiser}
 
 if __name__ == "__main__":
-    assert (
-        len(sys.argv) == 4
-    ), f"Usage: python {sys.argv[0]} <noisy_image_fpath> <sigma> <denoised_fpath>"
+    assert len(sys.argv) == 4, (
+        f"Usage: python {sys.argv[0]} <noisy_image_fpath> <sigma> <denoised_fpath>"
+    )
     noisy_image = pt_helpers.fpath_to_tensor(sys.argv[1])
     sigma = sys.argv[2]
     denoiser = architectures["bm3d"](in_channels=3, funit=sigma)

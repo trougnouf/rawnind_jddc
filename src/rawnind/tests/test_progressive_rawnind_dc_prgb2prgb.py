@@ -12,7 +12,10 @@ sys.path.append("..")
 from rawnind.libs import rawds
 from rawnind.libs import rawtestlib
 
-MS_SSSIM_VALUES = {'le': {0.85, 0.9, 0.97, 0.99}, 'ge': [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99, 1.00]}
+MS_SSSIM_VALUES = {
+    "le": {0.85, 0.9, 0.97, 0.99},
+    "ge": [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99, 1.00],
+}
 
 if __name__ == "__main__":
     preset_args = {"test_only": True, "init_step": None}
@@ -23,10 +26,10 @@ if __name__ == "__main__":
     )
     for operator, msssim_values in MS_SSSIM_VALUES.items():
         for msssim_value in msssim_values:
-            if operator == 'le':
-                kwargs = {'max_msssim_score': msssim_value}
-            elif operator == 'ge':
-                kwargs = {'min_msssim_score': msssim_value}
+            if operator == "le":
+                kwargs = {"max_msssim_score": msssim_value}
+            elif operator == "ge":
+                kwargs = {"min_msssim_score": msssim_value}
             dataloader = rawds.CleanProfiledRGBNoisyProfiledRGBImageCropsTestDataloader(
                 content_fpaths=[
                     "../../datasets/RawNIND/RawNIND_masks_and_alignments.yaml"
@@ -35,7 +38,7 @@ if __name__ == "__main__":
                 test_reserve=denoiserTraining.test_reserve,
                 bayer_only=True,
                 match_gain="input",
-                **kwargs
+                **kwargs,
             )
             # dataset = (
             #     rawds_ext_paired_test.CleanProfiledRGBNoisyBayerImageCropsExtTestDataloader(

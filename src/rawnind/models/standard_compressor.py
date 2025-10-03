@@ -69,7 +69,6 @@ class Std_ImageCompressor(compression_autoencoders.AbstractRawImageCompressor):
     def get_parameters(
         self, lr=None, bitEstimator_lr_multiplier: Optional[float] = None
     ):
-
         param_list = [
             {"params": self.parameters(), "name": "dummy"},
             # {"params": self.Decoder.parameters(), "name": "decoder"},

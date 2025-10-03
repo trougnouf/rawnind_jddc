@@ -141,7 +141,7 @@ def create_mosaic(
     cell_width = int(cell_width)
     cell_height = int(cell_height)
     print(
-        f"Each grid cell size: {cell_width}x{cell_height} pixels with {overlap*100}% overlap."
+        f"Each grid cell size: {cell_width}x{cell_height} pixels with {overlap * 100}% overlap."
     )
 
     # Create a blank canvas

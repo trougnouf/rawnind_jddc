@@ -233,7 +233,7 @@ def load_models_results(
         if "val_key" in model_attrs:
             return model_attrs["val_key"]
         if "lambda" not in model_attrs:
-            res = f'val_{model_attrs.get("loss", "msssim_loss")}'
+            res = f"val_{model_attrs.get('loss', 'msssim_loss')}"
             # breakpoint()
         else:
             res = "val_combined"
@@ -325,7 +325,6 @@ def group_relevant_models(
         models_per_definition[def_key] = []
         best_model_attrs = best_model_name = None
         for model_name, model_attrs in models_results.items():
-
             # if any of the attributes differ, skip
             # print(model_attrs["passthrough"])
 
@@ -804,7 +803,6 @@ def plot_1d_denoising(
     metrics=METRICS,
     visualize=False,
 ):
-
     MODELS_TO_IGNORE = {
         "manproc": ["Bayer (extra pairs)", "LinRGB (extra pairs)", "BM3D (LinRGB)"],
         "manproc_bostitch": ["BM3D (LinRGB)", "Bayer (more channels)"],
@@ -1281,7 +1279,6 @@ if __name__ == "__main__":
             visualize=args.visualize,
         )
     for generic_test_name in PROGRESSIVE_DENOISING_TESTNAMES:
-
         plot_progressive_denoising_curve(
             models_results,
             models_definitions,

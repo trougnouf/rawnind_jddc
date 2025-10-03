@@ -4,25 +4,24 @@ Denoise a single image using a trained model.
 By default save the denoised image in a directory named "denoised_images" in the model's save_dpath,
 with the same filename as the input image and the extension ".denoised.exr".
 Also save the metrics (and the bitrate if applicable) in a directory named "denoised_images_metrics",
-with the same filename as the input image and the extension ".metrics.yaml". 
+with the same filename as the input image and the extension ".metrics.yaml".
 
 egrun python tools/denoise_image.py -i /orb/Pictures/ITookAPicture/2023/05/29_LucieHikeLustinYvoirGR126/DSC04011.ARW --config ../../models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L4096.0_Balle_Balle_dc_prgb_1_/args.yaml  --device
 """
 
+import argparse
 import os
 import sys
-from typing import Literal, Optional, Tuple, Union
-import torch
+from typing import Optional
+
 import configargparse
+import torch
 import yaml
 
 sys.path.append("..")
 from rawnind.libs import abstract_trainer
-from common.libs import np_imgops
-from common.libs import pt_ops
 from common.libs import pt_losses
 from common.libs import pt_helpers
-from rawnind.models import raw_denoiser
 from rawnind.libs import rawproc
 from rawnind.libs import raw
 

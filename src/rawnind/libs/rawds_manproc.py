@@ -135,7 +135,13 @@ class ManuallyProcessedImageTestDataHandler(rawds.TestDataLoader):
                     xmp_fpath=image["dt_xmp"],
                     src_fpath=image["f_fpath"],
                 )
-                return pt_helpers.fpath_to_tensor(output_fpath, incl_metadata=False, device=net_output.device).unsqueeze(0).to(net_output.dtype)  # type: ignore
+                return (
+                    pt_helpers.fpath_to_tensor(
+                        output_fpath, incl_metadata=False, device=net_output.device
+                    )
+                    .unsqueeze(0)
+                    .to(net_output.dtype)
+                )  # type: ignore
             else:
                 raise ValueError(f"Invalid {self.net_input_type=}")
 
@@ -267,7 +273,7 @@ def prep_manproc_dataset(
             image["best_alignment_loss"] > alignment_max_loss
             or image["mask_mean"] < mask_mean_min
         ):
-            print(f'prep_manproc_dataset: rejected {image["f_fpath"]}')
+            print(f"prep_manproc_dataset: rejected {image['f_fpath']}")
             continue
         del image["crops"]  # Not needed here
         # Add the relevant paths to metadata
@@ -306,7 +312,7 @@ def prep_manproc_dataset(
             image["f_manproc_fpath"] = os.path.join(
                 noisy_dpath, f"{image['image_set']}_{noisy_fn}_aligned_to_{gt_fn}"
             )
-            print(f'prep_manproc_dataset: processing {image["f_manproc_fpath"]}')
+            print(f"prep_manproc_dataset: processing {image['f_manproc_fpath']}")
         # Previously done; nothing to do
         if os.path.isfile(image["gt_manproc_fpath"]) and (
             os.path.isfile(image["f_manproc_fpath"]) and "gt_rgb_mean" in image

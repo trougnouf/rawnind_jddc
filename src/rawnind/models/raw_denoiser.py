@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
-from torch import nn
-import torch
-import sys
 
-sys.path.append("..")
+import torch
+from torch import nn
+
+# sys.path.append("..")
 from rawnind.libs import rawproc
 
 """
 # U-Net with transposed convolutions (consistent shape) and concatenations rather than additions.
 """
-
-
 class Denoiser(nn.Module):
     def __init__(self, in_channels: int):
         super().__init__()
@@ -24,6 +22,7 @@ class Passthrough(Denoiser):
         self.dummy_parameter = torch.nn.Parameter(torch.randn(3))
         if kwargs:
             print(f"Passthrough: ignoring unexpected kwargs: {kwargs}")
+
     def forward(self, batch: torch.Tensor):
         if self.in_channels == 3:
             return batch

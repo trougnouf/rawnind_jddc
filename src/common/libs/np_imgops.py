@@ -1,20 +1,18 @@
-from typing import Optional, Tuple, Union
-import numpy as np
+# cv2.setNumThreads(0)
+import os
 import random
+import sys
 import unittest
 from enum import Enum, auto
+from typing import Tuple, Union
 
 # import multiprocessing
 # multiprocessing.set_start_method('spawn')
 import cv2
-
-# cv2.setNumThreads(0)
-import os
-import sys
+import numpy as np
 
 try:
     import OpenImageIO as oiio
-
     TIFF_PROVIDER = "OpenImageIO"
 except ImportError:
     TIFF_PROVIDER = "OpenCV"
@@ -58,7 +56,8 @@ def _opencv_img_fpath_to_np(fpath: str):
 
 
 def img_fpath_to_np_flt(
-    fpath: str, incl_metadata=False  # , bit_depth: Optional[int] = None
+    fpath: str,
+    incl_metadata=False,  # , bit_depth: Optional[int] = None
 ) -> Union[np.ndarray, Tuple[np.ndarray, dict]]:
     """returns a numpy float32 array from RGB image path (8-16 bits per component)
     shape: c, h, w

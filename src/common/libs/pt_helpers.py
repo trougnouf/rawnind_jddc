@@ -169,9 +169,9 @@ def get_device(device_n=None):
 def sdr_pttensor_to_file(tensor: torch.Tensor, fpath: str):
     """Save PyTorch tensor to SDR image file. (JPEG: 8-bit, PNG/TIFF: 16-bit)"""
     if tensor.dim() == 4:
-        assert (
-            tensor.size(0) == 1
-        ), "sdr_pttensor_to_file: batch size > 1 is not supported"
+        assert tensor.size(0) == 1, (
+            "sdr_pttensor_to_file: batch size > 1 is not supported"
+        )
         tensor = tensor.squeeze(0)
     if tensor.dtype == torch.float32 or tensor.dtype == torch.float16:
         if fpath[-4:].lower() in [".jpg", "jpeg"]:  # 8-bit

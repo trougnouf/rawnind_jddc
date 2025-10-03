@@ -10,7 +10,11 @@ def _get_model_type(expname: str) -> Literal["rawnind_dc", "rawnind_denoise"]:
 
     if expname.startswith("DenoiserTraining") or expname.startswith("train_denoise"):
         return "rawnind_denoise"
-    elif expname.startswith("DCTraining") or expname.startswith("train_dc") or 'dc' in expname:
+    elif (
+        expname.startswith("DCTraining")
+        or expname.startswith("train_dc")
+        or "dc" in expname
+    ):
         return "rawnind_dc"
     else:
         raise ValueError(

@@ -86,7 +86,7 @@ if __name__ == "__main__":
     )
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     args = get_args()
-    logging.info(f'# python {" ".join(sys.argv)}')
+    logging.info(f"# python {' '.join(sys.argv)}")
     logging.info(f"# {args=}")
     if args.dataset is None:
         datasets = os.listdir(EXTRARAW_DS_DPATH)

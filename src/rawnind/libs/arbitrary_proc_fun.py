@@ -1,21 +1,18 @@
 import os
-import sys
 import random
-from typing import Literal
+# cv2.setNumThreads(0)
+import time
 import unittest
-import torch
+from typing import Literal
+
 # import multiprocessing
 # multiprocessing.set_start_method('spawn')
 import cv2
-#cv2.setNumThreads(0)
-import time
-import torchvision
 import numpy as np
+import torch
+import torchvision
 
-import sys
-
-
-sys.path.append("..")
+# sys.path.append("..")
 from rawnind.libs import rawproc, raw
 
 TONEMAPPING_FUN: Literal["reinhard", "drago", "log"] = "log"
@@ -29,11 +26,11 @@ TONEMAPPING_PARAMS_RANGES = {
         "min": {"gamma": 0.9, "saturation": 0.75, "bias": 0.7},
         "max": {"gamma": 1.1, "saturation": 1.4, "bias": 0.9},
     },
-    "log": {'min': {}, 'max': {}}
+    "log": {"min": {}, "max": {}},
 }
 TONEMAPPING_PARAMS_RANGE = TONEMAPPING_PARAMS_RANGES[TONEMAPPING_FUN]
 
-EDGES_ENHANCEMENT_PARAMS_RANGE = {"min": {"alpha": 0.01}, "max": {"alpha": .5}}
+EDGES_ENHANCEMENT_PARAMS_RANGE = {"min": {"alpha": 0.01}, "max": {"alpha": 0.5}}
 GAMMA_CORRECTION_PARAMS_RANGE = {"min": {"gamma": 1.8}, "max": {"gamma": 2.2}}
 CONTRAST_PARAMS_RANGE = {
     "min": {"clipLimit": 2.5, "tileGridSize": 16},
@@ -51,11 +48,9 @@ ARBITRARY_PROC_PARAMS_RANGE = {
     "edges_enhancement": EDGES_ENHANCEMENT_PARAMS_RANGE,
     "sharpen": SHARPEN_PARAMS_RANGE,
     "tonemapping": TONEMAPPING_PARAMS_RANGE,
-    
     "gamma_correction": GAMMA_CORRECTION_PARAMS_RANGE,
     "contrast": CONTRAST_PARAMS_RANGE,
     "sigmoid_contrast_enhancement": SIGMOID_CONTRAST_ENHANCEMENT_PARAMS_RANGE,
-    
 }
 
 
@@ -141,6 +136,7 @@ def apply_tone_mapping_drago(img, gamma=1.0, saturation=1.0, bias=0.85):
     # print(f"min: {np.min(img)}, max: {np.max(img)}, mean: {np.mean(img)}")
     return ldr
 
+
 # def apply_tone_mapping_log(img, epsilon = 0.001):
 #     yuv_img = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
 #     L_max = np.max(yuv_img[:,:,0])
@@ -149,11 +145,17 @@ def apply_tone_mapping_drago(img, gamma=1.0, saturation=1.0, bias=0.85):
 #     return cv2.cvtColor(tone_mapped_yuv, cv2.COLOR_YUV2BGR)
 def apply_tone_mapping_log(img, epsilon=0.001):
     yuv_img = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
-    L_max = np.max(yuv_img[:,:,0])
-    tone_mapped_Y = np.log((1 + yuv_img[:,:,0]).clip(epsilon)) / np.log((1 + L_max + epsilon).clip(epsilon))
+    L_max = np.max(yuv_img[:, :, 0])
+    tone_mapped_Y = np.log((1 + yuv_img[:, :, 0]).clip(epsilon)) / np.log(
+        (1 + L_max + epsilon).clip(epsilon)
+    )
     # Normalize tone-mapped Y to the range [0, 1]
-    tone_mapped_Y = (tone_mapped_Y - np.min(tone_mapped_Y)) / (np.max(tone_mapped_Y) - np.min(tone_mapped_Y))
-    tone_mapped_yuv = np.stack([tone_mapped_Y, yuv_img[:,:,1], yuv_img[:,:,2]], axis=-1)
+    tone_mapped_Y = (tone_mapped_Y - np.min(tone_mapped_Y)) / (
+        np.max(tone_mapped_Y) - np.min(tone_mapped_Y)
+    )
+    tone_mapped_yuv = np.stack(
+        [tone_mapped_Y, yuv_img[:, :, 1], yuv_img[:, :, 2]], axis=-1
+    )
     return cv2.cvtColor(tone_mapped_yuv, cv2.COLOR_YUV2BGR)
 
 
@@ -257,13 +259,12 @@ def enhance_edges(img, alpha=1.0):
     Enhance edges in the image using Laplacian for edge detection and then blending with the original.
     All operations are done in floating point precision.
     """
-    yuv_img = cv2.cvtColor(img.clip(0,1), cv2.COLOR_BGR2YUV)
+    yuv_img = cv2.cvtColor(img.clip(0, 1), cv2.COLOR_BGR2YUV)
     # Apply Laplacian filter to detect edges
-    laplacian_y = cv2.Laplacian(img[:,:,0], cv2.CV_32F)
+    laplacian_y = cv2.Laplacian(img[:, :, 0], cv2.CV_32F)
 
     # Enhance edges by adding the Laplacian (scaled by alpha) back to the original image
-    yuv_img[:,:,0] += alpha * laplacian_y
-
+    yuv_img[:, :, 0] += alpha * laplacian_y
 
     return cv2.cvtColor(yuv_img, cv2.COLOR_YUV2BGR)
     # Clip the result to ensure it's within [0, 1]
@@ -322,7 +323,6 @@ def replace_nan_with_nearest(output_img):
 def arbitrarily_process_images_opencv(
     lin_rgb_img: torch.Tensor, randseed=None, enable_all=False
 ) -> torch.Tensor:
-
     if randseed:
         random.seed(randseed)
     # ensure a batch
@@ -352,7 +352,7 @@ def arbitrarily_process_images_opencv(
         # print(f"correct white balance: {time.time() - pretime}")
         # tone mapping
         # pretime = time.time()
-        if (random.getrandbits(3) or enable_all):
+        if random.getrandbits(3) or enable_all:
             if TONEMAPPING_FUN == "drago":
                 img = apply_tone_mapping_drago(
                     img,
@@ -389,7 +389,7 @@ def arbitrarily_process_images_opencv(
                         TONEMAPPING_PARAMS_RANGE["max"]["color_adapt"],
                     ),
                 )
-            elif TONEMAPPING_FUN == 'log':
+            elif TONEMAPPING_FUN == "log":
                 img = apply_tone_mapping_log(img)
             else:
                 raise ValueError(f"Unknown tonemapping function {TONEMAPPING_FUN}")
@@ -412,7 +412,7 @@ def arbitrarily_process_images_opencv(
         # print(f"enhance edges: {time.time() - pretime}")
         # gamma
         # pretime = time.time()
-        if (random.getrandbits(3) or enable_all):
+        if random.getrandbits(3) or enable_all:
             img = apply_gamma_correction_inplace(
                 img,
                 gamma=random.uniform(
@@ -429,7 +429,7 @@ def arbitrarily_process_images_opencv(
         #     clipLimit=2,  # random.uniform(2.0, 4.0),
         #     tileGridSize=64,  # int(random.uniform(8, 16)),
         # )
-        if (random.getrandbits(3) or enable_all):
+        if random.getrandbits(3) or enable_all:
             img = sigmoid_contrast_enhancement(
                 img,
                 gain=int(
@@ -448,7 +448,7 @@ def arbitrarily_process_images_opencv(
         # sharpen
         # pretime = time.time()
 
-        if (random.getrandbits(3) or enable_all):
+        if random.getrandbits(3) or enable_all:
             img = sharpen_image(
                 img,
                 kernel_size=random.choice((3, 5)),
@@ -613,7 +613,7 @@ def test_arbitrarily_process_images_opencv_values(infpath, outdpath):
     )
     img = pt_helpers.fpath_to_tensor(infpath)
     proc_img = arbitrarily_process_images_opencv(img, enable_all=True)
-    #pt_helpers.sdr_pttensor_to_file(proc_img, output_fpath)
+    # pt_helpers.sdr_pttensor_to_file(proc_img, output_fpath)
     raw.hdr_nparray_to_file(proc_img, output_fpath, color_profile="lin_rec2020")
     print(f"Saved midpoints to {output_fpath}")
 
@@ -626,12 +626,12 @@ def test_arbitrarily_process_images_opencv_values(infpath, outdpath):
                         param_ranges["min"][other_param]
                         + param_ranges["max"][other_param]
                     ) / 2
-                    ARBITRARY_PROC_PARAMS_RANGE[param_type]["min"][
-                        other_param
-                    ] = mid_min
-                    ARBITRARY_PROC_PARAMS_RANGE[param_type]["max"][
-                        other_param
-                    ] = mid_min
+                    ARBITRARY_PROC_PARAMS_RANGE[param_type]["min"][other_param] = (
+                        mid_min
+                    )
+                    ARBITRARY_PROC_PARAMS_RANGE[param_type]["max"][other_param] = (
+                        mid_min
+                    )
 
             # Test the parameter's min and max
             for min_or_max in ("min", "max"):

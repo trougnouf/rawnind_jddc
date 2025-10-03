@@ -1,6 +1,7 @@
 """
 GDN implementation from https://github.com/jorge-pessoa/pytorch-gdn under MIT license.
 """
+
 import torch
 import torch.utils.data
 from torch import nn, optim

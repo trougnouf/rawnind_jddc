@@ -9,7 +9,6 @@ sys.path.append("..")
 from rawnind.libs import abstract_trainer
 
 
-
 class DCTrainingBayerToProfiledRGB(
     abstract_trainer.DenoiseCompressTraining,
     abstract_trainer.BayerImageToImageNNTraining,
@@ -25,8 +24,6 @@ class DCTrainingBayerToProfiledRGB(
         if not args.in_channels:
             args.in_channels = 4
         super().autocomplete_args(args)
-
-
 
 
 if __name__ == "__main__":

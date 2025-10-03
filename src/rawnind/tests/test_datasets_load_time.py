@@ -47,7 +47,7 @@ if __name__ == "__main__":
     )
 
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
-    logging.info(f'# python {" ".join(sys.argv)}')
+    logging.info(f"# python {' '.join(sys.argv)}")
 
     logging.info(f"Testing CleanProfiledRGBNoisyBayerImageDataset runtimes...")
     timings = test_train_images_load_time(

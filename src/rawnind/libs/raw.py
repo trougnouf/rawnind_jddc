@@ -4,46 +4,48 @@ This file also handles HDR image export.
 """
 
 from __future__ import annotations
-import os
-import Imath  # OpenEXR
-import requests
+
 import argparse
 import operator
-import subprocess
+import os
 import shutil
-from collections import OrderedDict
+import subprocess
 from enum import Enum
 from typing import Literal, NamedTuple, Optional, Union
+
+import Imath  # OpenEXR
 import numpy as np
 import rawpy
+import requests
 
 from common.libs import icc
 
-
 try:
     import OpenImageIO as oiio
+
     OPENEXR_PROVIDER = "OpenImageIO"
 except ImportError:
     try:
         import OpenEXR
+
         OPENEXR_PROVIDER = "OpenEXR"
     except ImportError:
         raise ImportError("OpenImageIO or OpenEXR must be installed")
-
+print("\n Using ", OPENEXR_PROVIDER)
 # import multiprocessing
 # multiprocessing.set_start_method('spawn')
 import cv2
-#cv2.setNumThreads(0)
+# cv2.setNumThreads(0)
 
 try:
     import OpenImageIO as oiio
+
     TIFF_PROVIDER = "OpenImageIO"
 except ImportError:
     print(
         "raw.py warning: OpenImageIO not found, using OpenCV for TIFFs. Install OpenImageIO for better TIFF support."
     )
     TIFF_PROVIDER = "OpenCV"
-import matplotlib.pyplot as plt
 import torch  # for typing only
 
 
@@ -89,12 +91,12 @@ def raw_fpath_to_mono_img_and_metadata(
                 metadata["sizes"]["top_margin"] == metadata["sizes"]["left_margin"] == 0
             ):
                 raise NotImplementedError(
-                    f'{metadata["sizes"]=}, {metadata["bayer_pattern"]=} with borders'
+                    f"{metadata["sizes"]=}, {metadata["bayer_pattern"]=} with borders"
                 )
             if metadata["bayer_pattern"] == "GBRG":
-                assert (
-                    metadata["RGBG_pattern"] == [[3, 2], [0, 1]]
-                ).all(), f"{metadata['RGBG_pattern']=}"
+                assert (metadata["RGBG_pattern"] == [[3, 2], [0, 1]]).all(), (
+                    f"{metadata['RGBG_pattern']=}"
+                )
                 mono_img = mono_img[:, 1:-1]
                 # metadata["cropped_y"] = True
                 whole_image_raw_pattern = whole_image_raw_pattern[1:-1]
@@ -102,9 +104,9 @@ def raw_fpath_to_mono_img_and_metadata(
                 metadata["sizes"]["height"] -= 2
                 metadata["sizes"]["iheight"] -= 2
             elif metadata["bayer_pattern"] == "BGGR":
-                assert (
-                    metadata["RGBG_pattern"] == [[2, 3], [1, 0]]
-                ).all(), f"{metadata['RGBG_pattern']=}"
+                assert (metadata["RGBG_pattern"] == [[2, 3], [1, 0]]).all(), (
+                    f"{metadata['RGBG_pattern']=}"
+                )
                 mono_img = mono_img[:, 1:-1, 1:-1]
                 # metadata["cropped_x"] = metadata["cropped_y"] = True
                 whole_image_raw_pattern = whole_image_raw_pattern[1:-1, 1:-1]
@@ -115,9 +117,9 @@ def raw_fpath_to_mono_img_and_metadata(
                 metadata["sizes"]["width"] -= 2
                 metadata["sizes"]["iwidth"] -= 2
             elif metadata["bayer_pattern"] == "GRBG":
-                assert (
-                    metadata["RGBG_pattern"] == [[1, 0], [2, 3]]
-                ).all(), f"{metadata['RGBG_pattern']=}"
+                assert (metadata["RGBG_pattern"] == [[1, 0], [2, 3]]).all(), (
+                    f"{metadata['RGBG_pattern']=}"
+                )
                 mono_img = mono_img[:, :, 1:-1]
                 # metadata["cropped_x"] = True
                 whole_image_raw_pattern = whole_image_raw_pattern[:, 1:-1]
@@ -125,20 +127,20 @@ def raw_fpath_to_mono_img_and_metadata(
                 metadata["sizes"]["width"] -= 2
                 metadata["sizes"]["iwidth"] -= 2
             else:
-                raise NotImplementedError(f'{metadata["bayer_pattern"]=}')
+                raise NotImplementedError(f"{metadata["bayer_pattern"]=}")
         # try:  # DBG
-        assert (
-            metadata["sizes"]["raw_height"] >= metadata["sizes"]["height"]
-        ), f"Wrong height: {metadata['sizes']=}"
-        assert (
-            metadata["sizes"]["raw_width"] >= metadata["sizes"]["width"]
-        ), f"Wrong width: {metadata['sizes']=}"
+        assert metadata["sizes"]["raw_height"] >= metadata["sizes"]["height"], (
+            f"Wrong height: {metadata['sizes']=}"
+        )
+        assert metadata["sizes"]["raw_width"] >= metadata["sizes"]["width"], (
+            f"Wrong width: {metadata['sizes']=}"
+        )
         # except AssertionError as e:
         #    print(e)
         #    breakpoint()
         metadata["RGBG_pattern"] = whole_image_raw_pattern[:2, :2]
         set_bayer_pattern_name(metadata)
-        assert metadata["bayer_pattern"] == "RGGB", f'{metadata["bayer_pattern"]=}'
+        assert metadata["bayer_pattern"] == "RGGB", f"{metadata["bayer_pattern"]=}"
         return mono_img, whole_image_raw_pattern
 
     def rm_empty_borders(
@@ -191,7 +193,7 @@ def raw_fpath_to_mono_img_and_metadata(
         assert mono_img.shape[1:] == (
             metadata["sizes"]["raw_height"],
             metadata["sizes"]["raw_width"],
-        ), f'{mono_img.shape[1:]=}, {metadata["sizes"]=}'
+        ), f"{mono_img.shape[1:]=}, {metadata["sizes"]=}"
         metadata["RGBG_pattern"] = whole_image_raw_pattern[:2, :2]
         set_bayer_pattern_name(metadata)
         return mono_img, whole_image_raw_pattern
@@ -241,9 +243,9 @@ def raw_fpath_to_mono_img_and_metadata(
     metadata["camera_whitebalance"] = rawpy_img.camera_whitebalance
     metadata["black_level_per_channel"] = rawpy_img.black_level_per_channel
     metadata["white_level"] = rawpy_img.white_level  # imgdata.rawdata.color.maximum
-    metadata[
-        "camera_white_level_per_channel"
-    ] = rawpy_img.camera_white_level_per_channel  # imgdata.rawdata.color.linear_max
+    metadata["camera_white_level_per_channel"] = (
+        rawpy_img.camera_white_level_per_channel
+    )  # imgdata.rawdata.color.linear_max
     #  daylight_whitebalance = float rawdata.color.pre_mul[4]; in libraw
     #  White balance coefficients for daylight (daylight balance). Either read
     #  from file, or calculated on the basis of file data, or taken from
@@ -253,17 +255,17 @@ def raw_fpath_to_mono_img_and_metadata(
     #  for different models). Last row is zero for RGB cameras and non-zero for
     #  different color models (CMYG and so on).
     metadata["rgb_xyz_matrix"] = rawpy_img.rgb_xyz_matrix
-    assert metadata[
-        "rgb_xyz_matrix"
-    ].any(), f"rgb_xyz_matrix of {fpath} is empty ({metadata=})"
+    assert metadata["rgb_xyz_matrix"].any(), (
+        f"rgb_xyz_matrix of {fpath} is empty ({metadata=})"
+    )
     metadata["sizes"] = rawpy_img.sizes._asdict()
-    assert (
-        rawpy_img.color_desc.decode() == "RGBG"
-    ), f"{fpath} does not seem to have bayer pattern ({rawpy_img.color_desc.decode()})"
+    assert rawpy_img.color_desc.decode() == "RGBG", (
+        f"{fpath} does not seem to have bayer pattern ({rawpy_img.color_desc.decode()})"
+    )
     metadata["RGBG_pattern"] = rawpy_img.raw_pattern
-    assert (
-        metadata["RGBG_pattern"] is not None
-    ), f"{fpath} has no bayer pattern information"
+    assert metadata["RGBG_pattern"] is not None, (
+        f"{fpath} has no bayer pattern information"
+    )
     # processed metadata:
     # Replace raw_pattern from libraw (which always returns RGBG)
     set_bayer_pattern_name(metadata)
@@ -276,7 +278,9 @@ def raw_fpath_to_mono_img_and_metadata(
         assert_correct_metadata
         if isinstance(assert_correct_metadata, bool)
         else assert_correct_metadata.all()
-    ), f"Bayer pattern decoding did not match ({fpath=}, {metadata['RGBG_pattern']=}, {whole_image_raw_pattern[:2, :2]=})"
+    ), (
+        f"Bayer pattern decoding did not match ({fpath=}, {metadata['RGBG_pattern']=}, {whole_image_raw_pattern[:2, :2]=})"
+    )
     for a_wb in ("daylight", "camera"):
         metadata[f"{a_wb}_whitebalance_norm"] = np.array(
             metadata[f"{a_wb}_whitebalance"], dtype=np.float32
@@ -332,7 +336,7 @@ def mono_to_rggb_img(mono_img: np.ndarray, metadata: dict) -> np.ndarray:
     BGGR can be supported in the future by cropping the first/last row/column.
     """
     if metadata["bayer_pattern"] != "RGGB":
-        raise NotImplementedError(f'{metadata["bayer_pattern"]=} is not RGGB')
+        raise NotImplementedError(f"{metadata["bayer_pattern"]=} is not RGGB")
     assert mono_img.shape[-3] == 1, f"not a mono image ({mono_img.shape})"
     mono_img = mono_img[..., 0, :, :]
     # step 2: convert to 4-channels RGGB
@@ -414,7 +418,7 @@ def apply_whitebalance(
     # step 5: apply camera reference white balance
     assert f"{wb_type}_whitebalance_norm" in metadata, f"{wb_type=}, {metadata=}"
     if metadata["bayer_pattern"] != "RGGB" and img.shape[-3] != 3:
-        raise NotImplementedError(f'{metadata["bayer_pattern"]=} is not RGGB')
+        raise NotImplementedError(f"{metadata["bayer_pattern"]=} is not RGGB")
     if not in_place:
         img = img.copy()
     if img.shape[-3] == 1:  # mono
@@ -465,15 +469,15 @@ def demosaic(
         cv2.COLOR_BayerRGGB2RGB_EA,
     ), f"Wrong debayering method: {method}"
     assert mono_img.shape[0] == 1, f"{mono_img.shape=}"
-    assert metadata["bayer_pattern"] == "RGGB", f'{metadata["bayer_pattern"]=}'
+    assert metadata["bayer_pattern"] == "RGGB", f"{metadata["bayer_pattern"]=}"
     mono_img: np.ndarray = mono_img.copy()
     dbg_img = mono_img.copy()
     # convert to uint16 and scale to ensure we don't lose negative / large values
     black_offset: float = 0.0 if mono_img.min() >= 0.0 else -mono_img.min()
     mono_img += black_offset
-    assert (
-        mono_img >= 0
-    ).all(), f"{black_offset=}, {dbg_img.min()=}, {mono_img.min()=}"
+    assert (mono_img >= 0).all(), (
+        f"{black_offset=}, {dbg_img.min()=}, {mono_img.min()=}"
+    )
     max_value: float = 1.0 if mono_img.max() <= 1.0 else mono_img.max()
     mono_img /= max_value
     try:
@@ -617,7 +621,7 @@ def xtrans_fpath_to_OpenEXR(
     conversion_cmd: tuple = (
         "darktable-cli",
         src_fpath,
-        os.path.join("config", "dt4_xtrans_to_linrec2020.xmp"),
+        os.path.join(os.path.curdir, "src/rawnind/config", "dt4_xtrans_to_linrec2020.xmp"),
         dest_fpath,
         "--core",
         "--conf",
@@ -665,11 +669,19 @@ def hdr_nparray_to_file(
             if color_profile == "lin_rec2020":
                 # Set chromaticities for Rec. 2020
                 spec.attribute("oiio:ColorSpace", "Rec2020")
-                spec.attribute("chromaticities", oiio.TypeDesc("float[8]"), [0.708, 0.292, 0.17, 0.797, 0.131, 0.046, 0.3127, 0.3290])
+                spec.attribute(
+                    "chromaticities",
+                    oiio.TypeDesc("float[8]"),
+                    [0.708, 0.292, 0.17, 0.797, 0.131, 0.046, 0.3127, 0.3290],
+                )
             elif color_profile == "lin_sRGB":
                 # Set chromaticities for linear sRGB
                 spec.attribute("oiio:ColorSpace", "lin_srgb")
-                spec.attribute('chromaticities', oiio.TypeDesc("float[8]"), [0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290])
+                spec.attribute(
+                    "chromaticities",
+                    oiio.TypeDesc("float[8]"),
+                    [0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290],
+                )
             else:
                 print(f"warning: no color profile for {fpath}")
 
@@ -707,9 +719,9 @@ def hdr_nparray_to_file(
                 Imath.Compression.ZIPS_COMPRESSION
             )
             # Chromaticities
-            assert color_profile is None or color_profile.startswith(
-                "lin"
-            ), f"{color_profile=}"
+            assert color_profile is None or color_profile.startswith("lin"), (
+                f"{color_profile=}"
+            )
             if color_profile == "lin_rec2020":
                 header["chromaticities"] = Imath.Chromaticities(
                     Imath.chromaticity(0.708, 0.292),
@@ -798,7 +810,11 @@ def hdr_nparray_to_file(
                 spec.attribute("tiff:half", 1)
             if color_profile == "lin_rec2020":
                 # Set chromaticities for Rec. 2020
-                spec.attribute("chromaticities", oiio.TypeDesc("float[8]"), [0.708, 0.292, 0.17, 0.797, 0.131, 0.046, 0.3127, 0.3290])
+                spec.attribute(
+                    "chromaticities",
+                    oiio.TypeDesc("float[8]"),
+                    [0.708, 0.292, 0.17, 0.797, 0.131, 0.046, 0.3127, 0.3290],
+                )
                 spec.attribute("oiio:ColorSpace", "Rec2020")
                 spec.attribute("ICCProfile", oiio.TypeDesc("uint8[904]"), icc.rec2020)
                 # with open(
@@ -845,7 +861,7 @@ def hdr_nparray_to_file(
 def raw_fpath_to_hdr_img_file(
     src_fpath: str,
     dest_fpath: str,
-    output_color_profile: Literal['lin_rec2020', 'lin_sRGB'] = OUTPUT_COLOR_PROFILE,
+    output_color_profile: Literal["lin_rec2020", "lin_sRGB"] = OUTPUT_COLOR_PROFILE,
     bit_depth: Optional[int] = None,
     check_exposure: bool = True,
     crop_all: bool = True,
