@@ -684,18 +684,18 @@ def extract_bayer_channels(img: np.ndarray, pattern: np.ndarray) -> dict[str, np
     return channels
 
 
-def extract_xtrans_channels(img: np.ndarray, pattern: np.ndarray) -> dict[str, np.ndarray]:
-    """Extract 3 X-Trans channels via representative pixel sampling.
+def extract_xtrans_channels(img: np.ndarray, pattern: np.ndarray) -> dict[str, list[np.ndarray]]:
+    """Extract X-Trans channels via pixel shuffle without averaging.
     
-    Uses representative pixel sampling (one pixel per 6x6 block) to preserve
-    spatial phase information for FFT correlation.
+    Uses pixel shuffle to reorganize the 6x6 pattern into 36 position channels,
+    returning all position grids for each color separately for pixel-by-pixel comparison.
     
     Args:
         img: Mosaiced RAW image [1, H, W]
         pattern: 6x6 X-Trans pattern array
         
     Returns:
-        Dict with keys 'R', 'G', 'B' containing downsampled channel arrays
+        Dict with keys 'R', 'G', 'B' containing lists of position grids (no averaging)
     """
     values = img[0]
     h, w = values.shape
@@ -704,29 +704,36 @@ def extract_xtrans_channels(img: np.ndarray, pattern: np.ndarray) -> dict[str, n
     sampled_h = h // pattern_h
     sampled_w = w // pattern_w
     
-    # Find first occurrence of each color (representative position)
     color_map = {0: 'R', 1: 'G', 2: 'B'}
-    representatives = {}
     
-    for color_code in [0, 1, 2]:
-        mask = (pattern == color_code)
-        positions = np.argwhere(mask)
-        if len(positions) > 0:
-            representatives[color_map[color_code]] = tuple(positions[0])
+    # Pixel shuffle: reorganize into all 36 position grids
+    # Trim to multiple of pattern size
+    h_trim = sampled_h * pattern_h
+    w_trim = sampled_w * pattern_w
+    values = values[:h_trim, :w_trim]
     
-    # Extract channels by sampling representative pixel from each block
+    # Reshape: [H, W] -> [H/6, 6, W/6, 6] -> [H/6, W/6, 6, 6] -> [H/6, W/6, 36]
+    blocks = values.reshape(sampled_h, pattern_h, sampled_w, pattern_w)
+    blocks = blocks.transpose(0, 2, 1, 3)  # [H/6, W/6, 6, 6]
+    position_grids = blocks.reshape(sampled_h, sampled_w, pattern_h * pattern_w)
+    
+    # Group by color - return ALL position grids without averaging
     channels = {}
-    for color, (rep_y, rep_x) in representatives.items():
-        dense = np.zeros((sampled_h, sampled_w), dtype=values.dtype)
+    for color_code in [0, 1, 2]:
+        color_name = color_map[color_code]
         
-        for i in range(sampled_h):
-            for j in range(sampled_w):
-                block_y = i * pattern_h + rep_y
-                block_x = j * pattern_w + rep_x
-                if block_y < h and block_x < w:
-                    dense[i, j] = values[block_y, block_x]
+        # Find all flat indices for this color in the pattern
+        color_positions = []
+        for pos_y in range(pattern_h):
+            for pos_x in range(pattern_w):
+                if pattern[pos_y, pos_x] == color_code:
+                    flat_idx = pos_y * pattern_w + pos_x
+                    color_positions.append(flat_idx)
         
-        channels[color] = dense
+        # Extract all grids for this color - return as list
+        if color_positions:
+            color_grids = [position_grids[:, :, pos] for pos in color_positions]
+            channels[color_name] = color_grids
     
     return channels
 
@@ -809,17 +816,24 @@ def fft_phase_correlate_cfa(
         ch_anchor = channels_anchor[color]
         ch_target = channels_target[color]
         
-        # Detect shift at downsampled resolution
-        dy_down, dx_down = _fft_phase_correlate_single(ch_anchor, ch_target)
-        
-        # Scale back to full resolution
-        dy = dy_down * scale_factor
-        dx = dx_down * scale_factor
-        
-        channel_shifts.append((dy, dx))
-        
-        if verbose:
-            print(f"  {color:3s}: ({dy:3d}, {dx:3d})")
+        # Handle different return types: Bayer=single array, X-Trans=list of arrays
+        if isinstance(ch_anchor, list):
+            # X-Trans: compare each position grid pair, collect all shift estimates
+            for anchor_grid, target_grid in zip(ch_anchor, ch_target):
+                dy_down, dx_down = _fft_phase_correlate_single(anchor_grid, target_grid)
+                dy = dy_down * scale_factor
+                dx = dx_down * scale_factor
+                channel_shifts.append((dy, dx))
+                if verbose:
+                    print(f"  {color:3s} pos: ({dy:3d}, {dx:3d})")
+        else:
+            # Bayer: single array per color
+            dy_down, dx_down = _fft_phase_correlate_single(ch_anchor, ch_target)
+            dy = dy_down * scale_factor
+            dx = dx_down * scale_factor
+            channel_shifts.append((dy, dx))
+            if verbose:
+                print(f"  {color:3s}: ({dy:3d}, {dx:3d})")
     
     # Combine channel results
     if method == "median":

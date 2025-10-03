@@ -1,6 +1,8 @@
 """Test to compare FFT-CFA vs Bruteforce-RGB alignment methods."""
 
 import sys
+import argparse
+from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, 'src')
@@ -66,8 +68,86 @@ def shift_images(anchor, target, shift):
                     target[y1_target:y2_target, x1_target:x2_target])
 
 
-def test_alignment_comparison():
-    """Compare FFT-CFA (raw) vs Bruteforce-RGB (demosaic first) alignment."""
+def discover_test_cases(cfa_filter='all'):
+    """Discover all available test cases from the dataset.
+    
+    Args:
+        cfa_filter: 'all', 'bayer', or 'xtrans'
+    
+    Returns:
+        List of test case dictionaries
+    """
+    dataset_root = Path("src/rawnind/datasets/RawNIND/src")
+    test_cases = []
+    
+    # Determine which CFA types to scan
+    if cfa_filter == 'all':
+        cfa_types = ['Bayer', 'X-Trans']
+    elif cfa_filter == 'bayer':
+        cfa_types = ['Bayer']
+    elif cfa_filter == 'xtrans':
+        cfa_types = ['X-Trans']
+    else:
+        raise ValueError(f"Invalid cfa_filter: {cfa_filter}")
+    
+    for cfa_type in cfa_types:
+        cfa_dir = dataset_root / cfa_type
+        if not cfa_dir.exists():
+            continue
+        
+        # Iterate through each subject (Bark, Bikes, etc.)
+        for subject_dir in sorted(cfa_dir.iterdir()):
+            if not subject_dir.is_dir():
+                continue
+            
+            subject_name = subject_dir.name
+            gt_dir = subject_dir / "gt"
+            
+            # Find the GT file
+            if not gt_dir.exists():
+                continue
+            
+            gt_files = list(gt_dir.glob("*.cr2")) + list(gt_dir.glob("*.CR2"))
+            if not gt_files:
+                continue
+            
+            gt_file = gt_files[0]
+            
+            # Find all noisy files (non-GT)
+            noisy_files = []
+            for ext in ['*.cr2', '*.CR2']:
+                noisy_files.extend(subject_dir.glob(ext))
+            
+            # Filter out GT files
+            noisy_files = [f for f in noisy_files if f.parent.name != 'gt']
+            
+            # Create test cases
+            for noisy_file in sorted(noisy_files):
+                # Extract ISO from filename
+                iso = 'unknown'
+                if 'ISO' in noisy_file.name:
+                    iso_parts = noisy_file.name.split('ISO')[1].split('_')[0]
+                    iso = f"ISO{iso_parts}"
+                
+                test_cases.append({
+                    'name': f"{subject_name} {iso} ({cfa_type})",
+                    'gt': str(gt_file),
+                    'noisy': str(noisy_file),
+                    'cfa_type': cfa_type,
+                    'subject': subject_name,
+                    'iso': iso,
+                })
+    
+    return test_cases
+
+
+def test_alignment_comparison(test_cases=None, num_images=None):
+    """Compare FFT-CFA (raw) vs Bruteforce-RGB (demosaic first) alignment.
+    
+    Args:
+        test_cases: List of test case dictionaries, or None to use default
+        num_images: Maximum number of test cases to run, or None for all
+    """
     
     print("\n" + "="*80)
     print("ALIGNMENT METHOD COMPARISON: FFT-CFA vs Bruteforce-RGB")
@@ -75,18 +155,26 @@ def test_alignment_comparison():
     print("\nFFT-CFA: Fast phase correlation on raw Bayer/X-Trans data")
     print("Bruteforce-RGB: Slow exhaustive search after demosaicing to RGB\n")
     
-    test_cases = [
-        {
-            "name": "Bark ISO65535 (Bayer)",
-            "gt": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
-            "noisy": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/Bayer_Bark_ISO65535_sha1=6ba8ed5f7fff42c4c900812c02701649f4f2d49e.cr2",
-        },
-        {
-            "name": "Bark ISO800 (Bayer)",
-            "gt": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
-            "noisy": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/Bayer_Bark_ISO800_sha1=ba86f1da64a4bb534d9216e96c1c72177ed1e625.cr2",
-        },
-    ]
+    if test_cases is None:
+        # Use default hardcoded test cases
+        test_cases = [
+            {
+                "name": "Bark ISO65535 (Bayer)",
+                "gt": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
+                "noisy": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/Bayer_Bark_ISO65535_sha1=6ba8ed5f7fff42c4c900812c02701649f4f2d49e.cr2",
+            },
+            {
+                "name": "Bark ISO800 (Bayer)",
+                "gt": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
+                "noisy": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/Bayer_Bark_ISO800_sha1=ba86f1da64a4bb534d9216e96c1c72177ed1e625.cr2",
+            },
+        ]
+    
+    # Limit number of test cases if requested
+    if num_images is not None:
+        test_cases = test_cases[:num_images]
+    
+    print(f"Running {len(test_cases)} test case(s)...\n")
     
     results = []
     
@@ -195,4 +283,49 @@ def test_alignment_comparison():
 
 
 if __name__ == "__main__":
-    test_alignment_comparison()
+    parser = argparse.ArgumentParser(
+        description='Compare FFT-CFA vs Bruteforce-RGB alignment methods',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run with default 2 test cases
+  python tests/test_alignment_comparison.py
+  
+  # Run all available test cases
+  python tests/test_alignment_comparison.py --discover
+  
+  # Run first 5 test cases
+  python tests/test_alignment_comparison.py --discover --num_images 5
+  
+  # Run only Bayer images
+  python tests/test_alignment_comparison.py --discover --cfa bayer
+  
+  # Run only X-Trans images
+  python tests/test_alignment_comparison.py --discover --cfa xtrans
+  
+  # Run first 3 X-Trans images
+  python tests/test_alignment_comparison.py --discover --cfa xtrans --num_images 3
+        """
+    )
+    
+    parser.add_argument('--discover', action='store_true',
+                        help='Auto-discover all test cases from dataset')
+    parser.add_argument('--num_images', type=int, default=None,
+                        help='Maximum number of images to test (default: all)')
+    parser.add_argument('--cfa', choices=['all', 'bayer', 'xtrans'], default='all',
+                        help='CFA filter: all (default), bayer, or xtrans')
+    
+    args = parser.parse_args()
+    
+    # Determine test cases
+    if args.discover:
+        print(f"Discovering test cases (CFA filter: {args.cfa})...")
+        test_cases = discover_test_cases(cfa_filter=args.cfa)
+        print(f"Found {len(test_cases)} test case(s)")
+        if args.num_images:
+            print(f"Limiting to first {args.num_images} test case(s)")
+    else:
+        test_cases = None
+    
+    # Run comparison
+    test_alignment_comparison(test_cases=test_cases, num_images=args.num_images)

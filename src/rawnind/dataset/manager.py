@@ -1,0 +1,482 @@
+"""Dataset manager for RawNIND dataset.
+
+This module provides a canonical index of all scenes and images in the dataset,
+built from the authoritative dataset.yaml file. It handles discovery of local
+files, validation via SHA1 hashes, and downloading of missing files.
+"""
+
+import hashlib
+import yaml
+import requests
+import random
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Generator, Callable, Any
+from dataclasses import dataclass, field
+from functools import wraps
+
+
+# Dataset URLs
+DATASET_YAML_URL = "https://dataverse.uclouvain.be/api/access/datafile/:persistentId?persistentId=doi:10.14428/DVN/DEQCIM/WWGHOR"
+DATASET_ROOT = Path("src/rawnind/datasets/RawNIND/src")
+
+
+def invalidates_cache(func: Callable) -> Callable:
+    """Decorator to invalidate DatasetIndex caches after method execution."""
+    @wraps(func)
+    def wrapper(self: 'DatasetIndex', *args: Any, **kwargs: Any) -> Any:
+        result = func(self, *args, **kwargs)
+        self._invalidate_caches()
+        return result
+    return wrapper
+
+
+@dataclass
+class ImageInfo:
+    """Information about a single image file."""
+
+    filename: str
+    sha1: str
+    is_clean: bool
+    local_path: Optional[Path] = None
+    validated: bool = False
+
+
+@dataclass
+class SceneInfo:
+    """Information about a scene (collection of clean and noisy images)."""
+
+    scene_name: str
+    cfa_type: str  # 'Bayer' or 'X-Trans'
+    unknown_sensor: bool
+    test_reserve: bool
+    clean_images: List[ImageInfo] = field(default_factory=list)
+    noisy_images: List[ImageInfo] = field(default_factory=list)
+
+    def all_images(self) -> List[ImageInfo]:
+        """Get all images (clean + noisy) for this scene."""
+        return self.clean_images + self.noisy_images
+
+    def get_gt_image(self) -> Optional[ImageInfo]:
+        """Get the first clean (GT) image, or None if none exist."""
+        return self.clean_images[0] if self.clean_images else None
+
+
+class DatasetIndex:
+    """Canonical index of the RawNIND dataset."""
+
+    def __init__(self, cache_path: Optional[Path] = None):
+        """Initialize dataset index.
+
+        Args:
+            cache_path: Path to cached dataset.yaml (default: DATASET_ROOT/dataset.yaml)
+        """
+        self.cache_path = cache_path or DATASET_ROOT / "dataset_index.yaml"
+        self.scenes: Dict[
+            str, Dict[str, SceneInfo]
+        ] = {}  # {cfa_type: {scene_name: SceneInfo}}
+        self._loaded = False
+        self._known_extensions: Optional[set] = None
+        self._sorted_cfa_types: Optional[List[str]] = None
+
+    def _invalidate_caches(self) -> None:
+        """Invalidate cached computed values when index changes."""
+        self._known_extensions = None
+        self._sorted_cfa_types = None
+
+    @property
+    def known_extensions(self) -> set:
+        """Get set of all file extensions present in the dataset.
+        
+        Computed once and cached until index changes.
+        """
+        if self._known_extensions is None:
+            extensions = set()
+            for cfa_type, scenes in self.scenes.items():
+                for scene_info in scenes.values():
+                    for img_info in scene_info.all_images():
+                        if img_info.local_path is not None:
+                            extensions.add(img_info.local_path.suffix.lower())
+            self._known_extensions = extensions
+        return self._known_extensions
+
+    @property
+    def sorted_cfa_types(self) -> List[str]:
+        """Get sorted list of CFA types.
+        
+        Computed once and cached until index changes.
+        """
+        if self._sorted_cfa_types is None:
+            self._sorted_cfa_types = sorted(self.scenes.keys())
+        return self._sorted_cfa_types
+
+    def load_index(self, force_update: bool = False) -> None:
+        """Load the dataset index.
+
+        Args:
+            force_update: If True, download fresh index from online source
+        """
+        if self._loaded and not force_update:
+            return
+
+        # Check if cached index exists and is valid
+        if not force_update and self.cache_path.exists():
+            try:
+                self._load_from_yaml(self.cache_path)
+                self._loaded = True
+                return
+            except Exception as e:
+                print(f"Warning: Failed to load cached index: {e}")
+                print("Will download fresh index...")
+
+        # Download and cache the index
+        self.update_index()
+
+    def update_index(self) -> None:
+        """Download dataset.yaml from online source and build index."""
+        print(f"Downloading dataset index from {DATASET_YAML_URL}...")
+
+        response = requests.get(DATASET_YAML_URL, timeout=30)
+        response.raise_for_status()
+
+        # Parse YAML
+        dataset_data = yaml.safe_load(response.text)
+
+        # Build index
+        self._build_index_from_data(dataset_data)
+
+        # Save to cache
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.cache_path, "w") as f:
+            yaml.dump(dataset_data, f)
+
+        print(f"Index cached to {self.cache_path}")
+        self._loaded = True
+
+    def _load_from_yaml(self, yaml_path: Path) -> None:
+        """Load index from a local YAML file."""
+        with open(yaml_path, "r") as f:
+            dataset_data = yaml.safe_load(f)
+        self._build_index_from_data(dataset_data)
+
+    @invalidates_cache
+    def _build_index_from_data(self, dataset_data: dict) -> None:
+        """Build index from parsed dataset YAML data."""
+        self.scenes = {}
+
+        for cfa_type in ["Bayer", "X-Trans"]:
+            if cfa_type not in dataset_data:
+                continue
+
+            self.scenes[cfa_type] = {}
+
+            for scene_name, scene_data in dataset_data[cfa_type].items():
+                # Create ImageInfo objects for clean images
+                clean_images = []
+                for img_data in scene_data.get("clean_images", []):
+                    clean_images.append(
+                        ImageInfo(
+                            filename=img_data["filename"],
+                            sha1=img_data["sha1"],
+                            is_clean=True,
+                        )
+                    )
+
+                # Create ImageInfo objects for noisy images
+                noisy_images = []
+                for img_data in scene_data.get("noisy_images", []):
+                    noisy_images.append(
+                        ImageInfo(
+                            filename=img_data["filename"],
+                            sha1=img_data["sha1"],
+                            is_clean=False,
+                        )
+                    )
+
+                # Create SceneInfo
+                scene_info = SceneInfo(
+                    scene_name=scene_name,
+                    cfa_type=cfa_type,
+                    unknown_sensor=scene_data.get("unknown_sensor", False),
+                    test_reserve=scene_data.get("test_reserve", False),
+                    clean_images=clean_images,
+                    noisy_images=noisy_images,
+                )
+
+                self.scenes[cfa_type][scene_name] = scene_info
+
+    @invalidates_cache
+    def discover_local_files(self) -> Tuple[int, int]:
+        """Discover which files exist locally and update image paths.
+
+        Returns:
+            Tuple of (found_count, total_count)
+        """
+        if not self._loaded:
+            self.load_index()
+
+        found_count = 0
+        total_count = 0
+
+        for cfa_type, scenes in self.scenes.items():
+            cfa_dir = DATASET_ROOT / cfa_type
+            if not cfa_dir.exists():
+                continue
+
+            for scene_name, scene_info in scenes.items():
+                for img_info in scene_info.all_images():
+                    total_count += 1
+
+                    # Check in scene directory
+                    scene_dir = cfa_dir / scene_name
+
+                    # Check in gt subdirectory for clean images
+                    if img_info.is_clean:
+                        search_dirs = [scene_dir / "gt", scene_dir]
+                    else:
+                        search_dirs = [scene_dir]
+
+                    # Look for the file
+                    for search_dir in search_dirs:
+                        potential_path = search_dir / img_info.filename
+                        if potential_path.exists():
+                            img_info.local_path = potential_path
+                            found_count += 1
+                            break
+
+        return found_count, total_count
+
+    def validate_file(self, img_info: ImageInfo) -> bool:
+        """Validate a file's SHA1 hash.
+
+        Args:
+            img_info: Image info with local_path set
+
+        Returns:
+            True if file exists and hash matches, False otherwise
+        """
+        if img_info.local_path is None or not img_info.local_path.exists():
+            return False
+
+        computed_hash = compute_sha1(img_info.local_path)
+        img_info.validated = computed_hash == img_info.sha1
+        return img_info.validated
+
+    def validate_all_local_files(self) -> Tuple[int, int, List[ImageInfo]]:
+        """Validate SHA1 hashes of all local files.
+
+        Returns:
+            Tuple of (valid_count, total_local_count, invalid_files_list)
+        """
+        if not self._loaded:
+            self.load_index()
+
+        valid_count = 0
+        total_local = 0
+        invalid_files = []
+
+        for cfa_type, scenes in self.scenes.items():
+            for scene_name, scene_info in scenes.items():
+                for img_info in scene_info.all_images():
+                    if img_info.local_path is not None:
+                        total_local += 1
+                        if self.validate_file(img_info):
+                            valid_count += 1
+                        else:
+                            invalid_files.append(img_info)
+
+        return valid_count, total_local, invalid_files
+
+    def get_all_scenes(self) -> List[SceneInfo]:
+        """Get list of all scenes."""
+        if not self._loaded:
+            self.load_index()
+
+        all_scenes = []
+        for scenes in self.scenes.values():
+            all_scenes.extend(scenes.values())
+        return all_scenes
+
+    def get_scenes_by_cfa(self, cfa_type: str) -> List[SceneInfo]:
+        """Get scenes filtered by CFA type.
+
+        Args:
+            cfa_type: 'Bayer' or 'X-Trans'
+        """
+        if not self._loaded:
+            self.load_index()
+
+        return list(self.scenes.get(cfa_type, {}).values())
+
+    def get_scene(self, cfa_type: str, scene_name: str) -> Optional[SceneInfo]:
+        """Get a specific scene.
+
+        Args:
+            cfa_type: 'Bayer' or 'X-Trans'
+            scene_name: Scene name
+
+        Returns:
+            SceneInfo or None if not found
+        """
+        if not self._loaded:
+            self.load_index()
+
+        return self.scenes.get(cfa_type, {}).get(scene_name)
+
+    def get_missing_files(self) -> List[ImageInfo]:
+        """Get list of files not found locally."""
+        if not self._loaded:
+            self.load_index()
+
+        missing = []
+        for cfa_type, scenes in self.scenes.items():
+            for scene_name, scene_info in scenes.items():
+                for img_info in scene_info.all_images():
+                    if img_info.local_path is None:
+                        missing.append(img_info)
+
+        return missing
+
+    def get_available_scenes(self) -> List[SceneInfo]:
+        """Get scenes that have at least one GT image available locally."""
+        if not self._loaded:
+            self.load_index()
+
+        available = []
+        for cfa_type, scenes in self.scenes.items():
+            for scene_name, scene_info in scenes.items():
+                gt_img = scene_info.get_gt_image()
+                if gt_img and gt_img.local_path is not None:
+                    available.append(scene_info)
+
+        return available
+
+    def sequential_scene_generator(
+        self, extensions: Optional[List[str]] = None
+    ) -> Generator[SceneInfo, None, None]:
+        """Yield scenes sequentially in order.
+        
+        Args:
+            extensions: Optional list of file extensions to filter by (e.g., ['.arw', '.dng'])
+                       If None, all scenes are yielded regardless of extension.
+        
+        Yields:
+            SceneInfo objects in sequential order
+        """
+        if not self._loaded:
+            self.load_index()
+
+        for cfa_type in self.sorted_cfa_types:
+            for scene_name in sorted(self.scenes[cfa_type].keys()):
+                scene_info = self.scenes[cfa_type][scene_name]
+                
+                if extensions is None:
+                    yield scene_info
+                else:
+                    gt_img = scene_info.get_gt_image()
+                    if gt_img and gt_img.local_path is not None:
+                        ext_lower = gt_img.local_path.suffix.lower()
+                        if any(ext_lower == ext.lower() for ext in extensions):
+                            yield scene_info
+
+    def random_scene_generator(
+        self,
+        count: Optional[int] = None,
+        extensions: Optional[List[str]] = None,
+        seed: Optional[int] = None,
+    ) -> Generator[SceneInfo, None, None]:
+        """Yield random scenes without replacement.
+        
+        Args:
+            count: Number of scenes to yield. If None, yields all scenes.
+            extensions: Optional list of file extensions to filter by (e.g., ['.arw', '.dng'])
+                       If None, all scenes are considered regardless of extension.
+            seed: Random seed for reproducibility
+        
+        Yields:
+            SceneInfo objects in random order
+        """
+        if not self._loaded:
+            self.load_index()
+
+        if seed is not None:
+            random.seed(seed)
+
+        all_scenes = []
+        for cfa_type, scenes in self.scenes.items():
+            for scene_name, scene_info in scenes.items():
+                if extensions is None:
+                    all_scenes.append(scene_info)
+                else:
+                    gt_img = scene_info.get_gt_image()
+                    if gt_img and gt_img.local_path is not None:
+                        if any(gt_img.local_path.suffix.lower() == ext.lower() 
+                               for ext in extensions):
+                            all_scenes.append(scene_info)
+
+        random.shuffle(all_scenes)
+        
+        num_to_yield = count if count is not None else len(all_scenes)
+        for i, scene_info in enumerate(all_scenes):
+            if i >= num_to_yield:
+                break
+            yield scene_info
+
+    def print_summary(self) -> None:
+        """Print a summary of the dataset index."""
+        if not self._loaded:
+            self.load_index()
+
+        print("\n" + "=" * 80)
+        print("DATASET INDEX SUMMARY")
+        print("=" * 80)
+
+        for cfa_type, scenes in self.scenes.items():
+            print(f"\n{cfa_type}:")
+            print(f"  Scenes: {len(scenes)}")
+
+            total_clean = 0
+            total_noisy = 0
+            local_clean = 0
+            local_noisy = 0
+
+            for scene_info in scenes.values():
+                total_clean += len(scene_info.clean_images)
+                total_noisy += len(scene_info.noisy_images)
+
+                for img in scene_info.clean_images:
+                    if img.local_path is not None:
+                        local_clean += 1
+
+                for img in scene_info.noisy_images:
+                    if img.local_path is not None:
+                        local_noisy += 1
+
+            print(f"  Clean images: {local_clean}/{total_clean} local")
+            print(f"  Noisy images: {local_noisy}/{total_noisy} local")
+
+        print("\n" + "=" * 80 + "\n")
+
+
+def compute_sha1(file_path: Path) -> str:
+    """Compute SHA1 hash of a file.
+
+    Args:
+        file_path: Path to file
+
+    Returns:
+        SHA1 hash as hex string
+    """
+    sha1 = hashlib.sha1()
+    with open(file_path, "rb") as f:
+        while chunk := f.read(8192):
+            sha1.update(chunk)
+    return sha1.hexdigest()
+
+
+# Global dataset index instance
+_dataset_index = DatasetIndex()
+
+
+def get_dataset_index() -> DatasetIndex:
+    """Get the global dataset index instance."""
+    return _dataset_index
