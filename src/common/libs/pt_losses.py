@@ -48,7 +48,10 @@ class MS_SSIM_metric(pytorch_msssim.MS_SSIM):
 #         return super().forward(x, y, require_grad=True, batch_average=True)
 
 
-losses = {"mse": torch.nn.MSELoss, "msssim_loss": MS_SSIM_loss}#, "dists": DISTS_loss}
+losses = {
+    "mse": torch.nn.MSELoss,
+    "msssim_loss": MS_SSIM_loss,
+}  # , "dists": DISTS_loss}
 # metrics = losses | {"msssim": MS_SSIM_metric}  # python 3.8 / 3.10 compat
 metrics = {
     "msssim": MS_SSIM_metric,

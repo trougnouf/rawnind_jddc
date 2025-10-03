@@ -13,20 +13,16 @@ import scipy.ndimage
 from scipy.signal import correlate
 import torch
 
+
 def _is_multiprocessing_worker():
     """Check if we're running in a multiprocessing worker process."""
     try:
-        return multiprocessing.current_process().name != 'MainProcess'
+        return multiprocessing.current_process().name != "MainProcess"
     except:
         return False
 
 
-
-
-
-
 import torch
-
 
 
 # sys.path.append("..")
@@ -42,12 +38,14 @@ KEEPERS_QUANTILE: float = 0.9999
 MAX_SHIFT_SEARCH: int = 128
 GAMMA = 2.2
 DS_DN = "RawNIND"
-DATASETS_ROOT = resources.files('rawnind').joinpath('datasets')
+DATASETS_ROOT = resources.files("rawnind").joinpath("datasets")
 DS_BASE_DPATH: str = DATASETS_ROOT / DS_DN
 BAYER_DS_DPATH: str = DS_BASE_DPATH / "src" / "Bayer"
 LINREC2020_DS_DPATH: str = DS_BASE_DPATH / "proc" / "lin_rec2020"
 MASKS_DPATH = DS_BASE_DPATH / f"masks_{LOSS_THRESHOLD}"
-RAWNIND_CONTENT_FPATH = DS_BASE_DPATH / "RawNIND_masks_and_alignments.yaml" # used by tools/prep_image_dataset.py and libs/rawds.py
+RAWNIND_CONTENT_FPATH = (
+    DS_BASE_DPATH / "RawNIND_masks_and_alignments.yaml"
+)  # used by tools/prep_image_dataset.py and libs/rawds.py
 
 NEIGHBORHOOD_SEARCH_WINDOW = 3
 EXTRARAW_DS_DPATH = DS_BASE_DPATH / "extraraw"
@@ -194,12 +192,14 @@ def shift_images(
     target_img_out = target_img
     anchor_is_bayer = anchor_img.shape[0] == 4
     target_is_bayer = target_img.shape[0] == 4
-    
+
     # Bayer-to-Bayer shift: treat like RGB-to-RGB (no resolution mismatch)
     if anchor_is_bayer and target_is_bayer:
         target_shift_divisor = 1
     elif anchor_is_bayer and not target_is_bayer:
-        raise NotImplementedError("shift_images: Bayer anchor with RGB target not implemented.")
+        raise NotImplementedError(
+            "shift_images: Bayer anchor with RGB target not implemented."
+        )
     else:
         target_shift_divisor = target_is_bayer + 1
     if shift[0] > 0:  # y
@@ -368,27 +368,25 @@ def make_loss_mask_bayer(
     verbose: bool = False,
 ) -> np.ndarray:
     """Return a loss mask between two (aligned) raw Bayer images.
-    
+
     Operates directly on raw Bayer data (4 channels: R, G1, G2, B) without demosaicing.
     Computes L1 loss per-channel and sums to create a spatial loss map.
-    
+
     Args:
         anchor_img: Ground truth Bayer image (4, H, W)
         target_img: Target Bayer image (4, H, W)
         loss_threshold: Maximum acceptable loss
         keepers_quantile: Quantile threshold for rejecting high-loss regions
         verbose: Print debug info
-        
+
     Returns:
         loss_mask: Binary mask (H, W) where 1=use, 0=ignore
     """
     target_matched = match_gain(anchor_img, target_img)
-    
-    loss_map = np_l1(
-        gamma(anchor_img), gamma(target_matched), avg=False
-    )
+
+    loss_map = np_l1(gamma(anchor_img), gamma(target_matched), avg=False)
     loss_map = loss_map.sum(axis=0)
-    
+
     loss_mask = np.ones_like(loss_map)
     reject_threshold = min(loss_threshold, np.quantile(loss_map, keepers_quantile))
     if reject_threshold == 0:
@@ -396,7 +394,7 @@ def make_loss_mask_bayer(
     if verbose:
         print(f"{reject_threshold=}")
     loss_mask[loss_map >= reject_threshold] = 0.0
-    
+
     loss_mask = scipy.ndimage.binary_opening(loss_mask.astype(np.uint8)).astype(
         np.float32
     )
@@ -452,7 +450,7 @@ def find_best_alignment_fft(
 ) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
     """Fast alignment using FFT-based cross-correlation."""
     target_img = match_gain(anchor_img, target_img)
-    
+
     # Convert to grayscale for correlation
     if len(anchor_img.shape) > 2:
         anchor_gray = anchor_img.mean(axis=0)
@@ -460,54 +458,60 @@ def find_best_alignment_fft(
     else:
         anchor_gray = anchor_img
         target_gray = target_img
-    
+
     # Handle different image sizes by cropping to common region
     min_h = min(anchor_gray.shape[0], target_gray.shape[0])
     min_w = min(anchor_gray.shape[1], target_gray.shape[1])
-    
+
     # Crop both images to same size from center
     anchor_h, anchor_w = anchor_gray.shape
     target_h, target_w = target_gray.shape
-    
+
     anchor_y_start = (anchor_h - min_h) // 2
     anchor_x_start = (anchor_w - min_w) // 2
     target_y_start = (target_h - min_h) // 2
     target_x_start = (target_w - min_w) // 2
-    
-    anchor_crop = anchor_gray[anchor_y_start:anchor_y_start+min_h, anchor_x_start:anchor_x_start+min_w]
-    target_crop = target_gray[target_y_start:target_y_start+min_h, target_x_start:target_x_start+min_w]
-    
+
+    anchor_crop = anchor_gray[
+        anchor_y_start : anchor_y_start + min_h, anchor_x_start : anchor_x_start + min_w
+    ]
+    target_crop = target_gray[
+        target_y_start : target_y_start + min_h, target_x_start : target_x_start + min_w
+    ]
+
     # Normalize images
     anchor_crop = (anchor_crop - anchor_crop.mean()) / (anchor_crop.std() + 1e-8)
     target_crop = (target_crop - target_crop.mean()) / (target_crop.std() + 1e-8)
-    
+
     # Cross-correlation using FFT
-    correlation = correlate(anchor_crop, target_crop, mode='same')
-    
+    correlation = correlate(anchor_crop, target_crop, mode="same")
+
     # Find peak
     y_peak, x_peak = np.unravel_index(np.argmax(correlation), correlation.shape)
-    
+
     # Convert to shift coordinates
     shift_y = y_peak - anchor_crop.shape[0] // 2
     shift_x = x_peak - anchor_crop.shape[1] // 2
-    
+
     # Clamp to search range
     shift_y = np.clip(shift_y, -max_shift_search, max_shift_search)
     shift_x = np.clip(shift_x, -max_shift_search, max_shift_search)
-    
+
     best_shift = (int(shift_y), int(shift_x))
-    
+
     if return_loss_too:
         # Compute actual L1 loss for the found shift
         try:
-            shifted_anchor, shifted_target = shift_images(anchor_img, target_img, best_shift)
+            shifted_anchor, shifted_target = shift_images(
+                anchor_img, target_img, best_shift
+            )
             loss = np_l1(shifted_anchor, shifted_target, avg=True)
             return best_shift, float(loss)
         except Exception as e:
             if verbose:
                 print(f"Warning: Could not compute loss for shift {best_shift}: {e}")
-            return best_shift, float('inf')
-    
+            return best_shift, float("inf")
+
     return best_shift
 
 
@@ -521,43 +525,48 @@ def find_best_alignment(
     # ) -> Union[tuple[int, int], tuple[tuple[int, int], float]]: # python bw compat 2022-11-10
 ) -> Union[tuple, tuple]:  # python bw compat 2022-11-10
     """Find best alignment (minimal loss) between anchor_img and target_img.
-    
+
     Args:
         method: Alignment method to use:
             - "auto": Automatically select best method (defaults to FFT for accuracy+speed)
             - "fft": Use FFT-based phase correlation (RECOMMENDED)
             - "original": Use original brute-force method (slow, for reference only)
-    
+
     Note: FFT is now the default for "auto" for best accuracy and speed.
     """
     from rawnind.libs.alignment_backends import find_best_alignment_bruteforce_rgb
-    
+
     # Method selection
     if method == "auto":
         # Always prefer FFT: fastest + most accurate method
         # Benchmarks: 2.3s vs 40.2s (17.3x speedup), perfect accuracy vs 2-10px errors
         method = "fft"
-    
+
     # Start timing after method selection
     start_time = time.time() if verbose else None
-    
+
     # Dispatch to appropriate method
     if method == "fft":
-        result = find_best_alignment_fft(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
+        result = find_best_alignment_fft(
+            anchor_img, target_img, max_shift_search, return_loss_too, verbose
+        )
     elif method == "original":
-        result = find_best_alignment_bruteforce_rgb(anchor_img, target_img, max_shift_search, return_loss_too, verbose)
+        result = find_best_alignment_bruteforce_rgb(
+            anchor_img, target_img, max_shift_search, return_loss_too, verbose
+        )
     else:
         raise ValueError(f"Unknown alignment method: {method}")
-    
+
     # Suppress verbose output during multiprocessing to keep progress bar clean
     if verbose and start_time and not _is_multiprocessing_worker():
         elapsed = time.time() - start_time
         shift = result[0] if return_loss_too else result
         loss = result[1] if return_loss_too else "N/A"
-        print(f"Alignment method '{method}' took {elapsed:.3f}s, shift={shift}, loss={loss}")
-    
-    return result
+        print(
+            f"Alignment method '{method}' took {elapsed:.3f}s, shift={shift}, loss={loss}"
+        )
 
+    return result
 
 
 @lru_cache(maxsize=32)  # Cache recently loaded images
@@ -597,33 +606,38 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     if verbose:
         print(f"get_best_alignment_and_make_loss_mask: {mask_name=}")
     loss_mask = make_overexposure_mask(gt_img, gt_metadata["overexposure_lb"])
-    
+
     # Get alignment method from kwargs (used in both branches)
     alignment_method = kwargs.get("alignment_method", "auto")
     benchmark_mode = kwargs.get("benchmark_mode", False)
-    
+
     # NEW WORKFLOW: Align on RAW first using FFT (avoids wasteful demosaicing)
     # For RAW/Bayer images, use CFA-aware FFT alignment directly on mosaiced data
     if is_bayer:
         raw_gain = float(match_gain(gt_img, f_img, return_val=True))
         rgb_xyz_matrix = gt_metadata["rgb_xyz_matrix"].tolist()
-        
+
         verbose_alignment = kwargs.get("verbose_alignment", False)
         is_multiprocessing = kwargs.get("num_threads", 1) > 1
         verbose_for_alignment = verbose_alignment and not is_multiprocessing
-        
+
         # Check if user requested "original" method - requires demosaicing first
         if alignment_method == "original":
             # Demosaic first for brute-force alignment
             gt_rgb = raw.demosaic(gt_img, gt_metadata)
             f_rgb = raw.demosaic(f_img, f_metadata)
-            
+
             # Use brute-force alignment on RGB
             if benchmark_mode:
                 import time
+
                 align_start = time.perf_counter()
             best_alignment, best_alignment_loss = find_best_alignment(
-                gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
+                gt_rgb,
+                f_rgb,
+                return_loss_too=True,
+                method=alignment_method,
+                verbose=verbose_for_alignment,
             )
             if benchmark_mode:
                 alignment_time = time.perf_counter() - align_start
@@ -631,19 +645,25 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         else:
             # Default: Align on RAW using CFA-aware FFT (FAST AND ACCURATE!)
             from rawnind.libs.alignment_backends import find_best_alignment_fft_cfa
+
             if benchmark_mode:
                 import time
+
                 align_start = time.perf_counter()
             best_alignment, best_alignment_loss = find_best_alignment_fft_cfa(
-                gt_img, f_img, gt_metadata, 
-                method="median", return_loss_too=True, verbose=False
+                gt_img,
+                f_img,
+                gt_metadata,
+                method="median",
+                return_loss_too=True,
+                verbose=False,
             )
             if benchmark_mode:
                 alignment_time = time.perf_counter() - align_start
-            
+
             # Track actual method used (for bayer with auto/fft, use FFT-CFA)
             actual_method = "fft_cfa"
-            
+
             # Skip demosaicing - will compute loss mask on raw Bayer data
             gt_rgb = None
             f_rgb = None
@@ -653,58 +673,67 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         f_rgb = f_img
         rgb_xyz_matrix = None
         raw_gain = None
-        
+
         verbose_alignment = kwargs.get("verbose_alignment", False)
-        
+
         # Disable verbose during multiprocessing to avoid spam
         is_multiprocessing = kwargs.get("num_threads", 1) > 1
         verbose_for_alignment = verbose_alignment and not is_multiprocessing
-        
+
         # For RGB images, use alignment method on RGB
         if benchmark_mode:
             import time
+
             align_start = time.perf_counter()
         best_alignment, best_alignment_loss = find_best_alignment(
-            gt_rgb, f_rgb, return_loss_too=True, method=alignment_method, verbose=verbose_for_alignment
+            gt_rgb,
+            f_rgb,
+            return_loss_too=True,
+            method=alignment_method,
+            verbose=verbose_for_alignment,
         )
         if benchmark_mode:
             alignment_time = time.perf_counter() - align_start
-        
+
         # Track actual method used (resolve 'auto' to 'fft')
         actual_method = "fft" if alignment_method == "auto" else alignment_method
-    
+
     # Branch: Bayer FFT path vs RGB path
     if is_bayer and actual_method == "fft_cfa":
         # Bayer FFT path: operate on raw data, no demosaicing
         rgb_gain = None  # Not applicable for raw path
-        
+
         if verbose:
-            print(f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}")
-        
+            print(
+                f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}"
+            )
+
         # Shift raw Bayer images
         gt_img_aligned, target_img_aligned = shift_images(gt_img, f_img, best_alignment)
         loss_mask = shift_mask(loss_mask, best_alignment)
-        
+
         assert gt_img_aligned.shape == target_img_aligned.shape, (
             f"{gt_img_aligned.shape=} is not equal to {target_img_aligned.shape} ({best_alignment=}, {loss_mask.shape=}, {kwargs=})"
         )
-        
+
         # Compute loss mask directly on raw Bayer data
         loss_mask = make_loss_mask_bayer(gt_img_aligned, target_img_aligned) * loss_mask
     else:
         # RGB path (original method or non-Bayer images)
         rgb_gain = float(match_gain(gt_rgb, f_rgb, return_val=True))
-        
+
         if verbose:
-            print(f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}")
-        
+            print(
+                f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}"
+            )
+
         gt_img_aligned, target_img_aligned = shift_images(gt_rgb, f_rgb, best_alignment)
         loss_mask = shift_mask(loss_mask, best_alignment)
-        
+
         assert gt_img_aligned.shape == target_img_aligned.shape, (
             f"{gt_img_aligned.shape=} is not equal to {target_img_aligned.shape} ({best_alignment=}, {loss_mask.shape=}, {kwargs=})"
         )
-        
+
         loss_mask = make_loss_mask(gt_img_aligned, target_img_aligned) * loss_mask
     # except ValueError as e:
     #     print(f'get_best_alignment_and_make_loss_mask error {e=}, {kwargs=}, {loss_mask.shape=}, {gt_img.shape=}, {target_img.shape=}, {best_alignment=}, {gt_img_aligned.shape=}, {target_img_aligned.shape=}, {loss_mask.shape=}')

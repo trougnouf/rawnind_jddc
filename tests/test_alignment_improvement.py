@@ -35,7 +35,7 @@ def compute_mae_mse(img1: np.ndarray, img2: np.ndarray) -> tuple[float, float]:
 
 def test_fft_cfa_improves_alignment(random_scenes_with_synthetic_shifts):
     """Test that FFT-CFA detected shift reduces alignment error.
-    
+
     Tests until at least one scene of each CFA type (Bayer, X-Trans) passes.
     """
     scenes = random_scenes_with_synthetic_shifts
@@ -50,12 +50,16 @@ def test_fft_cfa_improves_alignment(random_scenes_with_synthetic_shifts):
 
     for i, scene in enumerate(scenes, 1):
         cfa_type = scene["cfa_type"]
-        
+
         # Skip if we've already validated this CFA type
-        if (cfa_type == "Bayer" and bayer_passed) or (cfa_type == "X-Trans" and xtrans_passed):
-            print(f"[{i:2d}] {scene['subject']:<25} ({cfa_type:<7}) | Skipped (already validated {cfa_type})")
+        if (cfa_type == "Bayer" and bayer_passed) or (
+            cfa_type == "X-Trans" and xtrans_passed
+        ):
+            print(
+                f"[{i:2d}] {scene['subject']:<25} ({cfa_type:<7}) | Skipped (already validated {cfa_type})"
+            )
             continue
-        
+
         original = scene["original_img"]
         shifted = scene["shifted_img"]
         true_shift = scene["true_shift"]
@@ -138,16 +142,16 @@ def test_fft_cfa_improves_alignment(random_scenes_with_synthetic_shifts):
 
 def test_bruteforce_rgb_improves_alignment(random_scenes_with_synthetic_shifts):
     """Test that Bruteforce-RGB detected shift reduces alignment error.
-    
+
     Note: Bruteforce-RGB only works on Bayer images (requires RGB demosaic).
     X-Trans images are skipped as there's no X-Trans RGB demosaic in the codebase.
     Tests until at least one Bayer scene passes, then skips remaining scenes.
     """
     scenes = random_scenes_with_synthetic_shifts
-    
+
     # Filter to Bayer only - bruteforce RGB requires RGB demosaic which only exists for Bayer
     bayer_scenes = [s for s in scenes if s["cfa_type"] == "Bayer"]
-    
+
     if len(bayer_scenes) == 0:
         pytest.skip("No Bayer scenes available for bruteforce RGB test")
 
@@ -161,7 +165,9 @@ def test_bruteforce_rgb_improves_alignment(random_scenes_with_synthetic_shifts):
 
     for i, scene in enumerate(bayer_scenes, 1):
         if bayer_passed:
-            print(f"[{i:2d}] {scene['subject']:<25} (Bayer  ) | Skipped (already validated Bayer)")
+            print(
+                f"[{i:2d}] {scene['subject']:<25} (Bayer  ) | Skipped (already validated Bayer)"
+            )
             continue
         original = scene["original_img"]
         shifted = scene["shifted_img"]
