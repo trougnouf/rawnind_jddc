@@ -31,7 +31,7 @@ async def _start_producer_and_limit(ingestor, max_images, outbound_send):
         async with internal_recv, outbound_send:
             async for scene_info in internal_recv:
                 await outbound_send.send(scene_info)
-                image_count = len(scene_info.all_images())
+                image_count += len(scene_info.all_images())
                 if image_count >= max_images:
                     # Stop the background producer and exit
                     prod_nursery.cancel_scope.cancel()
@@ -89,10 +89,10 @@ async def limited_smoke_test():
 
         # Scanner with stats
         async def scanner_with_stats(recv, new_file, missing):
-            async with recv:
+            async with recv, new_file, missing:
                 async for scene_info in recv:
                     for img in scene_info.all_images():
-                        stats['images_scanned'] = 1
+                        stats['images_scanned'] += 1
                     # Manually route images
                     scene_dir = dataset_root / scene_info.cfa_type / scene_info.scene_name
                     gt_dir = scene_dir / "gt"
@@ -108,7 +108,7 @@ async def limited_smoke_test():
                         for candidate in candidates:
                             if candidate.exists():
                                 img_info.local_path = candidate
-                                stats['files_found'] = 1
+                                stats['files_found'] += 1
                                 await new_file.send(img_info)
                                 logger.info(f"  Found: {img_info.filename}")
                                 found = True
@@ -116,15 +116,15 @@ async def limited_smoke_test():
 
                         if not found:
                             img_info.local_path = candidates[0] if candidates else None
-                            stats['files_missing'] = 1
+                            stats['files_missing'] += 1
                             await missing.send(img_info)
                             logger.info(f"  Missing: {img_info.filename}")
 
         # Downloader with stats
         async def downloader_with_stats(recv, send):
-            async with recv:
+            async with recv, send:
                 async for img_info in recv:
-                    stats['downloads_attempted'] = 1
+                    stats['downloads_attempted'] += 1
                     logger.info(f"  Downloading: {img_info.filename}")
                     # Forward to actual downloader (it handles the download)
                     await send.send(img_info)
@@ -133,7 +133,7 @@ async def limited_smoke_test():
         merged_send, merged_recv = trio.open_memory_channel(NUM_IMAGES)
 
         async def merge_inputs():
-            async with new_file_recv, downloaded_recv, merged_send:
+            async with merged_send:
                 async with trio.open_nursery() as merge_nursery:
                     async def forward(recv):
                         async with recv:
@@ -145,7 +145,7 @@ async def limited_smoke_test():
 
         # Verifier with stats
         async def verifier_with_stats(recv, verified, missing):
-            async with recv:
+            async with recv, verified, missing:
                 async for img_info in recv:
                     if img_info.local_path and img_info.local_path.exists():
                         # Compute hash
@@ -154,19 +154,19 @@ async def limited_smoke_test():
 
                         if computed == img_info.sha1:
                             img_info.validated = True
-                            stats['verified'] = 1
+                            stats['verified'] += 1
                             logger.info(f"  Verified: {img_info.filename}")
                             await verified.send(img_info)
                         else:
-                            stats['verification_failed'] = 1
+                            stats['verification_failed'] += 1
                             logger.warning(f"  Verification failed: {img_info.filename}")
                             if img_info.retry_count < 2:
-                                img_info.retry_count = 1
+                                img_info.retry_count += 1
                                 img_info.local_path.unlink()
                                 img_info.local_path = None
                                 await missing.send(img_info)
                     else:
-                        stats['verification_failed'] = 1
+                        stats['verification_failed'] += 1
 
         # Indexer with stats
         async def indexer_with_stats(recv, send):
@@ -180,7 +180,7 @@ async def limited_smoke_test():
                             scene_info = indexer._construct_scene(img_info)
                             indexer._scene_completion_tracker.add(scene_key)
                             indexer._move_scene_to_complete(scene_info)
-                            stats['scenes_completed'] = 1
+                            stats['scenes_completed'] += 1
                             logger.info(f"Scene complete: {scene_info.scene_name}")
                             await send.send(scene_info)
 
