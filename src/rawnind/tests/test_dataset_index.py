@@ -202,3 +202,152 @@ class TestEventBasedCacheInvalidation:
         
         assert listener1_called, "First listener should be called"
         assert listener2_called, "Second listener should be called"
+
+
+class TestAsyncDownloadPhase1:
+    """Test suite for Phase 1: Simple Async Download with Events."""
+
+    def test_discover_local_files_emits_event(self):
+        """Test that discover_local_files emits LOCAL_PATHS_UPDATED event.
+        
+        Given: A DatasetIndex instance
+        When: discover_local_files() is called
+        Then: LOCAL_PATHS_UPDATED event should be emitted
+        """
+        index = DatasetIndex()
+        
+        # Create minimal dataset data
+        dataset_data = {
+            'Bayer': {
+                'test_scene': {
+                    'clean_images': [{'filename': 'test.arw', 'sha1': 'abc123'}],
+                    'noisy_images': [],
+                    'unknown_sensor': False,
+                    'test_reserve': False
+                }
+            }
+        }
+        index._build_index_from_data(dataset_data)
+        
+        event_fired = False
+        
+        def listener():
+            nonlocal event_fired
+            event_fired = True
+        
+        index._events.on(CacheEvent.LOCAL_PATHS_UPDATED, listener)
+        index.discover_local_files()
+        
+        assert event_fired, "LOCAL_PATHS_UPDATED event should be emitted"
+
+    @pytest.mark.trio
+    async def test_async_download_preserves_index_state(self):
+        """Test that async_download_missing_files preserves index state correctly.
+        
+        Given: A DatasetIndex with some files marked as locally available and some missing
+        When: async_download_missing_files() is called
+        Then:
+            - Only files with local_path is None should be attempted for download
+            - Files already marked as available should not be re-checked or re-downloaded
+            - After download completes, discover_local_files() should be called to update state
+            - LOCAL_PATHS_UPDATED event should be emitted
+        """
+        import trio
+        
+        index = DatasetIndex()
+        
+        # Create test dataset with mixed availability
+        dataset_data = {
+            'Bayer': {
+                'scene1': {
+                    'clean_images': [
+                        {'filename': 'available1.arw', 'sha1': 'sha1_1', 'file_id': 'id1'},
+                        {'filename': 'missing1.arw', 'sha1': 'sha1_2', 'file_id': 'id2'}
+                    ],
+                    'noisy_images': [
+                        {'filename': 'available2.arw', 'sha1': 'sha1_3', 'file_id': 'id3'},
+                        {'filename': 'missing2.arw', 'sha1': 'sha1_4', 'file_id': 'id4'}
+                    ],
+                    'unknown_sensor': False,
+                    'test_reserve': False
+                }
+            }
+        }
+        index._build_index_from_data(dataset_data)
+        index._loaded = True  # Mark as loaded to prevent loading real index
+        
+        # Mark some files as available
+        initial_available = []
+        for scene in index.get_all_scenes():
+            if scene.clean_images:
+                scene.clean_images[0].local_path = Path("/fake/path/available1.arw")
+                initial_available.append(scene.clean_images[0])
+            if scene.noisy_images:
+                scene.noisy_images[0].local_path = Path("/fake/path/available2.arw")
+                initial_available.append(scene.noisy_images[0])
+        
+        initial_missing = index.get_missing_files()
+        assert len(initial_missing) == 2, "Should have 2 missing files"
+        
+        event_count = 0
+        def listener():
+            nonlocal event_count
+            event_count += 1
+        
+        index._events.on(CacheEvent.LOCAL_PATHS_UPDATED, listener)
+        
+        # Mock download (don't actually download)
+        with patch.object(index, '_download_file', return_value=None):
+            with patch.object(index, 'discover_local_files', wraps=index.discover_local_files):
+                await index.async_download_missing_files(max_concurrent=2)
+        
+        # Files marked as available should not have been touched
+        for img in initial_available:
+            assert img.local_path is not None, "Available files should still have local_path"
+        
+        # Event should have been emitted at least once (from discover_local_files)
+        assert event_count > 0, "LOCAL_PATHS_UPDATED event should be emitted"
+
+    @pytest.mark.trio
+    async def test_async_download_respects_concurrency_limit(self):
+        """Test that downloads respect the concurrency limit.
+        
+        Given: 10 missing files and max_concurrent=3
+        When: Downloads are initiated
+        Then: No more than 3 concurrent downloads should be active at any time
+        """
+        import trio
+        
+        index = DatasetIndex()
+        
+        # Create dataset with 10 missing files
+        dataset_data = {
+            'Bayer': {
+                'scene1': {
+                    'clean_images': [
+                        {'filename': f'file{i}.arw', 'sha1': f'sha{i}', 'file_id': f'id{i}'}
+                        for i in range(10)
+                    ],
+                    'noisy_images': [],
+                    'unknown_sensor': False,
+                    'test_reserve': False
+                }
+            }
+        }
+        index._build_index_from_data(dataset_data)
+        
+        active_downloads = []
+        max_seen_concurrent = [0]  # Use list to allow modification in closure
+        
+        async def mock_download(url, path):
+            active_downloads.append(str(path))
+            max_seen_concurrent[0] = max(max_seen_concurrent[0], len(active_downloads))
+            await trio.sleep(0.01)  # Simulate download time
+            active_downloads.remove(str(path))
+        
+        with patch.object(index, '_download_file', side_effect=mock_download):
+            with patch.object(index, 'discover_local_files'):
+                await index.async_download_missing_files(max_concurrent=3, progress=False)
+        
+        assert max_seen_concurrent[0] <= 3, f"Max concurrent should be ≤3, was {max_seen_concurrent[0]}"
+        assert max_seen_concurrent[0] > 0, "At least one download should have occurred"

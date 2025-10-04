@@ -9,12 +9,19 @@ import hashlib
 import yaml
 import requests
 import random
+import logging
+import trio
+import httpx
+from tqdm import tqdm
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Generator, Callable, Any, Set
 from dataclasses import dataclass, field
 from functools import wraps
 
+
+# Logger setup
+logger = logging.getLogger(__name__)
 
 # Dataset URLs
 DATASET_YAML_URL = "https://dataverse.uclouvain.be/api/access/datafile/:persistentId?persistentId=doi:10.14428/DVN/DEQCIM/WWGHOR"
@@ -126,6 +133,19 @@ class ImageInfo:
     is_clean: bool
     local_path: Optional[Path] = None
     validated: bool = False
+    file_id: Optional[str] = None  # Dataverse file ID for downloads
+    
+    @property
+    def download_url(self) -> str:
+        """Construct download URL for this file.
+        
+        Returns:
+            Download URL for the file
+        """
+        if self.file_id:
+            return f"https://dataverse.uclouvain.be/api/access/datafile/{self.file_id}"
+        # Fallback: use filename with SHA1 (requires lookup in dataset API)
+        return f"https://dataverse.uclouvain.be/api/access/datafile/:persistentId?persistentId=doi:10.14428/DVN/DEQCIM&filename={self.filename}"
 
 
 @dataclass
@@ -233,7 +253,7 @@ class DatasetIndex:
         if self._sorted_cfa_types is None:
             self._sorted_cfa_types = sorted(self.scenes.keys())
         return self._sorted_cfa_types
-
+        
     def load_index(self, force_update: bool = False) -> None:
         """Load the dataset index.
 
@@ -306,6 +326,7 @@ class DatasetIndex:
                             filename=img_data["filename"],
                             sha1=img_data["sha1"],
                             is_clean=True,
+                            file_id=img_data.get("file_id")
                         )
                     )
 
@@ -317,6 +338,7 @@ class DatasetIndex:
                             filename=img_data["filename"],
                             sha1=img_data["sha1"],
                             is_clean=False,
+                            file_id=img_data.get("file_id")
                         )
                     )
 
@@ -550,6 +572,126 @@ class DatasetIndex:
             if i >= num_to_yield:
                 break
             yield scene_info
+
+    def _candidate_paths(self, cfa_type: str, scene_name: str, img_info: ImageInfo) -> List[Path]:
+        """Generate candidate paths for an image file.
+        
+        Args:
+            cfa_type: CFA type (Bayer or X-Trans)
+            scene_name: Scene name
+            img_info: Image information
+            
+        Returns:
+            List of candidate paths to check
+        """
+        cfa_dir = self.dataset_root / cfa_type
+        scene_dir = cfa_dir / scene_name
+        
+        if img_info.is_clean:
+            return [
+                scene_dir / "gt" / img_info.filename,
+                scene_dir / img_info.filename
+            ]
+        else:
+            return [scene_dir / img_info.filename]
+
+    async def _download_file(self, url: str, dest_path: Path) -> None:
+        """Download a file asynchronously using Trio and httpx.
+        
+        Args:
+            url: Download URL
+            dest_path: Destination path for the downloaded file
+            
+        Raises:
+            Exception: If download fails
+        """
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            async with client.stream('GET', url) as response:
+                response.raise_for_status()
+                
+                with open(dest_path, 'wb') as f:
+                    async for chunk in response.aiter_bytes(chunk_size=8192):
+                        f.write(chunk)
+
+    async def async_download_missing_files(
+        self, 
+        max_concurrent: int = 5,
+        progress: bool = True
+    ) -> Tuple[int, int]:
+        """Download missing files with concurrency control.
+        
+        Args:
+            max_concurrent: Maximum concurrent downloads
+            progress: Show progress bar
+        
+        Returns:
+            Tuple of (successful_downloads, failed_downloads)
+        """
+        if not self._loaded:
+            self.load_index()
+        
+        # Refresh state (emits LOCAL_PATHS_UPDATED automatically)
+        self.discover_local_files()
+        
+        missing = self.get_missing_files()
+        
+        if not missing:
+            return 0, 0
+        
+        successful = 0
+        failed = 0
+        
+        async with trio.open_nursery() as nursery:
+            semaphore = trio.Semaphore(max_concurrent)
+            
+            pbar = tqdm(total=len(missing), desc="Downloading", unit="file") if progress else None
+            
+            async def download_task(img: ImageInfo):
+                nonlocal successful, failed
+                async with semaphore:
+                    try:
+                        # Construct destination path
+                        scene = None
+                        for cfa_scenes in self.scenes.values():
+                            for s in cfa_scenes.values():
+                                if img in s.all_images():
+                                    scene = s
+                                    break
+                            if scene:
+                                break
+                        
+                        if scene:
+                            cfa_dir = self.dataset_root / scene.cfa_type
+                            scene_dir = cfa_dir / scene.scene_name
+                            if img.is_clean:
+                                dest_path = scene_dir / "gt" / img.filename
+                            else:
+                                dest_path = scene_dir / img.filename
+                            
+                            await self._download_file(img.download_url, dest_path)
+                            successful += 1
+                        else:
+                            logger.error(f"Could not find scene for {img.filename}")
+                            failed += 1
+                    except Exception as e:
+                        logger.error(f"Failed to download {img.filename}: {e}")
+                        failed += 1
+                    finally:
+                        if pbar:
+                            pbar.update(1)
+            
+            for img_info in missing:
+                nursery.start_soon(download_task, img_info)
+            
+            if pbar:
+                pbar.close()
+        
+        # Refresh to verify downloads (emits LOCAL_PATHS_UPDATED automatically)
+        self.discover_local_files()
+        
+        return successful, failed
 
     def print_summary(self) -> None:
         """Print a summary of the dataset index."""
