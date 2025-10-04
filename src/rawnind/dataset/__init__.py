@@ -1,22 +1,23 @@
 """RawNIND dataset management."""
 
-from .d_classes import ImageInfo, SceneInfo
-from .manager import (
-    DatasetIndex,
-    CacheEvent,
-    EventEmitter,
-    hash_sha1,
-    emits_event,
-    emits_event_async,
-)
+from .DataIngestor import DataIngestor
+from .SceneIndexer import SceneIndexer
+from .Downloader import Downloader
+from .FileScanner import FileScanner
+from .MetadataEnricher import MetadataEnricher
+from .PipelineBuilder import PipelineBuilder
+from .SceneInfo import ImageInfo, SceneInfo
+from .Verifier import Verifier, hash_sha1
 
 __all__ = [
-    "DatasetIndex",
+    "SceneIndexer",
     "ImageInfo",
     "SceneInfo",
-    "CacheEvent",
-    "EventEmitter",
+    "MetadataEnricher",
     "hash_sha1",
-    "emits_event",
-    "emits_event_async",
+    "Verifier",
+    "DataIngestor",
+    "FileScanner",
+    "PipelineBuilder",
+    "Downloader",
 ]

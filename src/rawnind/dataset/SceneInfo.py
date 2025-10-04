@@ -10,9 +10,14 @@ class ImageInfo:
     filename: str
     sha1: str
     is_clean: bool
+    scene_name: str
+    scene_images: list[str]
+    cfa_type: str  # 'Bayer' or 'X-Trans'
     local_path: Optional[Path] = None
     validated: bool = False
     file_id: str = ""  # Dataverse file ID for downloads
+    retry_count: int = 0  # Track verification retry attempts
+    metadata: dict = field(default_factory=dict)  # Computed metadata
 
     @property
     def download_url(self) -> str:
