@@ -351,3 +351,105 @@ class TestAsyncDownloadPhase1:
         
         assert max_seen_concurrent[0] <= 3, f"Max concurrent should be ≤3, was {max_seen_concurrent[0]}"
         assert max_seen_concurrent[0] > 0, "At least one download should have occurred"
+
+
+class TestStreamingDiscoveryPhase2:
+    """Test suite for Phase 2: Streaming Discovery."""
+
+    def test_iter_missing_files_is_side_effect_free(self):
+        """Test that iter_missing_files() is side-effect free.
+        
+        Given: A DatasetIndex with cached state
+        When: iter_missing_files() is called multiple times
+        Then:
+            - Should return the same results each time
+            - Should not modify img_info.local_path
+            - Should not trigger filesystem checks
+            - Should not emit events
+        """
+        index = DatasetIndex()
+        
+        # Create minimal dataset data
+        dataset_data = {
+            'Bayer': {
+                'scene1': {
+                    'clean_images': [
+                        {'filename': 'available.arw', 'sha1': 'sha1', 'file_id': 'id1'},
+                        {'filename': 'missing.arw', 'sha1': 'sha2', 'file_id': 'id2'}
+                    ],
+                    'noisy_images': [],
+                    'unknown_sensor': False,
+                    'test_reserve': False
+                }
+            }
+        }
+        index._build_index_from_data(dataset_data)
+        index._loaded = True
+        
+        # Mark one as available
+        scene = list(index.get_all_scenes())[0]
+        scene.clean_images[0].local_path = Path("/fake/path/available.arw")
+        
+        event_count = 0
+        def listener():
+            nonlocal event_count
+            event_count += 1
+        
+        # Listen to all events
+        for event in CacheEvent:
+            index._events.on(event, listener)
+        
+        # Get missing files twice
+        missing1 = list(index.iter_missing_files())
+        missing2 = list(index.iter_missing_files())
+        
+        # Should be identical
+        assert missing1 == missing2, "Results should be identical"
+        assert len(missing1) == 1, "Should have exactly 1 missing file"
+        
+        # No events should have been emitted
+        assert event_count == 0, "No events should be emitted"
+        
+        # No filesystem operations should occur
+        with patch('pathlib.Path.exists') as mock_exists:
+            list(index.iter_missing_files())
+            mock_exists.assert_not_called()
+
+    def test_iter_missing_files_yields_incrementally(self):
+        """Test that iter_missing_files yields results incrementally.
+        
+        Given: A large dataset with many missing files
+        When: iter_missing_files() is called
+        Then: Results should be yielded one at a time (generator behavior)
+        """
+        index = DatasetIndex()
+        
+        # Create dataset with multiple missing files
+        dataset_data = {
+            'Bayer': {
+                'scene1': {
+                    'clean_images': [
+                        {'filename': f'missing{i}.arw', 'sha1': f'sha{i}', 'file_id': f'id{i}'}
+                        for i in range(5)
+                    ],
+                    'noisy_images': [],
+                    'unknown_sensor': False,
+                    'test_reserve': False
+                }
+            }
+        }
+        index._build_index_from_data(dataset_data)
+        index._loaded = True
+        
+        # Consume first item without materializing full list
+        gen = index.iter_missing_files()
+        first = next(gen)
+        
+        # Verify it's a generator and yields ImageInfo objects
+        from rawnind.dataset.manager import ImageInfo
+        assert isinstance(first, ImageInfo), "Should yield ImageInfo objects"
+        assert first.local_path is None, "Should yield only files with local_path=None"
+        
+        # Verify we can continue consuming
+        second = next(gen)
+        assert isinstance(second, ImageInfo), "Should continue yielding ImageInfo objects"

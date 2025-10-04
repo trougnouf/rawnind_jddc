@@ -487,6 +487,26 @@ class DatasetIndex:
                         missing.append(img_info)
 
         return missing
+    def iter_missing_files(self) -> Generator[ImageInfo, None, None]:
+        """Yield files not found locally based on cached state.
+        
+        This method is side-effect free and relies on cached local_path values.
+        Call discover_local_files() first to refresh cached state.
+        
+        Does not emit any events or modify state.
+        
+        Yields:
+            ImageInfo objects where local_path is None
+        """
+        if not self._loaded:
+            self.load_index()
+        
+        for cfa_type, scenes in self.scenes.items():
+            for scene_name, scene_info in scenes.items():
+                for img_info in scene_info.all_images():
+                    if img_info.local_path is None:
+                        yield img_info
+
 
     def get_available_scenes(self) -> List[SceneInfo]:
         """Get scenes that have at least one GT image available locally."""
