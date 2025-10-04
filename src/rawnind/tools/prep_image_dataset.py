@@ -28,7 +28,7 @@ import time
 import yaml
 from functools import lru_cache
 import re
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 
 sys.path.append("..")
 from rawnind.libs import rawproc
@@ -37,7 +37,6 @@ from pathlib import Path
 from rawnind.libs.rawproc import (
     DATASETS_ROOT,
     DS_DN,
-    DS_BASE_DPATH,
     BAYER_DS_DPATH,
     LINREC2020_DS_DPATH,
     RAWNIND_CONTENT_FPATH,
@@ -481,7 +480,7 @@ if __name__ == "__main__":
         )
 
     except KeyboardInterrupt:
-        logging.error(f"prep_image_dataset.py interrupted. Saving results.")
+        logging.error("prep_image_dataset.py interrupted. Saving results.")
 
     processing_time = time.time() - processing_start
     logging.info(

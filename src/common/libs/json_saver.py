@@ -1,6 +1,6 @@
 """JSONSaver class makes for a simple way to save/load train/test results."""
 
-from typing import Optional, Set
+from typing import Set
 import sys
 import os
 

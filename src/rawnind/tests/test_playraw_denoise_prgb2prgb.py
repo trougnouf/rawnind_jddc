@@ -24,7 +24,7 @@ if __name__ == "__main__":
         "playraw_msssim_loss.None" in denoiserTraining.json_saver.results["best_val"]
         or "playraw_msssim_loss" in denoiserTraining.json_saver.results["best_val"]
     ):
-        print(f"Skipping test, best_val is known")
+        print("Skipping test, best_val is known")
         sys.exit(0)
     dataset = (
         rawds_cleancleantest.CleanProfiledRGBCleanProfiledRGBImageCropsTestDataloader(

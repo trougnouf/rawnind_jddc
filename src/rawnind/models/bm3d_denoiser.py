@@ -7,8 +7,6 @@ import random
 import string
 import subprocess
 import torch
-import cv2
-import numpy as np
 
 sys.path.append("..")
 from typing import Union

@@ -1,15 +1,13 @@
 """RawNIND dataset management."""
 
+from .d_classes import ImageInfo, SceneInfo
 from .manager import (
     DatasetIndex,
-    ImageInfo,
-    SceneInfo,
     CacheEvent,
     EventEmitter,
-    compute_sha1,
+    hash_sha1,
     emits_event,
     emits_event_async,
-    invalidates_cache,
 )
 
 __all__ = [
@@ -18,8 +16,7 @@ __all__ = [
     "SceneInfo",
     "CacheEvent",
     "EventEmitter",
-    "compute_sha1",
+    "hash_sha1",
     "emits_event",
     "emits_event_async",
-    "invalidates_cache",
 ]

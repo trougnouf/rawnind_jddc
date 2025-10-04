@@ -1178,7 +1178,7 @@ if __name__ == "__main__":
     if not args.raw_fpath:
         args.raw_fpath = get_sample_raw_file(url=SAMPLE_RAW_URL)
     if not args.out_base_path:
-        args.out_base_path = os.path.join("tests_output", f"raw.py.main")
+        args.out_base_path = os.path.join("tests_output", "raw.py.main")
     # prepare image as neural network input
     mono_img, metadata = raw_fpath_to_mono_img_and_metadata(args.raw_fpath)
     print(f"raw.py: opened {args.raw_fpath} with {metadata=}\n")

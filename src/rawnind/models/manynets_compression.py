@@ -7,8 +7,6 @@ The autoencoder is left out of this library.
 """
 
 import math
-import time
-import statistics
 import logging
 import unittest
 import sys

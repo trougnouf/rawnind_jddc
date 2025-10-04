@@ -12,10 +12,9 @@ import random
 import logging
 import os
 import sys
-import math
 import time
 import unittest
-from typing import Literal, NamedTuple, Optional, Union
+from typing import Literal, NamedTuple, Optional
 from typing import TypedDict
 import tqdm
 

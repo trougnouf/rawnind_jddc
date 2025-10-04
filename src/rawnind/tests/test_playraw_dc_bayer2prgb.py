@@ -24,7 +24,7 @@ if __name__ == "__main__":
         akey in denoiserTraining.json_saver.results["best_val"]
         for akey in ["playraw_combined.None", "playraw_combined"]
     ):
-        print(f"Skipping test, best_val is known")
+        print("Skipping test, best_val is known")
         sys.exit(0)
     dataset = rawds_cleancleantest.CleanProfiledRGBCleanBayerImageCropsTestDataloader(
         content_fpaths=[

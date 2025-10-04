@@ -8,14 +8,7 @@ Only copy the sub-directory "saved_models", the files "args.yaml" and "trainres.
 
 import os
 import shutil
-from pathlib import Path
-from typing import List
 import yaml
-import os
-import shutil
-from pathlib import Path
-import yaml
-import time
 
 
 def copy_model_files(model_name: str, new_model_name) -> None:

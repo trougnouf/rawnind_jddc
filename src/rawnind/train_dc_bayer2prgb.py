@@ -1,9 +1,5 @@
 import os
 import sys
-from typing import Optional
-from collections.abc import Iterable
-import torch
-import logging
 
 sys.path.append("..")
 from rawnind.libs import abstract_trainer

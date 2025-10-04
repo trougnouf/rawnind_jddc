@@ -3,18 +3,12 @@
 # -*- coding: utf-8 -*-
 
 import math
-import time
-import logging
 import sys
-import statistics
 from typing import Optional, Type, Literal
 from typing_extensions import Self
 import torch
 from torch import nn
-from torch.nn import functional as F
 
-import ptflops
-import numpy as np
 
 sys.path.append("..")
 from common.extlibs import gdn

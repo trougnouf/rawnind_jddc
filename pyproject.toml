@@ -8,6 +8,7 @@ version = "0.2.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "black>=25.9.0",
     "colour==0.1.5",
     "colour-science==0.4.6",
     "configargparse==1.7.1",

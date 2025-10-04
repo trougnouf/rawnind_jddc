@@ -4,7 +4,6 @@ Required argument : --config <path to training config file>.yaml
 Launch with --debug_options output_valtest_images to output images.
 """
 
-import configargparse
 import sys
 
 sys.path.append("..")

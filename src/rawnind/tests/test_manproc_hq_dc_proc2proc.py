@@ -4,13 +4,10 @@ Required argument : --config <path to training config file>.yaml
 Launch with --debug_options output_valtest_images to output images.
 """
 
-import configargparse
 import sys
-import torch
 
 sys.path.append("..")
 from rawnind import train_dc_prgb2prgb
-from rawnind.libs import abstract_trainer
 from rawnind.libs import rawds_manproc
 
 
@@ -35,7 +32,7 @@ if __name__ == "__main__":
         "manproc_hq_msssim_loss.arbitraryproc"
         in denoiserTraining.json_saver.results["best_val"]
     ):
-        print(f"Skipping test, manproc_msssim_loss is known")
+        print("Skipping test, manproc_msssim_loss is known")
         sys.exit(0)
     dataset = rawds_manproc.ManuallyProcessedImageTestDataHandler(
         net_input_type="proc", min_msssim_score=0.95

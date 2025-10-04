@@ -32,7 +32,7 @@ if __name__ == "__main__":
                     f"progressive_test_manproc_bostitch_rawnind_msssim_{operator}_{msssim_value}_msssim_loss",
                 ]
             ):
-                print(f"Skipping test, best_val is known")
+                print("Skipping test, best_val is known")
                 continue
             dataset = rawds_manproc.ManuallyProcessedImageTestDataHandler(
                 net_input_type="bayer",

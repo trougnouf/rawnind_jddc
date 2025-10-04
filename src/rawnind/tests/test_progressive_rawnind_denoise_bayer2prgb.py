@@ -5,7 +5,6 @@ Launch with --debug_options output_valtest_images to output images.
 """
 
 import sys
-import os
 
 sys.path.append("..")
 

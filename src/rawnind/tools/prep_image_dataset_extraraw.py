@@ -123,7 +123,7 @@ if __name__ == "__main__":
             )
 
         except KeyboardInterrupt:
-            logging.error(f"prep_image_dataset.py interrupted. Saving results.")
+            logging.error("prep_image_dataset.py interrupted. Saving results.")
 
         results = results + cached_results
         logging.info(f"Fetching crops list for {dataset}")

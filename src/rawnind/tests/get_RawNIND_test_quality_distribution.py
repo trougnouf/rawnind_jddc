@@ -1,6 +1,5 @@
 import yaml
 import matplotlib.pyplot as plt
-import numpy as np
 
 # Load YAML file
 file_path = "../../datasets/RawNIND/RawNIND_masks_and_alignments.yaml"

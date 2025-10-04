@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-import math
 import torch
 from torch import nn
 

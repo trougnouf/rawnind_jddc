@@ -59,7 +59,7 @@ def add_arguments(parser):
     parser.add_argument(
         "--nonlinearities",
         nargs=("*"),
-        help=f"Nonlinearities used to compute the metrics, as defined in abstract_trainer.ImageToImageNN.get_transfer_function (ie pq, gamma22)",
+        help="Nonlinearities used to compute the metrics, as defined in abstract_trainer.ImageToImageNN.get_transfer_function (ie pq, gamma22)",
         default=["pq", "gamma22"],
     )
     # parser.add_argument(  # rm?

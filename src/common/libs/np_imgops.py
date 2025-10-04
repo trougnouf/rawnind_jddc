@@ -136,7 +136,7 @@ def np_to_img(img: np.ndarray, fpath: str, precision: int = 16):
     elif precision == 8:
         hwc_img = (hwc_img * 255).clip(0, 255).astype(np.uint8)
     else:
-        raise NotImplemented(precision)
+        raise NotImplementedError(precision)
     cv2.imwrite(fpath, hwc_img)
 
 

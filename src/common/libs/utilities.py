@@ -6,9 +6,6 @@ import sys
 import logging
 import random
 from typing import Callable, Union, Iterable, Optional, List, Any
-import asyncio
-import threading
-import queue
 import tqdm
 import json
 import csv
@@ -37,7 +34,6 @@ try:
     import png
 except ModuleNotFoundError as e:
     logging.error(f"{e} (install pypng)")
-import time
 import numpy as np
 import statistics
 import subprocess

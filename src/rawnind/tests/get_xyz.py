@@ -1,7 +1,4 @@
-import os
 import rawpy
-import numpy as np
-import doctest
 
 
 def print_attributes(fpath):

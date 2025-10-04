@@ -15,14 +15,6 @@ A simpler, cleaner public repository focusing on denoising-only is planned for t
 pip install -e .
 ```
 
-#### GPU Acceleration (Optional)
-For faster image alignment using CUDA:
-```bash
-pip install -e ".[gpu]"
-```
-
-Note: GPU acceleration requires NVIDIA CUDA 12.x. The GPU alignment method will automatically fallback to CPU-based FFT if CUDA is not available.
-
 ### Downloading the RawNIND Dataset
 
 If you just want to download the RawNIND dataset, you can use the following command:

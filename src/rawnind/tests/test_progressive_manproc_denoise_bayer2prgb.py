@@ -27,7 +27,7 @@ if __name__ == "__main__":
                 or f"{score_key}.None"
                 in denoiserTraining.json_saver.results["best_val"]
             ):
-                print(f"Skipping test, best_val is known")
+                print("Skipping test, best_val is known")
                 continue
             dataset = rawds_manproc.ManuallyProcessedImageTestDataHandler(
                 net_input_type="bayer", **kwargs

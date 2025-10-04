@@ -29,7 +29,6 @@ import sys
 
 import piqa
 
-import sys
 
 sys.path.append("..")
 # try:

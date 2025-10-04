@@ -8,7 +8,7 @@ This avoids wasteful demosaicing just to produce shift metadata.
 """
 
 import numpy as np
-from typing import Union, Tuple, Optional, List, Literal
+from typing import Union, Tuple, Literal
 
 try:
     import torch

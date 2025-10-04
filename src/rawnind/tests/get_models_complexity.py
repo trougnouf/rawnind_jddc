@@ -3,12 +3,10 @@ import torch
 import ptflops
 
 sys.path.append("..")
-from rawnind.libs import abstract_trainer
 from rawnind.models import raw_denoiser
 from rawnind.models import manynets_compression
 from rawnind.models import denoise_then_compress
 from rawnind.models import compression_autoencoders
-from nind_denoise.networks import UtNet
 
 if __name__ == "__main__":
     all_megapix_dims = ((4, 512, 512), (3, 1024, 1024))

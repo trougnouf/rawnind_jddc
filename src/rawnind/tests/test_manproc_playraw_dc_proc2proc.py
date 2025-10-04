@@ -5,7 +5,6 @@ Launch with --debug_options output_valtest_images to output images.
 """
 
 import sys
-import os
 
 sys.path.append("..")
 
@@ -24,7 +23,7 @@ if __name__ == "__main__":
         "manproc_playraw_combined.arbitraryproc"
         in denoiserTraining.json_saver.results["best_val"]
     ):
-        print(f"Skipping test, best_val is known")
+        print("Skipping test, best_val is known")
         sys.exit(0)
     # dataset = rawds_cleancleantest.CleanProfiledRGBCleanBayerImageCropsTestDataloader(
     #     content_fpaths=[

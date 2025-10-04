@@ -49,7 +49,7 @@ if __name__ == "__main__":
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     logging.info(f"# python {' '.join(sys.argv)}")
 
-    logging.info(f"Testing CleanProfiledRGBNoisyBayerImageDataset runtimes...")
+    logging.info("Testing CleanProfiledRGBNoisyBayerImageDataset runtimes...")
     timings = test_train_images_load_time(
         rawds.CleanProfiledRGBNoisyBayerImageDataset,
         num_crops=16,
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     )
     logging.info(f"CleanProfiledRGBNoisyBayerImageDataset timing: {timings}")
 
-    logging.info(f"Testing CleanProfiledRGBNoisyProfiledRGBImageDataset runtimes...")
+    logging.info("Testing CleanProfiledRGBNoisyProfiledRGBImageDataset runtimes...")
     timings = test_train_images_load_time(
         rawds.CleanProfiledRGBNoisyProfiledRGBImageDataset,
         num_crops=8,
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     )
     logging.info(f"CleanProfiledRGBNoisyProfiledRGBImageDataset timing: {timings}")
 
-    logging.info(f"Testing CleanProfiledRGBCleanBayerImageDataset runtimes...")
+    logging.info("Testing CleanProfiledRGBCleanBayerImageDataset runtimes...")
     timings = test_train_images_load_time(
         rawds.CleanProfiledRGBCleanBayerImageDataset,
         num_crops=16,
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     )
     logging.info(f"CleanProfiledRGBCleanBayerImageDataset timing: {timings}")
 
-    logging.info(f"Testing CleanProfiledRGBCleanProfiledRGBImageDataset runtimes...")
+    logging.info("Testing CleanProfiledRGBCleanProfiledRGBImageDataset runtimes...")
     timings = test_train_images_load_time(
         rawds.CleanProfiledRGBCleanProfiledRGBImageDataset,
         num_crops=8,

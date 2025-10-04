@@ -3,17 +3,14 @@
 
 # TODO validate by computing difference between first and last image
 # TODO set silent shooting
-import subprocess
 import os
-import logging
-from typing import Iterable, Literal
+from typing import Literal
 import gphoto2 as gp
 import sys
 import datetime
 import time
 import random
 import torch
-import sys
 
 sys.path.append("..")
 sys.path.append("../..")

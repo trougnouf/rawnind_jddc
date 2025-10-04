@@ -28,7 +28,7 @@ if __name__ == "__main__":
             "playraw_combined.bayer",
         ]
     ):
-        print(f"Skipping test, best_val is known")
+        print("Skipping test, best_val is known")
         sys.exit(0)
     dataset = (
         rawds_cleancleantest.CleanProfiledRGBCleanProfiledRGBImageCropsTestDataloader(

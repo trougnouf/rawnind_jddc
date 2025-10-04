@@ -5,7 +5,6 @@ import tqdm
 import argparse
 import datetime
 import yaml
-import sys
 
 sys.path.append("..")
 from common.libs import utilities

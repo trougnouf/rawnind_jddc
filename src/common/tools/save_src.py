@@ -1,7 +1,6 @@
 import os
 import shutil
 import sys
-from typing import Optional
 
 sys.path.append("..")
 from common.libs import utilities

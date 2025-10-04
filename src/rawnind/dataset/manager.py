@@ -7,29 +7,28 @@ files, validation via SHA1 hashes, and downloading of missing files.
 
 import hashlib
 import json
-import yaml
-import requests
-import random
 import logging
-import trio
-import httpx
-from tqdm import tqdm
 from enum import Enum, auto
+from functools import wraps
 from pathlib import Path
 from typing import (
     Dict,
     List,
     Optional,
     Tuple,
-    Generator,
     AsyncGenerator,
     Callable,
     Any,
     Set,
 )
-from dataclasses import dataclass, field
-from functools import wraps
 
+import httpx
+import requests
+import trio
+import yaml
+from tqdm import tqdm
+
+from rawnind.dataset import ImageInfo, SceneInfo
 
 # Logger setup
 logger = logging.getLogger(__name__)
@@ -125,74 +124,14 @@ def emits_event_async(event: CacheEvent) -> Callable:
     return decorator
 
 
-def invalidates_cache(func: Callable) -> Callable:
-    """Decorator to invalidate DatasetIndex caches after method execution.
-
-    DEPRECATED: Use @emits_event decorator instead for event-based invalidation.
-    """
-
-    @wraps(func)
-    def wrapper(self: "DatasetIndex", *args: Any, **kwargs: Any) -> Any:
-        result = func(self, *args, **kwargs)
-        self._invalidate_caches()
-        return result
-
-    return wrapper
-
-
-@dataclass
-class ImageInfo:
-    """Information about a single image file."""
-
-    filename: str
-    sha1: str
-    is_clean: bool
-    local_path: Optional[Path] = None
-    validated: bool = False
-    file_id: str = ""  # Dataverse file ID for downloads
-
-    @property
-    def download_url(self) -> str:
-        """Construct download URL for this file.
-
-        Returns:
-            Download URL for the file
-        """
-        if not self.file_id:
-            raise ValueError(
-                f"Cannot construct download URL: file_id not set for {self.filename}"
-            )
-        return f"https://dataverse.uclouvain.be/api/access/datafile/{self.file_id}"
-
-
-@dataclass
-class SceneInfo:
-    """Information about a scene (collection of clean and noisy images)."""
-
-    scene_name: str
-    cfa_type: str  # 'Bayer' or 'X-Trans'
-    unknown_sensor: bool
-    test_reserve: bool
-    clean_images: List[ImageInfo] = field(default_factory=list)
-    noisy_images: List[ImageInfo] = field(default_factory=list)
-
-    def all_images(self) -> List[ImageInfo]:
-        """Get all images (clean + noisy) for this scene."""
-        return self.clean_images + self.noisy_images
-
-    def get_gt_image(self) -> Optional[ImageInfo]:
-        """Get the first clean (GT) image, or None if none exist."""
-        return self.clean_images[0] if self.clean_images else None
-
-
 class DatasetIndex:
     """Canonical index of the RawNIND dataset with event-based cache invalidation."""
 
     def __init__(
-        self,
-        cache_paths: Optional[Tuple[Path, Path]] = None,
-        dataset_root: Optional[Path] = None,
-        dataset_metadata_url: Optional[str] = None,
+            self,
+            cache_paths: Optional[Tuple[Path, Path]] = None,
+            dataset_root: Optional[Path] = None,
+            dataset_metadata_url: Optional[str] = None,
     ):
         """Initialize dataset index.
 
@@ -202,7 +141,11 @@ class DatasetIndex:
             dataset_root: Root directory for dataset files (default: src/rawnind/datasets/RawNIND/src)
             dataset_metadata_url: URL for dataset metadata API (default: Dataverse API URL)
         """
-        self.dataset_root = Path(dataset_root) if dataset_root else Path("src/rawnind/datasets/RawNIND/src")
+        self.dataset_root = (
+            Path(dataset_root)
+            if dataset_root
+            else Path("src/rawnind/datasets/RawNIND/src")
+        )
         self.dataset_metadata_url = dataset_metadata_url or (
             "https://dataverse.uclouvain.be/api/datasets/:persistentId"
             "?persistentId=doi:10.14428/DVN/DEQCIM"
@@ -210,7 +153,7 @@ class DatasetIndex:
         if cache_paths is None:
             self.cache_paths = (
                 self.dataset_root / "dataset_index.yaml",
-                self.dataset_root / "dataset_metadata.json"
+                self.dataset_root / "dataset_metadata.json",
             )
         else:
             self.cache_paths = cache_paths
@@ -260,14 +203,6 @@ class DatasetIndex:
         """
         self._events.emit(event, **kwargs)
 
-    def _invalidate_caches(self) -> None:
-        """Invalidate cached computed values when index changes.
-
-        DEPRECATED: Event-based invalidation is now preferred.
-        """
-        self._known_extensions = None
-        self._sorted_cfa_types = None
-
     @property
     def known_extensions(self) -> set:
         """Get set of all file extensions present in the dataset.
@@ -308,33 +243,33 @@ class DatasetIndex:
 
     def _get_remote_index(self) -> dict:
         """Download YAML structure and JSON metadata, caching both.
-        
+
         Returns:
             dict: Dataset YAML structure (metadata is cached separately)
         """
         yaml_cache, metadata_cache = self.cache_paths
-        
-        print(f"Downloading dataset index from Dataverse...")
-        
+
+        print("Downloading dataset index from Dataverse...")
+
         # Download and cache YAML structure
         yaml_url = "https://dataverse.uclouvain.be/api/access/datafile/:persistentId?persistentId=doi:10.14428/DVN/DEQCIM/WWGHOR"
         response = requests.get(yaml_url, timeout=30)
         response.raise_for_status()
         dataset_data = yaml.safe_load(response.text)
-        
+
         # Ensure parent directory exists before writing
         yaml_cache.parent.mkdir(parents=True, exist_ok=True)
         yaml_cache.write_text(yaml.dump(dataset_data), encoding="utf-8")
-        
+
         # Download and cache JSON metadata
-        print(f"Downloading file metadata from Dataverse API...")
+        print("Downloading file metadata from Dataverse API...")
         response = requests.get(self.dataset_metadata_url, timeout=30)
         response.raise_for_status()
-        
+
         # Ensure parent directory exists before writing
         metadata_cache.parent.mkdir(parents=True, exist_ok=True)
         metadata_cache.write_text(response.text, encoding="utf-8")
-        
+
         return dataset_data
 
     @emits_event(CacheEvent.INDEX_STRUCTURE_CHANGED)
@@ -344,21 +279,21 @@ class DatasetIndex:
         Emits INDEX_STRUCTURE_CHANGED event upon completion.
         """
         yaml_cache, metadata_cache = self.cache_paths
-        
+
         # Load file ID mapping from cached metadata
         file_id_map = {}
         if metadata_cache.exists():
-            with open(metadata_cache, 'r') as f:
+            with open(metadata_cache, "r") as f:
                 metadata = json.load(f)
-            
-            if 'data' in metadata and 'latestVersion' in metadata['data']:
-                for file_entry in metadata['data']['latestVersion'].get('files', []):
-                    if 'dataFile' in file_entry:
-                        filename = file_entry['dataFile'].get('filename', '')
-                        file_id = file_entry['dataFile'].get('id', '')
+
+            if "data" in metadata and "latestVersion" in metadata["data"]:
+                for file_entry in metadata["data"]["latestVersion"].get("files", []):
+                    if "dataFile" in file_entry:
+                        filename = file_entry["dataFile"].get("filename", "")
+                        file_id = file_entry["dataFile"].get("id", "")
                         if filename and file_id:
                             file_id_map[filename] = str(file_id)
-        
+
         # Build index with file IDs from mapping
         _scenes = {}
         for cfa_type, cfa_data in dataset_data.items():
@@ -367,23 +302,27 @@ class DatasetIndex:
                 clean_images = []
                 for img_data in scene_data.get("clean_images", []):
                     filename = img_data["filename"]
+                    # Prefer metadata cache, fall back to dataset_data
+                    file_id = file_id_map.get(filename, img_data.get("file_id", ""))
                     clean_images.append(
                         ImageInfo(
                             filename=filename,
                             sha1=img_data["sha1"],
                             is_clean=True,
-                            file_id=file_id_map.get(filename, ""),
+                            file_id=file_id,
                         )
                     )
                 noisy_images = []
                 for img_data in scene_data.get("noisy_images", []):
                     filename = img_data["filename"]
+                    # Prefer metadata cache, fall back to dataset_data
+                    file_id = file_id_map.get(filename, img_data.get("file_id", ""))
                     noisy_images.append(
                         ImageInfo(
                             filename=filename,
                             sha1=img_data["sha1"],
                             is_clean=False,
-                            file_id=file_id_map.get(filename, ""),
+                            file_id=file_id,
                         )
                     )
                 scene_info = SceneInfo(
@@ -448,71 +387,11 @@ class DatasetIndex:
         if img_info.local_path is None or not img_info.local_path.exists():
             return False
 
-        computed_hash = compute_sha1(img_info.local_path)
+        computed_hash = hash_sha1(img_info.local_path)
         img_info.validated = computed_hash == img_info.sha1
         return img_info.validated
 
-    def get_all_scenes(self) -> List[SceneInfo]:
-        """Get list of all scenes."""
-
-        all_scenes = []
-        for scenes in self.scenes.values():
-            all_scenes.extend(scenes.values())
-        return all_scenes
-
-    def get_scenes_by_cfa(self, cfa_type: str) -> List[SceneInfo]:
-        """Get scenes filtered by CFA type.
-
-        Args:
-            cfa_type: 'Bayer' or 'X-Trans'
-        """
-
-        return list(self.scenes.get(cfa_type, {}).values())
-
-    def get_scene(self, cfa_type: str, scene_name: str) -> Optional[SceneInfo]:
-        """Get a specific scene.
-
-        Args:
-            cfa_type: 'Bayer' or 'X-Trans'
-            scene_name: Scene name
-
-        Returns:
-            SceneInfo or None if not found
-        """
-
-        return self.scenes.get(cfa_type, {}).get(scene_name)
-
-    def get_missing_files(self) -> List[ImageInfo]:
-        """Get list of files not found locally."""
-
-        missing = []
-        for cfa_type, scenes in self.scenes.items():
-            for scene_name, scene_info in scenes.items():
-                for img_info in scene_info.all_images():
-                    if img_info.local_path is None:
-                        missing.append(img_info)
-
-        return missing
-
-    def iter_missing_files(self) -> Generator[ImageInfo, None, None]:
-        """Yield files not found locally based on cached state.
-
-        This method is side-effect free and relies on cached local_path values.
-        Call discover_local_files() first to refresh cached state.
-
-        Does not emit any events or modify state.
-
-        Yields:
-            ImageInfo objects where local_path is None
-        """
-
-        for cfa_type, scenes in self.scenes.items():
-            for scene_name, scene_info in scenes.items():
-                for img_info in scene_info.all_images():
-                    if img_info.local_path is None:
-                        yield img_info
-
-    async def async_iter_missing_files(self) -> AsyncGenerator[ImageInfo, None]:
+    async def produce_missing_files(self) -> AsyncGenerator[ImageInfo, None]:
         """Asynchronously examine filesystem and yield missing files as discovered.
 
         This method:
@@ -559,77 +438,8 @@ class DatasetIndex:
             # Emit event after completion (even if interrupted)
             self._emit(CacheEvent.LOCAL_PATHS_UPDATED)
 
-    def sequential_scene_generator(
-        self, extensions: Optional[List[str]] = None
-    ) -> Generator[SceneInfo, None, None]:
-        """Yield scenes sequentially in order.
-
-        Args:
-            extensions: Optional list of file extensions to filter by (e.g., ['.arw', '.dng'])
-                       If None, all scenes are yielded regardless of extension.
-
-        Yields:
-            SceneInfo objects in sequential order
-        """
-
-        for cfa_type in self.sorted_cfa_types:
-            for scene_name in sorted(self.scenes[cfa_type].keys()):
-                scene_info = self.scenes[cfa_type][scene_name]
-
-                if extensions is None:
-                    yield scene_info
-                else:
-                    gt_img = scene_info.get_gt_image()
-                    if gt_img and gt_img.local_path is not None:
-                        ext_lower = gt_img.local_path.suffix.lower()
-                        if any(ext_lower == ext.lower() for ext in extensions):
-                            yield scene_info
-
-    def random_scene_generator(
-        self,
-        count: Optional[int] = None,
-        extensions: Optional[List[str]] = None,
-        seed: Optional[int] = None,
-    ) -> Generator[SceneInfo, None, None]:
-        """Yield random scenes without replacement.
-
-        Args:
-            count: Number of scenes to yield. If None, yields all scenes.
-            extensions: Optional list of file extensions to filter by (e.g., ['.arw', '.dng'])
-                       If None, all scenes are considered regardless of extension.
-            seed: Random seed for reproducibility
-
-        Yields:
-            SceneInfo objects in random order
-        """
-
-        if seed is not None:
-            random.seed(seed)
-
-        all_scenes = []
-        for cfa_type, scenes in self.scenes.items():
-            for scene_name, scene_info in scenes.items():
-                if extensions is None:
-                    all_scenes.append(scene_info)
-                else:
-                    gt_img = scene_info.get_gt_image()
-                    if gt_img and gt_img.local_path is not None:
-                        if any(
-                            gt_img.local_path.suffix.lower() == ext.lower()
-                            for ext in extensions
-                        ):
-                            all_scenes.append(scene_info)
-
-        random.shuffle(all_scenes)
-
-        num_to_yield = count if count is not None else len(all_scenes)
-        for i, scene_info in enumerate(all_scenes):
-            if i >= num_to_yield:
-                break
-            yield scene_info
-
     def _candidate_paths(
-        self, cfa_type: str, scene_name: str, img_info: ImageInfo
+            self, cfa_type: str, scene_name: str, img_info: ImageInfo
     ) -> List[Path]:
         """Generate candidate paths for an image file.
 
@@ -670,7 +480,7 @@ class DatasetIndex:
                         f.write(chunk)
 
     async def async_download_missing_files(
-        self, max_concurrent: int = 5, progress: bool = True
+            self, max_concurrent: int = 5, progress: bool = True
     ) -> Tuple[int, int]:
         """Download missing files with concurrency control and progress reporting.
 
@@ -698,7 +508,7 @@ class DatasetIndex:
 
             # Stream missing files as they're discovered
             # Event emission happens automatically in async_iter_missing_files
-            async for img_info in self.async_iter_missing_files():
+            async for img_info in self.produce_missing_files():
 
                 async def download_task(img: ImageInfo):
                     nonlocal successful, failed
@@ -726,40 +536,61 @@ class DatasetIndex:
         return successful, failed
 
     def print_summary(self) -> None:
-        """Print a summary of the dataset index."""
+        """
+        Prints a summary of the dataset index, including information about scenes and image
+        statistics.
 
-        print("\n" + "=" * 80)
-        print("DATASET INDEX SUMMARY")
-        print("=" * 80)
+        This method organizes and displays the dataset information for each type of CFA
+        (Color Filter Array), detailing the number of scenes, as well as local and total
+        clean and noisy image counts. It helps to summarize the current dataset state in
+        a readable manner.
+
+        Args:
+            self: The instance of the class containing the dataset index information.
+
+        Returns:
+            None: This method does not return any value.
+
+        Raises:
+            None
+        """
+
+        def count_local_images(images: List[ImageInfo]) -> Tuple[int, int]:
+            """Helper to count local/total images."""
+            total = len(images)
+            local = sum(1 for img in images if img.local_path is not None)
+            return local, total
+
+        border = "=" * 80
+        print(f"\n{border}")
+        print("DATASET INDEX SUMMARY".center(80))
+        print(f"{border}\n")
 
         for cfa_type, scenes in self.scenes.items():
-            print(f"\n{cfa_type}:")
+            # Scene count
+            print(f"{cfa_type}:")
             print(f"  Scenes: {len(scenes)}")
 
-            total_clean = 0
-            total_noisy = 0
-            local_clean = 0
-            local_noisy = 0
+            # Aggregate image counts
+            local_clean, total_clean = (0, 0)
+            local_noisy, total_noisy = (0, 0)
 
             for scene_info in scenes.values():
-                total_clean += len(scene_info.clean_images)
-                total_noisy += len(scene_info.noisy_images)
+                lc, tc = count_local_images(scene_info.clean_images)
+                ln, tn = count_local_images(scene_info.noisy_images)
+                local_clean += lc
+                total_clean += tc
+                local_noisy += ln
+                total_noisy += tn
 
-                for img in scene_info.clean_images:
-                    if img.local_path is not None:
-                        local_clean += 1
-
-                for img in scene_info.noisy_images:
-                    if img.local_path is not None:
-                        local_noisy += 1
-
+            # Print image stats
             print(f"  Clean images: {local_clean}/{total_clean} local")
-            print(f"  Noisy images: {local_noisy}/{total_noisy} local")
+            print(f"  Noisy images: {local_noisy}/{total_noisy} local\n")
 
-        print("\n" + "=" * 80 + "\n")
+        print(f"{border}\n")
 
 
-def compute_sha1(file_path: Path) -> str:
+def hash_sha1(file_path: Path) -> str:
     """Compute SHA1 hash of a file.
 
     Args:
@@ -773,4 +604,3 @@ def compute_sha1(file_path: Path) -> str:
         while chunk := f.read(8192):
             sha1.update(chunk)
     return sha1.hexdigest()
-

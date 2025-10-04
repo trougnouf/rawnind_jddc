@@ -1,16 +1,8 @@
 import os
 import sys
-import statistics
-import time
-import logging
-from typing import Optional
-from collections.abc import Iterable
-import torch
 
 sys.path.append("..")
 from rawnind.libs import abstract_trainer
-from rawnind.libs import rawproc
-from rawnind.libs import raw
 
 APPROX_EXPOSURE_DIFF_PENALTY = 1 / 10000
 
