@@ -6,7 +6,7 @@ import requests
 import trio
 import yaml
 
-from . import ImageInfo, SceneInfo
+from .SceneInfo import ImageInfo, SceneInfo
 
 
 class DataIngestor:

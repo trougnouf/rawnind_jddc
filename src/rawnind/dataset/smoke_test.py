@@ -10,6 +10,33 @@ from rawnind.dataset import DataIngestor, FileScanner, Downloader, Verifier, Sce
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+NUM_IMAGES = 3
+
+
+# NOTE: we must NOT open a nursery inside an async generator that yields,
+# because Trio forbids doing async work while an async generator is being
+# finalized. Instead, start the producer task from a regular async function
+# and read from an internal channel.
+
+async def _start_producer_and_limit(ingestor, max_images, outbound_send):
+    """Start ingestor.produce_scenes into an internal channel then forward up to max_images to outbound_send."""
+    internal_send, internal_recv = trio.open_memory_channel(NUM_IMAGES)
+
+    async with trio.open_nursery() as prod_nursery:
+        # Start the real producer feeding the internal_send channel.
+        prod_nursery.start_soon(ingestor.produce_scenes, internal_send)
+
+        # Read up to max_images from the internal_recv and forward to outbound_send.
+        image_count = 0
+        async with internal_recv, outbound_send:
+            async for scene_info in internal_recv:
+                await outbound_send.send(scene_info)
+                image_count = len(scene_info.all_images())
+                if image_count >= max_images:
+                    # Stop the background producer and exit
+                    prod_nursery.cancel_scope.cancel()
+                    break
+
 
 async def limited_smoke_test():
     """
@@ -20,7 +47,7 @@ async def limited_smoke_test():
     """
     dataset_root = Path("tmp/rawnind_dataset")
 
-    print("\n" + "=" * 70)
+    print("\n"  "=" * 70)
     print("SMOKE TEST: Processing first 5 images")
     print("=" * 70 + "\n")
 
@@ -39,12 +66,12 @@ async def limited_smoke_test():
 
     async with trio.open_nursery() as nursery:
         # Create channels
-        (scene_send, scene_recv) = trio.open_memory_channel(10)
-        (new_file_send, new_file_recv) = trio.open_memory_channel(10)
-        (missing_send, missing_recv) = trio.open_memory_channel(10)
-        (downloaded_send, downloaded_recv) = trio.open_memory_channel(10)
-        (verified_send, verified_recv) = trio.open_memory_channel(10)
-        (complete_scene_send, complete_scene_recv) = trio.open_memory_channel(10)
+        (scene_send, scene_recv) = trio.open_memory_channel(NUM_IMAGES)
+        (new_file_send, new_file_recv) = trio.open_memory_channel(NUM_IMAGES)
+        (missing_send, missing_recv) = trio.open_memory_channel(NUM_IMAGES)
+        (downloaded_send, downloaded_recv) = trio.open_memory_channel(NUM_IMAGES)
+        (verified_send, verified_recv) = trio.open_memory_channel(NUM_IMAGES)
+        (complete_scene_send, complete_scene_recv) = trio.open_memory_channel(NUM_IMAGES)
 
         # Initialize components
         ingestor = DataIngestor(dataset_root=dataset_root)
@@ -53,25 +80,19 @@ async def limited_smoke_test():
         verifier = Verifier(max_retries=2)
         indexer = SceneIndexer(dataset_root)
 
-        # Limited ingestor that stops after 5 images
+        # Limited ingestor that stops after 5 images.
+        # We start the real ingestor.produce_scenes in a background task that feeds
+        # an internal channel, and forward up to 5 images to scene_send.
+
         async def limited_produce_scenes(send_channel):
-            """Produce scenes but stop after 5 total images."""
-            async with send_channel:
-                image_count = 0
-                async for scene_info in _limited_scene_producer(ingestor, max_images=5):
-                    stats['scenes_ingested'] += 1
-                    image_count += len(scene_info.all_images())
-                    logger.info(f"Ingested scene: {scene_info.scene_name} ({len(scene_info.all_images())} images)")
-                    await send_channel.send(scene_info)
-                    if image_count >= 5:
-                        break
+            await _start_producer_and_limit(ingestor, max_images=5, outbound_send=send_channel)
 
         # Scanner with stats
         async def scanner_with_stats(recv, new_file, missing):
             async with recv:
                 async for scene_info in recv:
                     for img in scene_info.all_images():
-                        stats['images_scanned'] += 1
+                        stats['images_scanned'] = 1
                     # Manually route images
                     scene_dir = dataset_root / scene_info.cfa_type / scene_info.scene_name
                     gt_dir = scene_dir / "gt"
@@ -87,7 +108,7 @@ async def limited_smoke_test():
                         for candidate in candidates:
                             if candidate.exists():
                                 img_info.local_path = candidate
-                                stats['files_found'] += 1
+                                stats['files_found'] = 1
                                 await new_file.send(img_info)
                                 logger.info(f"  Found: {img_info.filename}")
                                 found = True
@@ -95,7 +116,7 @@ async def limited_smoke_test():
 
                         if not found:
                             img_info.local_path = candidates[0] if candidates else None
-                            stats['files_missing'] += 1
+                            stats['files_missing'] = 1
                             await missing.send(img_info)
                             logger.info(f"  Missing: {img_info.filename}")
 
@@ -103,13 +124,13 @@ async def limited_smoke_test():
         async def downloader_with_stats(recv, send):
             async with recv:
                 async for img_info in recv:
-                    stats['downloads_attempted'] += 1
+                    stats['downloads_attempted'] = 1
                     logger.info(f"  Downloading: {img_info.filename}")
                     # Forward to actual downloader (it handles the download)
                     await send.send(img_info)
 
         # Merge channels
-        merged_send, merged_recv = trio.open_memory_channel(10)
+        merged_send, merged_recv = trio.open_memory_channel(NUM_IMAGES)
 
         async def merge_inputs():
             async with new_file_recv, downloaded_recv, merged_send:
@@ -133,19 +154,19 @@ async def limited_smoke_test():
 
                         if computed == img_info.sha1:
                             img_info.validated = True
-                            stats['verified'] += 1
+                            stats['verified'] = 1
                             logger.info(f"  Verified: {img_info.filename}")
                             await verified.send(img_info)
                         else:
-                            stats['verification_failed'] += 1
+                            stats['verification_failed'] = 1
                             logger.warning(f"  Verification failed: {img_info.filename}")
                             if img_info.retry_count < 2:
-                                img_info.retry_count += 1
+                                img_info.retry_count = 1
                                 img_info.local_path.unlink()
                                 img_info.local_path = None
                                 await missing.send(img_info)
                     else:
-                        stats['verification_failed'] += 1
+                        stats['verification_failed'] = 1
 
         # Indexer with stats
         async def indexer_with_stats(recv, send):
@@ -159,7 +180,7 @@ async def limited_smoke_test():
                             scene_info = indexer._construct_scene(img_info)
                             indexer._scene_completion_tracker.add(scene_key)
                             indexer._move_scene_to_complete(scene_info)
-                            stats['scenes_completed'] += 1
+                            stats['scenes_completed'] = 1
                             logger.info(f"Scene complete: {scene_info.scene_name}")
                             await send.send(scene_info)
 
@@ -191,28 +212,6 @@ async def limited_smoke_test():
     print(f"Verification failures:   {stats['verification_failed']}")
     print(f"Complete scenes:         {stats['scenes_completed']}")
     print("=" * 70 + "\n")
-
-
-async def _limited_scene_producer(ingestor, max_images):
-    """Helper generator that limits total images produced."""
-    image_count = 0
-
-    # Create internal channel
-    send_channel, recv_channel = trio.open_memory_channel(10)
-
-    async def produce():
-        await ingestor.produce_scenes(send_channel)
-
-    async with trio.open_nursery() as nursery:
-        nursery.start_soon(produce)
-
-        async with recv_channel:
-            async for scene_info in recv_channel:
-                yield scene_info
-                image_count += len(scene_info.all_images())
-                if image_count >= max_images:
-                    nursery.cancel_scope.cancel()
-                    break
 
 
 if __name__ == "__main__":

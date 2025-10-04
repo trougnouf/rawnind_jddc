@@ -2,85 +2,115 @@ from pathlib import Path
 
 import pytest
 import trio
+import yaml
 
 from rawnind.dataset.DataIngestor import DataIngestor
+from rawnind.dataset.SceneInfo import SceneInfo
 
 
-@pytest.mark.asyncio
-async def test_produce_scenes(mocker):
+@pytest.mark.trio
+async def test_produce_scenes(tmp_path):
+    """Test that produce_scenes yields SceneInfo objects."""
     # Arrange
-    cache_paths = (Path("test_yaml_cache.yaml"), Path("test_metadata_cache.json"))
-    dataset_root = Path("test_dataset")
-    mocker.patch(
-        "rawnind.dataset.DataIngestor._load_index",
-        new_callable=mocker.AsyncMock,
-        return_value={
-            "Bayer": {
-                "scene1": {
-                    "clean_images": [{"filename": "img1.png", "sha1": "abc"}],
-                    "noisy_images": [{"filename": "img2.png", "sha1": "def"}],
-                }
+    yaml_cache = tmp_path / "test_yaml_cache.yaml"
+    metadata_cache = tmp_path / "test_metadata_cache.json"
+
+    # Create mock cache data
+    dataset_data = {
+        "Bayer": {
+            "scene1": {
+                "clean_images": [{"filename": "img1.png", "sha1": "abc123"}],
+                "noisy_images": [{"filename": "img2.png", "sha1": "def456"}],
+                "unknown_sensor": False,
+                "test_reserve": False
             }
-        },
+        }
+    }
+
+    with open(yaml_cache, "w") as f:
+        yaml.dump(dataset_data, f)
+
+    with open(metadata_cache, "w") as f:
+        f.write('{"data": {"latestVersion": {"files": []}}}')
+
+    send_channel, receive_channel = trio.open_memory_channel(10)
+    data_ingestor = DataIngestor(
+        cache_paths=(yaml_cache, metadata_cache),
+        dataset_root=tmp_path
     )
 
-    send_channel, receive_channel = trio.open_memory_channel(0)
+    # Act & Assert
+    async with trio.open_nursery() as nursery:
+        nursery.start_soon(data_ingestor.produce_scenes, send_channel)
 
-    data_ingestor = DataIngestor(cache_paths=cache_paths, dataset_root=dataset_root)
-    produce_task = asyncio.create_task(data_ingestor.produce_scenes(send_channel))
+        async with receive_channel:
+            scene_info = await receive_channel.receive()
 
-    # Act
-    scene_info = await receive_channel.receive()
+            assert scene_info.scene_name == "scene1"
+            assert scene_info.cfa_type == "Bayer"
+            assert len(scene_info.clean_images) == 1
+            assert len(scene_info.noisy_images) == 1
+            assert scene_info.clean_images[0].filename == "img1.png"
+            assert scene_info.noisy_images[0].filename == "img2.png"
 
-    # Assert
-    assert scene_info.scene_name == "scene1"
-    assert len(scene_info.clean_images) == 1
-    assert len(scene_info.noisy_images) == 1
-
-    await produce_task
+            nursery.cancel_scope.cancel()
 
 
-@pytest.mark.asyncio
-async def test_load_index_from_cache(mocker):
+@pytest.mark.trio
+async def test_load_index_from_cache(tmp_path):
+    """Test that _load_index loads from cache when available."""
     # Arrange
-    cache_paths = (Path("test_yaml_cache.yaml"), Path("test_metadata_cache.json"))
-    dataset_root = Path("test_dataset")
-    mocker.patch(
-        "rawnind.dataset.DataIngestor._fetch_remote_index",
-        new_callable=mocker.AsyncMock,
-        return_value={"Bayer": {"scene1": {}}},
-    )
+    yaml_cache = tmp_path / "test_yaml_cache.yaml"
+    metadata_cache = tmp_path / "test_metadata_cache.json"
 
-    data_ingestor = DataIngestor(cache_paths=cache_paths, dataset_root=dataset_root)
-    with open("test_yaml_cache.yaml", "w") as f:
-        yaml.dump({"Bayer": {"scene1": {}}}, f)
+    dataset_data = {"Bayer": {"scene1": {"clean_images": [], "noisy_images": []}}}
+
+    with open(yaml_cache, "w") as f:
+        yaml.dump(dataset_data, f)
+
+    with open(metadata_cache, "w") as f:
+        f.write('{}')
+
+    data_ingestor = DataIngestor(
+        cache_paths=(yaml_cache, metadata_cache),
+        dataset_root=tmp_path
+    )
 
     # Act
     index_data = await data_ingestor._load_index()
 
     # Assert
-    assert index_data == {"Bayer": {"scene1": {}}}
+    assert index_data == dataset_data
 
 
-@pytest.mark.asyncio
-async def test_fetch_remote_index(mocker):
+@pytest.mark.trio
+async def test_fetch_remote_index(tmp_path, mocker):
+    """Test that _fetch_remote_index downloads and caches data."""
     # Arrange
-    cache_paths = (Path("test_yaml_cache.yaml"), Path("test_metadata_cache.json"))
-    dataset_root = Path("test_dataset")
-    mock_yaml_data = {"Bayer": {"scene1": {}}}
-    mocker.patch(
-        "rawnind.dataset.DataIngestor.fetch_yaml",
-        return_value=mock_yaml_data,
-    )
-    mocker.patch(
-        "rawnind.dataset.DataIngestor.fetch_metadata",
-        return_value='{"data": {"latestVersion": {"files": []}}}',
-    )
+    yaml_cache = tmp_path / "test_yaml_cache.yaml"
+    metadata_cache = tmp_path / "test_metadata_cache.json"
 
-    data_ingestor = DataIngestor(cache_paths=cache_paths, dataset_root=dataset_root)
+    mock_yaml_data = {"Bayer": {"scene1": {"clean_images": [], "noisy_images": []}}}
+    mock_metadata = '{"data": {"latestVersion": {"files": []}}}'
+
+    def mock_fetch_yaml():
+        import yaml
+        return mock_yaml_data
+
+    def mock_fetch_metadata():
+        return mock_metadata
+
+    mocker.patch("trio.to_thread.run_sync", side_effect=[mock_yaml_data, mock_metadata])
+
+    data_ingestor = DataIngestor(
+        cache_paths=(yaml_cache, metadata_cache),
+        dataset_root=tmp_path
+    )
 
     # Act
     index_data = await data_ingestor._fetch_remote_index()
 
     # Assert
     assert index_data == mock_yaml_data
+    assert yaml_cache.exists()
+    assert metadata_cache.exists()

@@ -35,7 +35,7 @@ class MetadataEnricher:
         self.cache_path = cache_path or Path("src/rawnind/datasets/RawNIND/metadata_cache.json")
         self.dataset_root = dataset_root or Path("src/rawnind/datasets/RawNIND/src")
         self.max_concurrent = max_concurrent
-        self.computation_fn = computation_fn or self._default_computation
+        self.computation_fn = computation_fn  # Can be None
         self.enable_crops_enrichment = enable_crops_enrichment
         self._metadata_cache: Dict[str, Dict[str, Any]] = {}
         self._load_cache()
