@@ -453,3 +453,147 @@ class TestStreamingDiscoveryPhase2:
         # Verify we can continue consuming
         second = next(gen)
         assert isinstance(second, ImageInfo), "Should continue yielding ImageInfo objects"
+
+
+class TestStreamingAsyncDiscoveryPhase3:
+    """Test suite for Phase 3: Streaming Async Discovery with Events."""
+
+    @pytest.mark.trio
+    async def test_async_iter_missing_files_streams_during_discovery(self):
+        """Test that async_iter_missing_files streams during filesystem discovery.
+        
+        Given: A dataset with mixed available/missing files
+        When: async_iter_missing_files() examines filesystem
+        Then: Missing files should be yielded before entire filesystem scan completes
+        """
+        import trio
+        
+        index = DatasetIndex()
+        
+        # Create dataset with multiple files
+        dataset_data = {
+            'Bayer': {
+                'scene1': {
+                    'clean_images': [
+                        {'filename': f'file{i}.arw', 'sha1': f'sha{i}', 'file_id': f'id{i}'}
+                        for i in range(10)
+                    ],
+                    'noisy_images': [],
+                    'unknown_sensor': False,
+                    'test_reserve': False
+                }
+            }
+        }
+        index._build_index_from_data(dataset_data)
+        index._loaded = True
+        
+        yielded_count = 0
+        filesystem_scan_complete = False
+        
+        async for img_info in index.async_iter_missing_files():
+            yielded_count += 1
+            # First results should come before full scan completes
+            # (we'll verify by checking we can break early)
+            if yielded_count >= 5:
+                break
+        
+        # Verify we got results before consuming all
+        assert yielded_count == 5, "Should be able to consume first 5 results"
+        
+        # Verify it's actually streaming (can get results incrementally)
+        from rawnind.dataset.manager import ImageInfo
+        gen = index.async_iter_missing_files()
+        first = await gen.__anext__()
+        assert isinstance(first, ImageInfo), "Should yield ImageInfo objects"
+
+    @pytest.mark.trio
+    async def test_async_iter_missing_files_emits_event(self):
+        """Test that async_iter_missing_files emits LOCAL_PATHS_UPDATED event.
+        
+        Given: Files that don't exist locally
+        When: async_iter_missing_files() completes
+        Then: LOCAL_PATHS_UPDATED event should be emitted
+        """
+        import trio
+        
+        index = DatasetIndex()
+        
+        # Create minimal dataset
+        dataset_data = {
+            'Bayer': {
+                'scene1': {
+                    'clean_images': [
+                        {'filename': 'missing1.arw', 'sha1': 'sha1', 'file_id': 'id1'},
+                        {'filename': 'missing2.arw', 'sha1': 'sha2', 'file_id': 'id2'}
+                    ],
+                    'noisy_images': [],
+                    'unknown_sensor': False,
+                    'test_reserve': False
+                }
+            }
+        }
+        index._build_index_from_data(dataset_data)
+        index._loaded = True
+        
+        event_fired = False
+        
+        def listener():
+            nonlocal event_fired
+            event_fired = True
+        
+        index._events.on(CacheEvent.LOCAL_PATHS_UPDATED, listener)
+        
+        # Consume generator fully (event emits after completion)
+        async for _ in index.async_iter_missing_files():
+            pass
+        
+        assert event_fired, "LOCAL_PATHS_UPDATED event should be emitted after completion"
+
+    @pytest.mark.trio
+    async def test_async_iter_missing_files_updates_cached_state(self):
+        """Test that async_iter_missing_files updates img_info.local_path.
+        
+        Given: Files that don't exist locally
+        When: async_iter_missing_files() runs
+        Then: img_info.local_path should be set to expected path (for download target)
+        """
+        import trio
+        from pathlib import Path
+        
+        index = DatasetIndex()
+        
+        # Create minimal dataset
+        dataset_data = {
+            'Bayer': {
+                'scene1': {
+                    'clean_images': [
+                        {'filename': 'missing.arw', 'sha1': 'sha1', 'file_id': 'id1'}
+                    ],
+                    'noisy_images': [],
+                    'unknown_sensor': False,
+                    'test_reserve': False
+                }
+            }
+        }
+        index._build_index_from_data(dataset_data)
+        index._loaded = True
+        
+        # Ensure no local path is set initially
+        for scene in index.get_all_scenes():
+            for img in scene.all_images():
+                assert img.local_path is None, "Initial local_path should be None"
+        
+        missing = []
+        async for img_info in index.async_iter_missing_files():
+            missing.append(img_info)
+            # Should have designated path for download
+            assert img_info.local_path is not None, "local_path should be set"
+            assert isinstance(img_info.local_path, Path), "local_path should be a Path"
+        
+        # Cached state should be updated
+        assert len(missing) == 1, "Should have yielded one missing file"
+        assert missing[0].local_path is not None, "Cached state should be updated"
+        
+        # Verify the path makes sense (should be in expected location)
+        expected_path = index.dataset_root / 'Bayer' / 'scene1' / 'gt' / 'missing.arw'
+        assert missing[0].local_path == expected_path, "Path should match expected location"

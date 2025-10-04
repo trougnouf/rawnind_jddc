@@ -15,7 +15,7 @@ import httpx
 from tqdm import tqdm
 from enum import Enum, auto
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Generator, Callable, Any, Set
+from typing import Dict, List, Optional, Tuple, Generator, AsyncGenerator, Callable, Any, Set
 from dataclasses import dataclass, field
 from functools import wraps
 
@@ -506,6 +506,53 @@ class DatasetIndex:
                 for img_info in scene_info.all_images():
                     if img_info.local_path is None:
                         yield img_info
+
+    async def async_iter_missing_files(self) -> AsyncGenerator[ImageInfo, None]:
+        """Asynchronously examine filesystem and yield missing files as discovered.
+        
+        This method:
+        - Checks candidate paths for each file
+        - Updates img_info.local_path (either to existing file or designated download target)
+        - Yields ImageInfo objects that are missing (no existing file found)
+        - Emits LOCAL_PATHS_UPDATED event after completion
+        
+        This is the recommended way to discover and download files in a streaming fashion.
+        
+        Yields:
+            ImageInfo objects for files not found locally
+        """
+        if not self._loaded:
+            self.load_index()
+        
+        try:
+            for cfa_type, scenes in self.scenes.items():
+                cfa_dir = self.dataset_root / cfa_type
+                cfa_exists = cfa_dir.exists()
+                
+                for scene_name, scene_info in scenes.items():
+                    for img_info in scene_info.all_images():
+                        # Get candidate paths
+                        candidates = self._candidate_paths(cfa_type, scene_name, img_info)
+                        
+                        # Check if file exists in any candidate location (synchronous)
+                        found = False
+                        if cfa_exists:  # Only check if directory exists
+                            for candidate in candidates:
+                                if candidate.exists():
+                                    img_info.local_path = candidate
+                                    found = True
+                                    break
+                        
+                        if not found:
+                            # Set to primary candidate as download target
+                            img_info.local_path = candidates[0] if candidates else None
+                            yield img_info
+                        
+                        # Yield control to Trio scheduler (not for I/O)
+                        await trio.sleep(0)
+        finally:
+            # Emit event after completion (even if interrupted)
+            self._emit(CacheEvent.LOCAL_PATHS_UPDATED)
 
 
     def get_available_scenes(self) -> List[SceneInfo]:
