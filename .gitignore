@@ -9,3 +9,8 @@ uv.lock
 
 # Setup documentation (local only)
 SETUP_COMPLETE.md
+src/models/**/*.log
+src/models/**/*.yaml
+src/models/**/*.config
+tmp
+.serena
