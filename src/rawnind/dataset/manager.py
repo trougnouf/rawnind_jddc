@@ -9,8 +9,9 @@ import hashlib
 import yaml
 import requests
 import random
+from enum import Enum, auto
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Generator, Callable, Any
+from typing import Dict, List, Optional, Tuple, Generator, Callable, Any, Set
 from dataclasses import dataclass, field
 from functools import wraps
 
@@ -20,8 +21,94 @@ DATASET_YAML_URL = "https://dataverse.uclouvain.be/api/access/datafile/:persiste
 DATASET_ROOT = Path("src/rawnind/datasets/RawNIND/src")
 
 
+class CacheEvent(Enum):
+    """Events that can trigger cache invalidation."""
+    INDEX_STRUCTURE_CHANGED = auto()  # Scenes added/removed, index rebuilt
+    LOCAL_PATHS_UPDATED = auto()      # File discovery updated local_path values
+    FILE_VALIDATED = auto()           # File validation state changed
+    METADATA_CHANGED = auto()         # Scene metadata updated
+
+
+class EventEmitter:
+    """Simple synchronous event emitter (Trio-safe)."""
+    
+    def __init__(self):
+        self._listeners: Dict[CacheEvent, Set[Callable]] = {
+            event: set() for event in CacheEvent
+        }
+    
+    def on(self, event: CacheEvent, callback: Callable) -> None:
+        """Register a callback for an event.
+        
+        Args:
+            event: The event to listen for
+            callback: Function to call when event fires (takes no arguments)
+        """
+        self._listeners[event].add(callback)
+    
+    def off(self, event: CacheEvent, callback: Callable) -> None:
+        """Unregister a callback.
+        
+        Args:
+            event: The event to stop listening for
+            callback: The callback to remove
+        """
+        self._listeners[event].discard(callback)
+    
+    def emit(self, event: CacheEvent, **kwargs: Any) -> None:
+        """Emit an event synchronously (safe in Trio context).
+        
+        Args:
+            event: The event to emit
+            **kwargs: Optional context data (currently unused)
+        """
+        for callback in self._listeners[event]:
+            callback()
+
+
+def emits_event(event: CacheEvent) -> Callable:
+    """Decorator to emit an event after synchronous method execution.
+    
+    Args:
+        event: The event to emit after method completes
+    
+    Returns:
+        Decorator function
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(self: 'DatasetIndex', *args: Any, **kwargs: Any) -> Any:
+            result = func(self, *args, **kwargs)
+            self._emit(event)
+            return result
+        return wrapper
+    return decorator
+
+
+def emits_event_async(event: CacheEvent) -> Callable:
+    """Decorator to emit an event after async method execution (Trio-compatible).
+    
+    Args:
+        event: The event to emit after method completes
+    
+    Returns:
+        Decorator function for async methods
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(self: 'DatasetIndex', *args: Any, **kwargs: Any) -> Any:
+            result = await func(self, *args, **kwargs)
+            self._emit(event)  # Synchronous emit is safe in Trio
+            return result
+        return wrapper
+    return decorator
+
+
 def invalidates_cache(func: Callable) -> Callable:
-    """Decorator to invalidate DatasetIndex caches after method execution."""
+    """Decorator to invalidate DatasetIndex caches after method execution.
+    
+    DEPRECATED: Use @emits_event decorator instead for event-based invalidation.
+    """
     @wraps(func)
     def wrapper(self: 'DatasetIndex', *args: Any, **kwargs: Any) -> Any:
         result = func(self, *args, **kwargs)
@@ -62,24 +149,62 @@ class SceneInfo:
 
 
 class DatasetIndex:
-    """Canonical index of the RawNIND dataset."""
+    """Canonical index of the RawNIND dataset with event-based cache invalidation."""
 
-    def __init__(self, cache_path: Optional[Path] = None):
+    def __init__(self, cache_path: Optional[Path] = None, dataset_root: Optional[Path] = None):
         """Initialize dataset index.
 
         Args:
-            cache_path: Path to cached dataset.yaml (default: DATASET_ROOT/dataset.yaml)
+            cache_path: Path to cached dataset.yaml (default: DATASET_ROOT/dataset_index.yaml)
+            dataset_root: Root directory for dataset files
         """
-        self.cache_path = cache_path or DATASET_ROOT / "dataset_index.yaml"
+        self.dataset_root = dataset_root or DATASET_ROOT
+        self.cache_path = cache_path or self.dataset_root / "dataset_index.yaml"
         self.scenes: Dict[
             str, Dict[str, SceneInfo]
         ] = {}  # {cfa_type: {scene_name: SceneInfo}}
         self._loaded = False
-        self._known_extensions: Optional[set] = None
+        
+        # Cached values
+        self._known_extensions: Optional[Set[str]] = None
         self._sorted_cfa_types: Optional[List[str]] = None
+        
+        # Event system
+        self._events = EventEmitter()
+        self._setup_cache_listeners()
+    
+    def _setup_cache_listeners(self) -> None:
+        """Register callbacks to invalidate specific caches on relevant events."""
+        # known_extensions depends on both local paths and index structure
+        self._events.on(
+            CacheEvent.LOCAL_PATHS_UPDATED,
+            lambda: setattr(self, '_known_extensions', None)
+        )
+        self._events.on(
+            CacheEvent.INDEX_STRUCTURE_CHANGED,
+            lambda: setattr(self, '_known_extensions', None)
+        )
+        
+        # sorted_cfa_types only depends on index structure
+        self._events.on(
+            CacheEvent.INDEX_STRUCTURE_CHANGED,
+            lambda: setattr(self, '_sorted_cfa_types', None)
+        )
+    
+    def _emit(self, event: CacheEvent, **kwargs: Any) -> None:
+        """Emit an event (internal helper).
+        
+        Args:
+            event: Event to emit
+            **kwargs: Optional context
+        """
+        self._events.emit(event, **kwargs)
 
     def _invalidate_caches(self) -> None:
-        """Invalidate cached computed values when index changes."""
+        """Invalidate cached computed values when index changes.
+        
+        DEPRECATED: Event-based invalidation is now preferred.
+        """
         self._known_extensions = None
         self._sorted_cfa_types = None
 
@@ -158,9 +283,12 @@ class DatasetIndex:
             dataset_data = yaml.safe_load(f)
         self._build_index_from_data(dataset_data)
 
-    @invalidates_cache
+    @emits_event(CacheEvent.INDEX_STRUCTURE_CHANGED)
     def _build_index_from_data(self, dataset_data: dict) -> None:
-        """Build index from parsed dataset YAML data."""
+        """Build index from parsed dataset YAML data.
+        
+        Emits INDEX_STRUCTURE_CHANGED event upon completion.
+        """
         self.scenes = {}
 
         for cfa_type in ["Bayer", "X-Trans"]:
@@ -204,9 +332,11 @@ class DatasetIndex:
 
                 self.scenes[cfa_type][scene_name] = scene_info
 
-    @invalidates_cache
+    @emits_event(CacheEvent.LOCAL_PATHS_UPDATED)
     def discover_local_files(self) -> Tuple[int, int]:
         """Discover which files exist locally and update image paths.
+        
+        Emits LOCAL_PATHS_UPDATED event upon completion.
 
         Returns:
             Tuple of (found_count, total_count)
@@ -218,7 +348,7 @@ class DatasetIndex:
         total_count = 0
 
         for cfa_type, scenes in self.scenes.items():
-            cfa_dir = DATASET_ROOT / cfa_type
+            cfa_dir = self.dataset_root / cfa_type
             if not cfa_dir.exists():
                 continue
 
