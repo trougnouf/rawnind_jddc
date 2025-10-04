@@ -1,11 +1,10 @@
 """Create a curated test dataset with known misaligned pairs and diverse samples."""
-
 import json
 from pathlib import Path
 
-print("=" * 80)
+print("="*80)
 print("CREATING CURATED TEST DATASET")
-print("=" * 80)
+print("="*80)
 print()
 
 # Known misaligned pairs from previous testing
@@ -18,7 +17,7 @@ known_misaligned = [
         "noisy_file": "Bayer/Bark/Bayer_Bark_ISO65535_sha1=6ba8ed5f7fff42c4c900812c02701649f4f2d49e.cr2",
         "expected_shift": [12, -10],
         "shift_magnitude": "large",
-        "notes": "Largest shift found, FFT has 2px error on this",
+        "notes": "Largest shift found, FFT has 2px error on this"
     },
     {
         "scene": "Bark",
@@ -28,7 +27,7 @@ known_misaligned = [
         "noisy_file": "Bayer/Bark/Bayer_Bark_ISO800_sha1=ba86f1da64a4bb534d9216e96c1c72177ed1e625.cr2",
         "expected_shift": [4, -4],
         "shift_magnitude": "small",
-        "notes": "FFT works perfectly on this",
+        "notes": "FFT works perfectly on this"
     },
     {
         "scene": "Kortlek",
@@ -38,7 +37,7 @@ known_misaligned = [
         "noisy_file": "Bayer/Kortlek/Bayer_Kortlek_ISO51200_sha1=8fed453fdfb162673bb9ed41f9c5f03095331e3b.cr2",
         "expected_shift": [0, -4],
         "shift_magnitude": "small",
-        "notes": "Horizontal shift only, FFT works perfectly",
+        "notes": "Horizontal shift only, FFT works perfectly"
     },
 ]
 
@@ -52,7 +51,7 @@ aligned_samples = [
         "noisy_file": "Bayer/7D-1/Bayer_7D-1_ISO800_sha1=11d2f7ac51732304c1ed32e352f3dd080f546c4b.cr2",
         "expected_shift": [0, 0],
         "shift_magnitude": "none",
-        "notes": "Pre-aligned, test case for (0,0)",
+        "notes": "Pre-aligned, test case for (0,0)"
     },
 ]
 
@@ -69,7 +68,7 @@ xtrans_samples = [
         ],
         "expected_shift": "unknown",
         "shift_magnitude": "unknown",
-        "notes": "X-Trans 6x6 pattern, currently fails to load",
+        "notes": "X-Trans 6x6 pattern, currently fails to load"
     },
 ]
 
@@ -90,13 +89,13 @@ test_dataset = {
             "1. Test channel-split FFT on Bark ISO65535 (large shift with 2px error)",
             "2. Verify channel-split doesn't break small shifts",
             "3. Test on X-Trans if loading can be fixed",
-        ],
-    },
+        ]
+    }
 }
 
 # Save
 output_file = Path("curated_test_dataset.json")
-with open(output_file, "w") as f:
+with open(output_file, 'w') as f:
     json.dump(test_dataset, f, indent=2)
 
 print(f"Created curated test dataset: {output_file}")
@@ -121,7 +120,7 @@ for category, cases in [("misaligned", known_misaligned), ("aligned", aligned_sa
     for case in cases:
         gt_path = base_path / case["gt_file"]
         noisy_path = base_path / case["noisy_file"]
-
+        
         if not gt_path.exists():
             print(f"  ❌ Missing: {case['gt_file']}")
             all_good = False

@@ -10,10 +10,8 @@ import rawnind.models
 from rawnind.tools import denoise_image
 from rawnind.libs import rawproc
 
-MODEL_FPATH = os.path.join(
-    os.path.abspath(os.path.curdir),
-    "src/rawnind/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-11-22-bayer_ms-ssim_mgout_notrans_valeither_noowwnpics_mgdef_-1/saved_models/iter_1245000.pt",
-)
+MODEL_FPATH = os.path.join(os.path.abspath(os.path.curdir),
+                           "src/rawnind/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-11-22-bayer_ms-ssim_mgout_notrans_valeither_noowwnpics_mgdef_-1/saved_models/iter_1245000.pt")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -25,9 +23,9 @@ if __name__ == "__main__":
     parser.add_argument("--cpu", action="store_true")
     args = parser.parse_args()
     # TODO debayer if prgb model
-    model_is_bayer = "bayer" in args.model_fpath.lower()
+    model_is_bayer = 'bayer' in args.model_fpath.lower()
     if rawnind.libs.raw.is_xtrans(args.input_fpath):
-        infile = args.input_fpath.replace("RAF", "exr")
+        infile = args.input_fpath.replace('RAF', 'exr')
         rawnind.libs.raw.xtrans_fpath_to_OpenEXR(args.input_fpath, infile)
     else:
         infile = args.input_fpath
@@ -48,11 +46,12 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
     with torch.no_grad():
-        input_image, rgb_xyz_matrix = denoise_image.load_image(infile, device=device)
+        input_image, rgb_xyz_matrix = denoise_image.load_image(
+            infile, device=device
+        )
         input_image = input_image.unsqueeze(0)
         model = rawnind.models.raw_denoiser.UtNet2(
-            in_channels=4 if model_is_bayer and not infile.endswith(".exr") else 3,
-            funit=32,
+            in_channels=4 if model_is_bayer and not infile.endswith(".exr") else 3, funit=32
         )
         model.load_state_dict(
             torch.load(

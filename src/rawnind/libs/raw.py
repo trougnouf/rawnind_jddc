@@ -223,7 +223,7 @@ def raw_fpath_to_mono_img_and_metadata(
             divisor = 6
         else:
             raise ValueError(f"Unsupported pattern shape: {pattern_shape}")
-
+        
         # crop raw width/height if bigger than width/height
         if h % divisor > 0:
             mono_img = mono_img[:, : -(h % divisor)]
@@ -236,9 +236,7 @@ def raw_fpath_to_mono_img_and_metadata(
             metadata["sizes"]["width"] -= w % divisor
             metadata["sizes"]["iwidth"] -= w % divisor
 
-        assert not (mono_img.shape[1] % divisor or mono_img.shape[2] % divisor), (
-            mono_img.shape
-        )
+        assert not (mono_img.shape[1] % divisor or mono_img.shape[2] % divisor), mono_img.shape
         return mono_img, whole_image_raw_pattern
 
     # step 1: get raw data and metadata
@@ -284,7 +282,7 @@ def raw_fpath_to_mono_img_and_metadata(
     set_bayer_pattern_name(metadata)
 
     whole_image_raw_pattern = rawpy_img.raw_colors
-
+    
     # Handle both Bayer (2x2) and X-Trans (6x6) patterns
     pattern_shape = metadata["RGBG_pattern"].shape
     if pattern_shape == (2, 2):
@@ -650,85 +648,80 @@ def is_xtrans(fpath) -> bool:
 # CFA-AWARE FFT PHASE CORRELATION FOR ALIGNMENT
 # ============================================================================
 
-
-def extract_bayer_channels(
-    img: np.ndarray, pattern: np.ndarray
-) -> dict[str, np.ndarray]:
+def extract_bayer_channels(img: np.ndarray, pattern: np.ndarray) -> dict[str, np.ndarray]:
     """Extract 4 Bayer channels via strided slicing.
-
+    
     Args:
         img: Mosaiced RAW image [1, H, W]
         pattern: 2x2 Bayer pattern array (values 0=R, 1=G, 2=B, 3=G)
-
+        
     Returns:
         Dict with keys 'R', 'G1', 'G2', 'B' containing downsampled channel arrays
     """
     values = img[0]
-
+    
     # RawPy pattern encoding: 0=R, 1=G, 2=B, 3=G
-    color_map = {0: "R", 1: "G", 2: "B", 3: "G"}
+    color_map = {0: 'R', 1: 'G', 2: 'B', 3: 'G'}
     positions = {}
-
+    
     for row in range(2):
         for col in range(2):
             color_code = pattern[row, col]
             color = color_map[color_code]
-
-            if color == "G":
-                key = "G1" if "G1" not in positions else "G2"
+            
+            if color == 'G':
+                key = 'G1' if 'G1' not in positions else 'G2'
             else:
                 key = color
-
+            
             positions[key] = (row, col)
-
+    
     # Extract channels via strided slicing
     channels = {}
     for key, (row, col) in positions.items():
         channels[key] = values[row::2, col::2].copy()
-
+    
     return channels
 
 
-def extract_xtrans_channels(
-    img: np.ndarray, pattern: np.ndarray
-) -> dict[str, list[np.ndarray]]:
+def extract_xtrans_channels(img: np.ndarray, pattern: np.ndarray) -> dict[str, list[np.ndarray]]:
     """Extract X-Trans channels via pixel shuffle without averaging.
-
+    
     Uses pixel shuffle to reorganize the 6x6 pattern into 36 position channels,
     returning all position grids for each color separately for pixel-by-pixel comparison.
-
+    
     Args:
         img: Mosaiced RAW image [1, H, W]
         pattern: 6x6 X-Trans pattern array
-
+        
     Returns:
         Dict with keys 'R', 'G', 'B' containing lists of position grids (no averaging)
     """
     values = img[0]
     h, w = values.shape
     pattern_h, pattern_w = pattern.shape
-
+    
     sampled_h = h // pattern_h
     sampled_w = w // pattern_w
-
-    color_map = {0: "R", 1: "G", 2: "B"}
-
+    
+    color_map = {0: 'R', 1: 'G', 2: 'B'}
+    
     # Pixel shuffle: reorganize into all 36 position grids
     # Trim to multiple of pattern size
     h_trim = sampled_h * pattern_h
     w_trim = sampled_w * pattern_w
     values = values[:h_trim, :w_trim]
-
+    
     # Reshape: [H, W] -> [H/6, 6, W/6, 6] -> [H/6, W/6, 6, 6] -> [H/6, W/6, 36]
     blocks = values.reshape(sampled_h, pattern_h, sampled_w, pattern_w)
     blocks = blocks.transpose(0, 2, 1, 3)  # [H/6, W/6, 6, 6]
     position_grids = blocks.reshape(sampled_h, sampled_w, pattern_h * pattern_w)
-
+    
     # Group by color - return ALL position grids without averaging
     channels = {}
     for color_code in [0, 1, 2]:
         color_name = color_map[color_code]
-
+        
         # Find all flat indices for this color in the pattern
         color_positions = []
         for pos_y in range(pattern_h):
@@ -736,75 +729,73 @@ def extract_xtrans_channels(
                 if pattern[pos_y, pos_x] == color_code:
                     flat_idx = pos_y * pattern_w + pos_x
                     color_positions.append(flat_idx)
-
+        
         # Extract all grids for this color - return as list
         if color_positions:
             color_grids = [position_grids[:, :, pos] for pos in color_positions]
             channels[color_name] = color_grids
-
+    
     return channels
 
 
-def _fft_phase_correlate_single(
-    anchor_ch: np.ndarray, target_ch: np.ndarray
-) -> tuple[int, int]:
+def _fft_phase_correlate_single(anchor_ch: np.ndarray, target_ch: np.ndarray) -> tuple[int, int]:
     """Single-channel FFT phase correlation (hot path).
-
+    
     Performance-critical function with minimal branching.
-
+    
     Args:
         anchor_ch: Reference channel [H, W]
         target_ch: Target channel [H, W]
-
+        
     Returns:
         (dy, dx): Detected shift in pixels
     """
     from scipy import signal
-
+    
     # Normalize to zero mean
     anchor_norm = anchor_ch - anchor_ch.mean()
     target_norm = target_ch - target_ch.mean()
-
+    
     # FFT cross-correlation
-    correlation = signal.fftconvolve(anchor_norm, target_norm[::-1, ::-1], mode="same")
-
+    correlation = signal.fftconvolve(anchor_norm, target_norm[::-1, ::-1], mode='same')
+    
     # Find peak
     peak_idx = np.unravel_index(np.argmax(correlation), correlation.shape)
     center = np.array(correlation.shape) // 2
-
+    
     # Convert to shift (displacement convention)
     shift = np.array(peak_idx) - center
-
+    
     return int(shift[0]), int(shift[1])
 
 
 def fft_phase_correlate_cfa(
     anchor: np.ndarray,
-    target: np.ndarray,
+    target: np.ndarray, 
     anchor_metadata: dict,
     method: Literal["median", "mean"] = "median",
-    verbose: bool = False,
+    verbose: bool = False
 ) -> tuple[tuple[int, int], list[tuple[int, int]]]:
     """CFA-aware FFT phase correlation for RAW image alignment.
-
+    
     Extracts color channels from mosaiced CFA data and performs FFT phase
     correlation on each channel independently. Combines results via median
     or mean to produce robust shift estimate.
-
+    
     Args:
         anchor: Reference RAW image [1, H, W]
         target: Target RAW image to align [1, H, W]
         anchor_metadata: Metadata dict containing 'RGBG_pattern'
         method: 'median' or 'mean' for combining channel shifts
         verbose: Print per-channel shift detections
-
+        
     Returns:
         shift: (dy, dx) tuple - final combined shift estimate
         channel_shifts: List of per-channel (dy, dx) detections
     """
-    pattern = anchor_metadata["RGBG_pattern"]
+    pattern = anchor_metadata['RGBG_pattern']
     pattern_shape = pattern.shape
-
+    
     # Auto-detect CFA type and extract channels
     if pattern_shape == (2, 2):
         # Bayer CFA
@@ -818,13 +809,13 @@ def fft_phase_correlate_cfa(
         scale_factor = 6
     else:
         raise ValueError(f"Unsupported CFA pattern shape: {pattern_shape}")
-
+    
     # Correlate each channel pair
     channel_shifts = []
     for color in channels_anchor.keys():
         ch_anchor = channels_anchor[color]
         ch_target = channels_target[color]
-
+        
         # Handle different return types: Bayer=single array, X-Trans=list of arrays
         if isinstance(ch_anchor, list):
             # X-Trans: compare each position grid pair, collect all shift estimates
@@ -843,7 +834,7 @@ def fft_phase_correlate_cfa(
             channel_shifts.append((dy, dx))
             if verbose:
                 print(f"  {color:3s}: ({dy:3d}, {dx:3d})")
-
+    
     # Combine channel results
     if method == "median":
         dy_final = int(np.median([s[0] for s in channel_shifts]))
@@ -853,7 +844,7 @@ def fft_phase_correlate_cfa(
         dx_final = int(np.mean([s[1] for s in channel_shifts]))
     else:
         raise ValueError(f"Unknown method: {method}")
-
+    
     return (dy_final, dx_final), channel_shifts
 
 
@@ -866,9 +857,7 @@ def xtrans_fpath_to_OpenEXR(
     conversion_cmd: tuple = (
         "darktable-cli",
         src_fpath,
-        os.path.join(
-            os.path.curdir, "src/rawnind/config", "dt4_xtrans_to_linrec2020.xmp"
-        ),
+        os.path.join(os.path.curdir, "src/rawnind/config", "dt4_xtrans_to_linrec2020.xmp"),
         dest_fpath,
         "--core",
         "--conf",

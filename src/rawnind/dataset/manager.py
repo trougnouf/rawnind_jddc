@@ -6,45 +6,27 @@ files, validation via SHA1 hashes, and downloading of missing files.
 """
 
 import hashlib
+import yaml
+import requests
 import random
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Generator, Callable, Any
 from dataclasses import dataclass, field
 from functools import wraps
-from pathlib import Path
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
-import httpx
-import requests
-import trio
-import yaml
-from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
 
 # Dataset URLs
 DATASET_YAML_URL = "https://dataverse.uclouvain.be/api/access/datafile/:persistentId?persistentId=doi:10.14428/DVN/DEQCIM/WWGHOR"
-DATASET_API_URL = "https://dataverse.uclouvain.be/api/datasets/:persistentId/versions/:latest/files?persistentId=doi:10.14428/DVN/DEQCIM"
 DATASET_ROOT = Path("src/rawnind/datasets/RawNIND/src")
-
-METADATA_TIMEOUT = httpx.Timeout(30.0)
-DOWNLOAD_TIMEOUT = httpx.Timeout(300.0)
 
 
 def invalidates_cache(func: Callable) -> Callable:
     """Decorator to invalidate DatasetIndex caches after method execution."""
-
     @wraps(func)
-    def wrapper(self: "DatasetIndex", *args: Any, **kwargs: Any) -> Any:
+    def wrapper(self: 'DatasetIndex', *args: Any, **kwargs: Any) -> Any:
         result = func(self, *args, **kwargs)
         self._invalidate_caches()
         return result
-
     return wrapper
 
 
@@ -95,9 +77,6 @@ class DatasetIndex:
         self._loaded = False
         self._known_extensions: Optional[set] = None
         self._sorted_cfa_types: Optional[List[str]] = None
-        self._remote_file_index: Optional[Dict[str, int]] = None
-        self._missing_file_count = 0
-        self._dataset_complete = False
 
     def _invalidate_caches(self) -> None:
         """Invalidate cached computed values when index changes."""
@@ -107,7 +86,7 @@ class DatasetIndex:
     @property
     def known_extensions(self) -> set:
         """Get set of all file extensions present in the dataset.
-
+        
         Computed once and cached until index changes.
         """
         if self._known_extensions is None:
@@ -123,42 +102,12 @@ class DatasetIndex:
     @property
     def sorted_cfa_types(self) -> List[str]:
         """Get sorted list of CFA types.
-
+        
         Computed once and cached until index changes.
         """
         if self._sorted_cfa_types is None:
             self._sorted_cfa_types = sorted(self.scenes.keys())
         return self._sorted_cfa_types
-
-    @property
-    def missing_file_count(self) -> int:
-        """Return the most recently computed number of missing files."""
-        return self._missing_file_count
-
-    @property
-    def dataset_complete(self) -> bool:
-        """Return whether the dataset is currently considered complete."""
-        return self._dataset_complete
-
-    async def async_load_index(self, force_update: bool = False) -> None:
-        """Asynchronously load the dataset index.
-
-        Args:
-            force_update: If True, download fresh index from online source
-        """
-        if self._loaded and not force_update:
-            return
-
-        if not force_update and self.cache_path.exists():
-            try:
-                await trio.to_thread.run_sync(self._load_from_yaml, self.cache_path)
-                self._loaded = True
-                return
-            except Exception as exc:
-                print(f"Warning: Failed to load cached index: {exc}")
-                print("Will download fresh index...")
-
-        await self.async_update_index()
 
     def load_index(self, force_update: bool = False) -> None:
         """Load the dataset index.
@@ -169,32 +118,18 @@ class DatasetIndex:
         if self._loaded and not force_update:
             return
 
+        # Check if cached index exists and is valid
         if not force_update and self.cache_path.exists():
             try:
                 self._load_from_yaml(self.cache_path)
                 self._loaded = True
                 return
-            except Exception as exc:
-                print(f"Warning: Failed to load cached index: {exc}")
+            except Exception as e:
+                print(f"Warning: Failed to load cached index: {e}")
                 print("Will download fresh index...")
 
+        # Download and cache the index
         self.update_index()
-
-    async def async_update_index(self) -> None:
-        """Asynchronously download dataset.yaml from online source and build index."""
-        print(f"Downloading dataset index from {DATASET_YAML_URL}...")
-
-        async with httpx.AsyncClient(timeout=METADATA_TIMEOUT) as client:
-            response = await client.get(DATASET_YAML_URL)
-            response.raise_for_status()
-            text = response.text
-
-        dataset_data = yaml.safe_load(text)
-        self._build_index_from_data(dataset_data)
-        await trio.to_thread.run_sync(self._write_cache, dataset_data)
-
-        print(f"Index cached to {self.cache_path}")
-        self._loaded = True
 
     def update_index(self) -> None:
         """Download dataset.yaml from online source and build index."""
@@ -203,23 +138,24 @@ class DatasetIndex:
         response = requests.get(DATASET_YAML_URL, timeout=30)
         response.raise_for_status()
 
+        # Parse YAML
         dataset_data = yaml.safe_load(response.text)
+
+        # Build index
         self._build_index_from_data(dataset_data)
-        self._write_cache(dataset_data)
+
+        # Save to cache
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.cache_path, "w") as f:
+            yaml.dump(dataset_data, f)
 
         print(f"Index cached to {self.cache_path}")
         self._loaded = True
 
-    def _write_cache(self, dataset_data: dict) -> None:
-        """Persist dataset metadata to the cache file."""
-        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.cache_path, "w") as handle:
-            yaml.dump(dataset_data, handle)
-
     def _load_from_yaml(self, yaml_path: Path) -> None:
         """Load index from a local YAML file."""
-        with open(yaml_path, "r") as handle:
-            dataset_data = yaml.safe_load(handle)
+        with open(yaml_path, "r") as f:
+            dataset_data = yaml.safe_load(f)
         self._build_index_from_data(dataset_data)
 
     @invalidates_cache
@@ -234,24 +170,29 @@ class DatasetIndex:
             self.scenes[cfa_type] = {}
 
             for scene_name, scene_data in dataset_data[cfa_type].items():
-                clean_images = [
-                    ImageInfo(
-                        filename=img["filename"],
-                        sha1=img["sha1"],
-                        is_clean=True,
+                # Create ImageInfo objects for clean images
+                clean_images = []
+                for img_data in scene_data.get("clean_images", []):
+                    clean_images.append(
+                        ImageInfo(
+                            filename=img_data["filename"],
+                            sha1=img_data["sha1"],
+                            is_clean=True,
+                        )
                     )
-                    for img in scene_data.get("clean_images", [])
-                ]
 
-                noisy_images = [
-                    ImageInfo(
-                        filename=img["filename"],
-                        sha1=img["sha1"],
-                        is_clean=False,
+                # Create ImageInfo objects for noisy images
+                noisy_images = []
+                for img_data in scene_data.get("noisy_images", []):
+                    noisy_images.append(
+                        ImageInfo(
+                            filename=img_data["filename"],
+                            sha1=img_data["sha1"],
+                            is_clean=False,
+                        )
                     )
-                    for img in scene_data.get("noisy_images", [])
-                ]
 
+                # Create SceneInfo
                 scene_info = SceneInfo(
                     scene_name=scene_name,
                     cfa_type=cfa_type,
@@ -262,36 +203,6 @@ class DatasetIndex:
                 )
 
                 self.scenes[cfa_type][scene_name] = scene_info
-
-    async def async_discover_local_files(self) -> Tuple[int, int]:
-        """Asynchronously discover which files exist locally and update image paths.
-
-        Returns:
-            Tuple of (found_count, total_count)
-        """
-        if not self._loaded:
-            await self.async_load_index()
-
-        found_count = 0
-        total_count = 0
-
-        for cfa_type, scenes in self.scenes.items():
-            cfa_dir = DATASET_ROOT / cfa_type
-            if not await trio.to_thread.run_sync(lambda: cfa_dir.exists()):
-                continue
-
-            for scene_name, scene_info in scenes.items():
-                for img_info in scene_info.all_images():
-                    total_count += 1
-                    img_info.local_path = None
-                    for candidate in self._candidate_paths(cfa_type, scene_name, img_info):
-                        if await trio.to_thread.run_sync(lambda path=candidate: path.exists()):
-                            img_info.local_path = candidate
-                            found_count += 1
-                            break
-
-        self._invalidate_caches()
-        return found_count, total_count
 
     @invalidates_cache
     def discover_local_files(self) -> Tuple[int, int]:
@@ -314,10 +225,21 @@ class DatasetIndex:
             for scene_name, scene_info in scenes.items():
                 for img_info in scene_info.all_images():
                     total_count += 1
-                    img_info.local_path = None
-                    for candidate in self._candidate_paths(cfa_type, scene_name, img_info):
-                        if candidate.exists():
-                            img_info.local_path = candidate
+
+                    # Check in scene directory
+                    scene_dir = cfa_dir / scene_name
+
+                    # Check in gt subdirectory for clean images
+                    if img_info.is_clean:
+                        search_dirs = [scene_dir / "gt", scene_dir]
+                    else:
+                        search_dirs = [scene_dir]
+
+                    # Look for the file
+                    for search_dir in search_dirs:
+                        potential_path = search_dir / img_info.filename
+                        if potential_path.exists():
+                            img_info.local_path = potential_path
                             found_count += 1
                             break
 
@@ -350,10 +272,10 @@ class DatasetIndex:
 
         valid_count = 0
         total_local = 0
-        invalid_files: List[ImageInfo] = []
+        invalid_files = []
 
-        for scenes in self.scenes.values():
-            for scene_info in scenes.values():
+        for cfa_type, scenes in self.scenes.items():
+            for scene_name, scene_info in scenes.items():
                 for img_info in scene_info.all_images():
                     if img_info.local_path is not None:
                         total_local += 1
@@ -369,7 +291,7 @@ class DatasetIndex:
         if not self._loaded:
             self.load_index()
 
-        all_scenes: List[SceneInfo] = []
+        all_scenes = []
         for scenes in self.scenes.values():
             all_scenes.extend(scenes.values())
         return all_scenes
@@ -400,54 +322,30 @@ class DatasetIndex:
 
         return self.scenes.get(cfa_type, {}).get(scene_name)
 
-    def iter_missing_files(self) -> Generator[ImageInfo, None, None]:
-        """Yield ImageInfo entries missing from the local filesystem."""
+    def get_missing_files(self) -> List[ImageInfo]:
+        """Get list of files not found locally."""
         if not self._loaded:
             self.load_index()
 
-        missing: List[ImageInfo] = []
-
-        for cfa_type in sorted(self.scenes.keys()):
-            for scene_name in sorted(self.scenes[cfa_type].keys()):
-                scene_info = self.scenes[cfa_type][scene_name]
+        missing = []
+        for cfa_type, scenes in self.scenes.items():
+            for scene_name, scene_info in scenes.items():
                 for img_info in scene_info.all_images():
-                    if img_info.local_path is not None and img_info.local_path.exists():
-                        continue
-
-                    candidates = self._candidate_paths(cfa_type, scene_name, img_info)
-                    for candidate in candidates:
-                        if candidate.exists():
-                            img_info.local_path = candidate
-                            break
-                    else:
-                        img_info.local_path = candidates[0]
-                        missing.append(img_info)
-                        continue
-
-                    if img_info.local_path is None or not img_info.local_path.exists():
-                        img_info.local_path = candidates[0]
+                    if img_info.local_path is None:
                         missing.append(img_info)
 
-        self._missing_file_count = len(missing)
-        self._dataset_complete = self._missing_file_count == 0
-
-        for img_info in missing:
-            yield img_info
-
-    def get_missing_files(self) -> List[ImageInfo]:
-        """Get list of files not found locally."""
-        return list(self.iter_missing_files())
+        return missing
 
     def get_available_scenes(self) -> List[SceneInfo]:
         """Get scenes that have at least one GT image available locally."""
         if not self._loaded:
             self.load_index()
 
-        available: List[SceneInfo] = []
-        for scenes in self.scenes.values():
-            for scene_info in scenes.values():
+        available = []
+        for cfa_type, scenes in self.scenes.items():
+            for scene_name, scene_info in scenes.items():
                 gt_img = scene_info.get_gt_image()
-                if gt_img and gt_img.local_path is not None and gt_img.local_path.exists():
+                if gt_img and gt_img.local_path is not None:
                     available.append(scene_info)
 
         return available
@@ -456,11 +354,11 @@ class DatasetIndex:
         self, extensions: Optional[List[str]] = None
     ) -> Generator[SceneInfo, None, None]:
         """Yield scenes sequentially in order.
-
+        
         Args:
             extensions: Optional list of file extensions to filter by (e.g., ['.arw', '.dng'])
                        If None, all scenes are yielded regardless of extension.
-
+        
         Yields:
             SceneInfo objects in sequential order
         """
@@ -470,12 +368,12 @@ class DatasetIndex:
         for cfa_type in self.sorted_cfa_types:
             for scene_name in sorted(self.scenes[cfa_type].keys()):
                 scene_info = self.scenes[cfa_type][scene_name]
-
+                
                 if extensions is None:
                     yield scene_info
                 else:
                     gt_img = scene_info.get_gt_image()
-                    if gt_img and gt_img.local_path is not None and gt_img.local_path.exists():
+                    if gt_img and gt_img.local_path is not None:
                         ext_lower = gt_img.local_path.suffix.lower()
                         if any(ext_lower == ext.lower() for ext in extensions):
                             yield scene_info
@@ -487,13 +385,13 @@ class DatasetIndex:
         seed: Optional[int] = None,
     ) -> Generator[SceneInfo, None, None]:
         """Yield random scenes without replacement.
-
+        
         Args:
             count: Number of scenes to yield. If None, yields all scenes.
             extensions: Optional list of file extensions to filter by (e.g., ['.arw', '.dng'])
                        If None, all scenes are considered regardless of extension.
             seed: Random seed for reproducibility
-
+        
         Yields:
             SceneInfo objects in random order
         """
@@ -503,180 +401,25 @@ class DatasetIndex:
         if seed is not None:
             random.seed(seed)
 
-        all_scenes: List[SceneInfo] = []
-        for scenes in self.scenes.values():
-            for scene_info in scenes.values():
+        all_scenes = []
+        for cfa_type, scenes in self.scenes.items():
+            for scene_name, scene_info in scenes.items():
                 if extensions is None:
                     all_scenes.append(scene_info)
                 else:
                     gt_img = scene_info.get_gt_image()
-                    if (
-                        gt_img
-                        and gt_img.local_path is not None
-                        and gt_img.local_path.exists()
-                        and any(
-                            gt_img.local_path.suffix.lower() == ext.lower()
-                            for ext in extensions
-                        )
-                    ):
-                        all_scenes.append(scene_info)
+                    if gt_img and gt_img.local_path is not None:
+                        if any(gt_img.local_path.suffix.lower() == ext.lower() 
+                               for ext in extensions):
+                            all_scenes.append(scene_info)
 
         random.shuffle(all_scenes)
-
+        
         num_to_yield = count if count is not None else len(all_scenes)
         for i, scene_info in enumerate(all_scenes):
             if i >= num_to_yield:
                 break
             yield scene_info
-
-    async def async_get_dataset_files(self) -> Dict[str, int]:
-        """Asynchronously fetch the list of files in the dataset and their IDs."""
-        async with httpx.AsyncClient(timeout=METADATA_TIMEOUT) as client:
-            mapping = await self._ensure_remote_file_index(client, force_refresh=True)
-        return dict(mapping)
-
-    async def _ensure_remote_file_index(
-        self,
-        client: httpx.AsyncClient,
-        *,
-        force_refresh: bool = False,
-    ) -> Dict[str, int]:
-        """Ensure the remote file index is populated and return it."""
-        if force_refresh:
-            self._remote_file_index = None
-
-        if self._remote_file_index is None:
-            response = await client.get(DATASET_API_URL)
-            response.raise_for_status()
-            payload = response.json()
-            data = payload.get("data", []) if isinstance(payload, dict) else []
-
-            index: Dict[str, int] = {}
-            for entry in data:
-                if not isinstance(entry, dict):
-                    continue
-                data_file = entry.get("dataFile")
-                if not isinstance(data_file, dict):
-                    continue
-
-                filename = data_file.get("filename")
-                file_id = data_file.get("id")
-
-                if isinstance(filename, str) and isinstance(file_id, int):
-                    index[filename] = file_id
-
-            self._remote_file_index = index
-
-        return self._remote_file_index
-
-    async def _download_and_validate(
-        self,
-        client: httpx.AsyncClient,
-        img_info: ImageInfo,
-        file_id: int,
-        *,
-        timeout: httpx.Timeout,
-    ) -> None:
-        """Download a single file and validate it."""
-        if img_info.local_path is None:
-            raise ValueError("Local path must be set before download")
-
-        url = f"https://dataverse.uclouvain.be/api/access/datafile/{file_id}"
-        response = await client.get(url, timeout=timeout)
-        response.raise_for_status()
-        content = await response.aread()
-
-        def _write_file() -> None:
-            img_info.local_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(img_info.local_path, "wb") as handle:
-                handle.write(content)
-
-        await trio.to_thread.run_sync(_write_file)
-
-        valid = await trio.to_thread.run_sync(self.validate_file, img_info)
-        if not valid:
-            raise ValueError(f"Downloaded file {img_info.filename} failed validation")
-
-    async def async_download_missing_files(
-        self,
-        max_concurrent: int = 5,
-        *,
-        limit: Optional[int] = None,
-    ) -> None:
-        """Asynchronously download missing files with optional concurrency and limit."""
-        if not self._loaded:
-            await self.async_load_index()
-
-        await self.async_discover_local_files()
-        missing = list(self.iter_missing_files())
-
-        if limit is not None:
-            if limit <= 0:
-                missing = []
-            else:
-                missing = missing[:limit]
-
-        if not missing:
-            print("No missing files to download.")
-            return
-
-        console = Console()
-        errors: List[str] = []
-        limiter = trio.CapacityLimiter(max(1, int(max_concurrent)))
-
-        progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}", justify="right"),
-            BarColumn(bar_width=None),
-            MofNCompleteColumn(),
-            TextColumn("•"),
-            TimeElapsedColumn(),
-            TextColumn("•"),
-            TimeRemainingColumn(),
-            console=console,
-            refresh_per_second=10,
-        )
-
-        with progress:
-            async with httpx.AsyncClient(timeout=DOWNLOAD_TIMEOUT) as client:
-                await self._ensure_remote_file_index(client, force_refresh=True)
-
-                download_task = progress.add_task(
-                    f"[green]Downloading {len(missing)} files", total=len(missing)
-                )
-
-                async def worker(image_info: ImageInfo) -> None:
-                    async with limiter:
-                        try:
-                            file_index = await self._ensure_remote_file_index(client)
-                            file_id = file_index.get(image_info.filename)
-                            if file_id is None:
-                                raise FileNotFoundError(
-                                    f"File {image_info.filename} not found in remote index"
-                                )
-                            await self._download_and_validate(
-                                client, image_info, file_id, timeout=DOWNLOAD_TIMEOUT
-                            )
-                            progress.update(download_task, advance=1)
-                        except Exception as exc:
-                            error_msg = f"Failed to download {image_info.filename}: {exc}"
-                            errors.append(error_msg)
-                            console.print(f"[red]ERROR:[/red] {error_msg}")
-                            progress.update(download_task, advance=1)
-
-                async with trio.open_nursery() as nursery:
-                    for img in missing:
-                        nursery.start_soon(worker, img)
-
-                progress.update(download_task, completed=len(missing))
-
-        if errors:
-            console.print(f"\n[red]Completed with {len(errors)} errors[/red]")
-        else:
-            console.print("\n[green]All downloads completed successfully![/green]")
-
-        await self.async_discover_local_files()
-        list(self.iter_missing_files())  # refresh cached counters  # refresh cached counters  # refresh cached counters
 
     def print_summary(self) -> None:
         """Print a summary of the dataset index."""
@@ -701,29 +444,17 @@ class DatasetIndex:
                 total_noisy += len(scene_info.noisy_images)
 
                 for img in scene_info.clean_images:
-                    if img.local_path is not None and img.local_path.exists():
+                    if img.local_path is not None:
                         local_clean += 1
 
                 for img in scene_info.noisy_images:
-                    if img.local_path is not None and img.local_path.exists():
+                    if img.local_path is not None:
                         local_noisy += 1
 
             print(f"  Clean images: {local_clean}/{total_clean} local")
             print(f"  Noisy images: {local_noisy}/{total_noisy} local")
 
         print("\n" + "=" * 80 + "\n")
-
-    def _candidate_paths(
-        self,
-        cfa_type: str,
-        scene_name: str,
-        img_info: ImageInfo,
-    ) -> List[Path]:
-        """Return candidate local paths for an image."""
-        scene_dir = DATASET_ROOT / cfa_type / scene_name
-        if img_info.is_clean:
-            return [scene_dir / "gt" / img_info.filename, scene_dir / img_info.filename]
-        return [scene_dir / img_info.filename]
 
 
 def compute_sha1(file_path: Path) -> str:
@@ -736,8 +467,8 @@ def compute_sha1(file_path: Path) -> str:
         SHA1 hash as hex string
     """
     sha1 = hashlib.sha1()
-    with open(file_path, "rb") as handle:
-        while chunk := handle.read(8192):
+    with open(file_path, "rb") as f:
+        while chunk := f.read(8192):
             sha1.update(chunk)
     return sha1.hexdigest()
 

@@ -1,14 +1,12 @@
 """Test FFT phase correlation on synthetic data to understand sign convention."""
-
 import numpy as np
 import sys
-
 sys.path.append("src")
 from rawnind.libs.rawproc import shift_images
 
-print("=" * 80)
+print("="*80)
 print("FFT SIGN CONVENTION TEST")
-print("=" * 80)
+print("="*80)
 print()
 
 # Create synthetic test image
@@ -40,48 +38,46 @@ print("Confirmed: correct shift is (-4, -4)")
 print()
 
 # Now test FFT phase correlation
-print("=" * 80)
+print("="*80)
 print("FFT PHASE CORRELATION TEST")
-print("=" * 80)
+print("="*80)
 print()
-
 
 def fft_phase_correlate(anchor, target):
     """Standard FFT phase correlation."""
     anchor_img = anchor[0]
     target_img = target[0]
-
+    
     # Mean center to remove DC component
     anchor_centered = anchor_img - anchor_img.mean()
     target_centered = target_img - target_img.mean()
-
+    
     # FFT
     f1 = np.fft.fft2(anchor_centered)
     f2 = np.fft.fft2(target_centered)
-
+    
     # Cross-power spectrum (phase correlation)
     cross_power = (f1 * np.conj(f2)) / (np.abs(f1 * np.conj(f2)) + 1e-10)
-
+    
     # Inverse FFT to get correlation
     correlation = np.fft.ifft2(cross_power).real
-
+    
     # Find peak
     h, w = correlation.shape
     peak_y, peak_x = np.unravel_index(np.argmax(correlation), correlation.shape)
-
+    
     print(f"Raw peak position: ({peak_y}, {peak_x}) out of shape ({h}, {w})")
-
+    
     # The peak tells us the displacement from target to anchor
     # But we need to handle FFT wraparound
     if peak_y > h // 2:
         peak_y -= h
     if peak_x > w // 2:
         peak_x -= w
-
+    
     print(f"After wraparound handling: ({peak_y}, {peak_x})")
-
+    
     return (peak_y, peak_x), correlation
-
 
 shift_from_fft, corr = fft_phase_correlate(img, shifted_img)
 
@@ -94,9 +90,9 @@ print()
 # The issue: FFT tells us where target is displaced FROM anchor
 # But we need to know where target is POSITIONED relative to anchor
 
-print("=" * 80)
+print("="*80)
 print("UNDERSTANDING THE SIGN CONVENTION")
-print("=" * 80)
+print("="*80)
 print()
 
 print("1. We rolled content DOWN by 4, RIGHT by 4")
@@ -106,9 +102,7 @@ print()
 
 print("2. FFT phase correlation finds displacement:")
 print("   → It finds that anchor is at position (4,4) in target's coordinate system")
-print(
-    "   → Or equivalently: target's origin is at (-4,-4) in anchor's coordinate system"
-)
+print("   → Or equivalently: target's origin is at (-4,-4) in anchor's coordinate system")
 print()
 
 print("3. shift_images convention:")
@@ -135,9 +129,9 @@ loss = np.abs(anchor_out - target_out).mean()
 print(f"   Loss with negated shift: {loss:.6f} {'✅' if loss < 0.001 else '❌'}")
 print()
 
-print("=" * 80)
+print("="*80)
 print("CONCLUSION")
-print("=" * 80)
+print("="*80)
 print("The FFT implementation is NEGATING when it should NOT, or vice versa.")
 print("FFT returns displacement, but we're interpreting it incorrectly.")
 print()

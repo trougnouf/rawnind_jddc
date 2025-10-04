@@ -1,8 +1,6 @@
 """Test to understand shift_images convention."""
-
 import numpy as np
 import sys
-
 sys.path.append("src")
 from rawnind.libs.rawproc import shift_images
 
@@ -24,12 +22,10 @@ print()
 print("Testing shift_images(anchor=original, target=shifted_down_right, shift):")
 print()
 
-for test_shift in [(0, 0), (2, 2), (-2, -2), (3, 3)]:
+for test_shift in [(0,0), (2,2), (-2,-2), (3,3)]:
     anchor_out, target_out = shift_images(img, shifted_down_right, test_shift)
     loss = np.abs(anchor_out - target_out).mean()
     print(f"shift={test_shift}: anchor_out.shape={anchor_out.shape}, loss={loss:.6f}")
 
 print()
-print(
-    "Expected: shift=(2,2) should give lowest loss since target is shifted down-right by 2"
-)
+print("Expected: shift=(2,2) should give lowest loss since target is shifted down-right by 2")

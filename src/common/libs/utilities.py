@@ -24,12 +24,10 @@ try:
     import torch
     import torch.multiprocessing as mp
     from torch.multiprocessing import Pool
-
     TORCH_AVAILABLE = True
 except ImportError:
     from multiprocessing import Pool
     import multiprocessing as mp
-
     TORCH_AVAILABLE = False
 
 
@@ -46,6 +44,8 @@ import yaml
 
 # sys.path += ['..', '.']
 NUM_THREADS = os.cpu_count()
+
+
 
 
 def checksum(fpath, htype="sha1"):
@@ -102,7 +102,7 @@ def mt_runner(
 ) -> Iterable[Any]:
     """
     Multiprocessing runner.
-
+    
     Args:
         fun: function to run
         argslist: list of arguments to pass to function
@@ -114,21 +114,21 @@ def mt_runner(
     """
     if num_threads is None:
         num_threads = NUM_THREADS
-
+    
     # Check if verbose flag is set in argslist
     verbose = False
     if argslist and len(argslist) > 0:
-        if isinstance(argslist[0], dict) and "verbose" in argslist[0]:
-            verbose = argslist[0]["verbose"]
-
+        if isinstance(argslist[0], dict) and 'verbose' in argslist[0]:
+            verbose = argslist[0]['verbose']
+    
     # Set multiprocessing start method to spawn for CUDA compatibility
     if TORCH_AVAILABLE:
         try:
-            mp.set_start_method("spawn", force=True)
+            mp.set_start_method('spawn', force=True)
         except RuntimeError:
             # Start method already set
             pass
-
+    
     if num_threads == 1:
         # Single-threaded execution
         results = []
@@ -138,7 +138,7 @@ def mt_runner(
             else:
                 results.append(fun(args))
         return results
-
+    
     # Use context manager for automatic cleanup of pool resources
     with Pool(num_threads) as pool:
         try:
@@ -150,7 +150,7 @@ def mt_runner(
                 amap = pool.imap
             else:
                 amap = pool.imap_unordered
-
+            
             if ordered:
                 print("mt_runner warning: ordered=True might be slower.")
                 if progress_bar:
@@ -163,43 +163,32 @@ def mt_runner(
                     ret = []
                     try:
                         # Use a stationary progress bar that updates in place
-                        bar_format = "{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
-                        pbar = tqdm.tqdm(
-                            amap(fun, argslist),
-                            total=len(argslist),
-                            desc=progress_desc,
-                            bar_format=bar_format,
-                            position=0,
-                            leave=True,
-                            dynamic_ncols=True,
-                            file=sys.stderr,
-                            mininterval=0.05,
-                        )
-
+                        bar_format = '{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+                        pbar = tqdm.tqdm(amap(fun, argslist), total=len(argslist), desc=progress_desc, 
+                                       bar_format=bar_format, position=0, leave=True, 
+                                       dynamic_ncols=True, file=sys.stderr, mininterval=0.05)
+                        
                         current_scene = None
                         current_method = None
-
+                        
                         for i, ares in enumerate(pbar):
                             ret.append(ares)
                             # Extract scene and method info for display (only in verbose mode)
-                            if verbose and hasattr(ares, "get") and "gt_fpath" in ares:
+                            if verbose and hasattr(ares, 'get') and 'gt_fpath' in ares:
                                 # Extract scene and actual method used from the result
-                                scene_name = ares.get("image_set", "unknown")
-                                method = ares.get("alignment_method", "unknown")
-
+                                scene_name = ares.get('image_set', 'unknown')
+                                method = ares.get('alignment_method', 'unknown')
+                                
                                 # Only update description if scene or method changed to avoid flicker
-                                if (
-                                    scene_name != current_scene
-                                    or method != current_method
-                                ):
+                                if scene_name != current_scene or method != current_method:
                                     current_scene = scene_name
                                     current_method = method
                                     desc = f"Scene: {scene_name:<30} Method: {method.upper()}"
                                     pbar.set_description(desc)
-
+                        
                         # Don't close the progress bar - leave it on screen showing final state
                         pbar.close()
-
+                                
                     except (TypeError, KeyboardInterrupt) as e:
                         if isinstance(e, KeyboardInterrupt):
                             logging.info("Multiprocessing interrupted by user")
@@ -209,12 +198,12 @@ def mt_runner(
                         raise
                 else:
                     ret = list(amap(fun, argslist))
-
+                    
         except Exception as e:
             logging.error(f"Multiprocessing error: {e}")
             # Context manager will handle cleanup
             raise
-
+            
         return ret
 
 

@@ -6,7 +6,6 @@ This module provides alignment backends for noisy RAW images to clean ground tru
 Key insight: Alignment operates directly on RAW/mosaiced data using CFA-aware FFT.
 This avoids wasteful demosaicing just to produce shift metadata.
 """
-
 import numpy as np
 from typing import Union, Tuple, Optional, List, Literal
 
@@ -53,7 +52,7 @@ def shift_images(
 ) -> Union[tuple, tuple]:
     """
     Shift images in y,x directions and crop both accordingly.
-
+    
     Handles both RGB and Bayer patterns correctly.
     """
     anchor_img_out = anchor_img
@@ -62,7 +61,7 @@ def shift_images(
     if anchor_img.shape[0] == 4:
         raise NotImplementedError("shift_images: Bayer anchor_img is not implemented.")
     target_shift_divisor = target_is_bayer + 1
-
+    
     if shift[0] > 0:  # y
         anchor_img_out = anchor_img_out[..., shift[0] :, :]
         target_img_out = target_img_out[
@@ -74,7 +73,9 @@ def shift_images(
 
     elif shift[0] < 0:  # y
         anchor_img_out = anchor_img_out[..., : shift[0], :]
-        target_img_out = target_img_out[..., -(shift[0] // target_shift_divisor) :, :]
+        target_img_out = target_img_out[
+            ..., -(shift[0] // target_shift_divisor) :, :
+        ]
         if shift[0] % 2:
             anchor_img_out = anchor_img_out[..., 1:, :]
             target_img_out = target_img_out[..., 1:, :]
@@ -108,10 +109,10 @@ def find_best_alignment_cpu(
 ) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
     """
     CPU-based CFA-aware FFT alignment for RAW images.
-
+    
     This is just an alias for find_best_alignment_fft_cfa() for consistency.
     Hierarchical methods are NOT used - they're fundamentally broken on RAW/CFA data.
-
+    
     See docs/BENCHMARK_FINDINGS.md: "Hierarchical method fundamentally broken on RAW/CFA data"
     """
     return find_best_alignment_fft_cfa(
@@ -129,35 +130,35 @@ def find_best_alignment_fft_cfa(
 ) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
     """
     CFA-aware FFT alignment for RAW/mosaiced images.
-
+    
     This uses the production FFT implementation from raw.py that operates directly
     on RAW mosaiced data, avoiding wasteful demosaicing just to get shift metadata.
-
+    
     Args:
         anchor_raw: Reference RAW image [1, H, W]
-        target_raw: Target RAW image to align [1, H, W]
+        target_raw: Target RAW image to align [1, H, W]  
         anchor_metadata: Metadata dict containing 'RGBG_pattern'
         method: 'median' or 'mean' for combining channel shifts
         return_loss_too: If True, compute and return L1 loss after alignment
         verbose: Print per-channel shift detections
-
+        
     Returns:
         shift: (dy, dx) tuple
         OR (shift, loss) if return_loss_too=True
     """
     from rawnind.libs import raw
-
+    
     # Run CFA-aware FFT
     shift, channel_shifts = raw.fft_phase_correlate_cfa(
         anchor_raw, target_raw, anchor_metadata, method=method, verbose=verbose
     )
-
+    
     if return_loss_too:
         # Compute L1 loss after alignment
         anchor_aligned, target_aligned = shift_images(anchor_raw, target_raw, shift)
         loss = np_l1(anchor_aligned, target_aligned)
         return shift, float(loss)
-
+    
     return shift
 
 
@@ -170,18 +171,18 @@ def find_best_alignment_bruteforce_rgb(
 ) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
     """
     Brute-force alignment search on RGB/demosaiced images.
-
+    
     Original neighborhood search method from initial codebase.
     Uses L1 loss minimization with iterative neighbor exploration.
     Slow but deterministic - primarily kept for reference/comparison.
-
+    
     Args:
         anchor_img: Reference RGB image
         target_img: Target RGB image to align
         max_shift_search: Maximum shift to search (Manhattan distance)
         return_loss_too: If True, return loss along with shift
         verbose: Print shift exploration details
-
+        
     Returns:
         shift: (dy, dx) tuple
         OR (shift, loss) if return_loss_too=True
@@ -191,7 +192,9 @@ def find_best_alignment_bruteforce_rgb(
         f"{anchor_img.mean()=}, {target_img.mean()=}"
     )
     current_best_shift: tuple = (0, 0)
-    shifts_losses: dict = {current_best_shift: np_l1(anchor_img, target_img, avg=True)}
+    shifts_losses: dict = {
+        current_best_shift: np_l1(anchor_img, target_img, avg=True)
+    }
     if verbose:
         print(f"{shifts_losses=}")
 
@@ -239,18 +242,18 @@ def find_best_alignment_bruteforce_rgb(
 ) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
     """
     Brute-force alignment search on RGB/demosaiced images.
-
+    
     Original neighborhood search method from initial codebase.
     Uses L1 loss minimization with iterative neighbor exploration.
     Slow but deterministic - primarily kept for reference/comparison.
-
+    
     Args:
         anchor_img: Reference RGB image
         target_img: Target RGB image to align
         max_shift_search: Maximum shift to search (Manhattan distance)
         return_loss_too: If True, return loss along with shift
         verbose: Print shift exploration details
-
+        
     Returns:
         shift: (dy, dx) tuple
         OR (shift, loss) if return_loss_too=True
@@ -260,7 +263,9 @@ def find_best_alignment_bruteforce_rgb(
         f"{anchor_img.mean()=}, {target_img.mean()=}"
     )
     current_best_shift: tuple = (0, 0)
-    shifts_losses: dict = {current_best_shift: np_l1(anchor_img, target_img, avg=True)}
+    shifts_losses: dict = {
+        current_best_shift: np_l1(anchor_img, target_img, avg=True)
+    }
     if verbose:
         print(f"{shifts_losses=}")
 
