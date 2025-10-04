@@ -687,7 +687,10 @@ class DatasetIndex:
         max_concurrent: int = 5,
         progress: bool = True
     ) -> Tuple[int, int]:
-        """Download missing files with concurrency control.
+        """Download missing files with concurrency control and progress reporting.
+        
+        Uses streaming discovery via async_iter_missing_files(), which automatically
+        emits LOCAL_PATHS_UPDATED event upon completion.
         
         Args:
             max_concurrent: Maximum concurrent downloads
@@ -699,64 +702,42 @@ class DatasetIndex:
         if not self._loaded:
             self.load_index()
         
-        # Refresh state (emits LOCAL_PATHS_UPDATED automatically)
-        self.discover_local_files()
-        
-        missing = self.get_missing_files()
-        
-        if not missing:
-            return 0, 0
-        
         successful = 0
         failed = 0
         
         async with trio.open_nursery() as nursery:
             semaphore = trio.Semaphore(max_concurrent)
             
-            pbar = tqdm(total=len(missing), desc="Downloading", unit="file") if progress else None
+            # Note: Using regular tqdm (not tqdm.asyncio) because we track download
+            # completion (via pbar.update() in tasks), not iteration. tqdm.asyncio is
+            # for wrapping async iterables to track iteration progress.
+            pbar = tqdm(desc="Downloading", unit="file") if progress else None
             
-            async def download_task(img: ImageInfo):
-                nonlocal successful, failed
-                async with semaphore:
-                    try:
-                        # Construct destination path
-                        scene = None
-                        for cfa_scenes in self.scenes.values():
-                            for s in cfa_scenes.values():
-                                if img in s.all_images():
-                                    scene = s
-                                    break
-                            if scene:
-                                break
-                        
-                        if scene:
-                            cfa_dir = self.dataset_root / scene.cfa_type
-                            scene_dir = cfa_dir / scene.scene_name
-                            if img.is_clean:
-                                dest_path = scene_dir / "gt" / img.filename
-                            else:
-                                dest_path = scene_dir / img.filename
-                            
-                            await self._download_file(img.download_url, dest_path)
+            # Stream missing files as they're discovered
+            # Event emission happens automatically in async_iter_missing_files
+            async for img_info in self.async_iter_missing_files():
+                async def download_task(img: ImageInfo):
+                    nonlocal successful, failed
+                    async with semaphore:
+                        try:
+                            await self._download_file(img.download_url, img.local_path)
                             successful += 1
-                        else:
-                            logger.error(f"Could not find scene for {img.filename}")
+                        except Exception as e:
+                            logger.error(f"Failed to download {img.filename}: {e}")
                             failed += 1
-                    except Exception as e:
-                        logger.error(f"Failed to download {img.filename}: {e}")
-                        failed += 1
-                    finally:
-                        if pbar:
-                            pbar.update(1)
-            
-            for img_info in missing:
+                        finally:
+                            if pbar is not None:
+                                pbar.update(1)
+                
                 nursery.start_soon(download_task, img_info)
             
-            if pbar:
+            if pbar is not None:
                 pbar.close()
         
-        # Refresh to verify downloads (emits LOCAL_PATHS_UPDATED automatically)
-        self.discover_local_files()
+        # No need for explicit discover_local_files() here
+        # async_iter_missing_files() already emitted LOCAL_PATHS_UPDATED
+        # If you want to re-verify downloaded files:
+        # self.discover_local_files()  # This would emit the event again
         
         return successful, failed
 
