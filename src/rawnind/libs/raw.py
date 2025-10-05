@@ -69,7 +69,75 @@ def raw_fpath_to_mono_img_and_metadata(
     crop_all: bool = True,
     return_float: bool = True,
 ) -> tuple[np.ndarray, dict]:
-    """Convert from raw fpath to (tuple) [1,h,w] numpy array and metadata dictionary."""
+    """Load a RAW camera file and extract mosaiced sensor data with metadata.
+
+    This is the entry point for reading proprietary RAW formats (CR2, NEF, ARW, RAF, etc.)
+    and converting them to a standardized representation suitable for neural network processing.
+    The function handles the complexities of different camera sensors: Bayer patterns (2×2 RGGB,
+    GBRG, BGGR, GRBG) and X-Trans patterns (6×6 non-Bayer), border cropping, and conversion to
+    a canonical RGGB layout when requested.
+
+    The mosaiced image is returned as a single-channel array where each pixel contains exactly
+    one color measurement (red, green, or blue depending on the color filter at that location).
+    The metadata dictionary provides everything needed for subsequent processing: white balance
+    coefficients, color correction matrices, black/white levels, and the exact pattern layout.
+
+    Bayer pattern conversion logic:
+    Different cameras use different Bayer starting points (RGGB, GBRG, BGGR, GRBG). When
+    force_rggb=True, the function crops 1-2 pixels from borders to align all patterns to RGGB,
+    simplifying downstream processing at the cost of slight resolution loss. X-Trans sensors
+    (6×6 pattern) are not converted, as their structure is fundamentally different.
+
+    Border handling:
+    RAW files often include inactive pixels at image borders (optical black regions for
+    calibration). The function reads border offsets from metadata and removes these regions.
+    Additionally, dimensions are cropped to multiples of the pattern size (4 for Bayer, 6 for
+    X-Trans) to ensure clean tiling.
+
+    Black/white point normalization:
+    When return_float=True, sensor values are scaled from their native range (typically 0-4095
+    for 12-bit or 0-16383 for 14-bit) to [0,1] floating point, accounting for black level
+    offset and sensor saturation point. This normalization is crucial for neural network
+    training, which expects inputs in a consistent range.
+
+    Args:
+        fpath: Path to RAW file (CR2, NEF, ARW, RAF, DNG, etc.)
+        force_rggb: Convert all Bayer patterns to RGGB by cropping borders (ignored for X-Trans)
+        crop_all: Crop to the region declared as valid in metadata (removes borders)
+        return_float: Scale pixel values to [0,1] using black/white points; if False, returns
+            raw integer sensor values
+
+    Returns:
+        Tuple of (mono_img, metadata) where:
+        - mono_img: np.ndarray of shape (1, H, W), mosaiced sensor data, float32 if return_float
+            else uint16
+        - metadata: dict containing:
+            - 'camera_whitebalance': [R, G, B, G] multipliers from camera
+            - 'daylight_whitebalance': [R, G, B, G] for standard illuminant
+            - 'rgb_xyz_matrix': Camera RGB to CIE XYZ conversion (4×3 for RGBG sensors)
+            - 'black_level_per_channel': Sensor dark current offset per channel
+            - 'white_level': Sensor saturation point
+            - 'RGBG_pattern': 2×2 (Bayer) or 6×6 (X-Trans) array of color indices (0=R, 1=G, 2=B, 3=G)
+            - 'bayer_pattern': Pattern name string ('RGGB', 'GBRG', etc.)
+            - 'sizes': Dict with image dimensions (raw_height, raw_width, top_margin, etc.)
+
+    Raises:
+        ValueError: If file cannot be opened, has unsupported CFA pattern, or lacks required metadata
+
+    Example:
+        >>> mono, meta = raw_fpath_to_mono_img_and_metadata('IMG_0001.CR2')
+        >>> mono.shape
+        (1, 3472, 5208)
+        >>> meta['bayer_pattern']
+        'RGGB'
+        >>> meta['camera_whitebalance']
+        array([2.3984, 1.0, 1.5234, 1.0])
+
+    Note:
+        X-Trans files (Fujifilm RAF) are handled but not converted to RGGB. Their 6×6 pattern
+        remains intact. For X-Trans processing, use the specialized xtrans_to_OpenEXR workflow
+        instead of attempting to demosaic directly.
+    """
 
     def mono_any_to_mono_rggb(
         mono_img: np.ndarray, metadata: dict, whole_image_raw_pattern
@@ -192,7 +260,7 @@ def raw_fpath_to_mono_img_and_metadata(
         assert mono_img.shape[1:] == (
             metadata["sizes"]["raw_height"],
             metadata["sizes"]["raw_width"],
-        ), f"{mono_img.shape[1:]=}, {metadata["sizes"]=}"
+        ), f"{mono_img.shape[1:]=}, {metadata[" sizes"]=}"
         # Keep original pattern size - don't force to 2x2 for X-Trans
         # metadata["RGBG_pattern"] = whole_image_raw_pattern[:2, :2]  # Old Bayer-only code
         # set_bayer_pattern_name(metadata)  # Pattern already set earlier
@@ -442,11 +510,62 @@ def apply_whitebalance(
     in_place: bool = True,
     reverse: bool = False,
 ) -> None:
-    """
-    Apply white balance.
+    """Apply or remove white balance correction to neutralize color casts from illumination.
 
-    wb_type values: daylight or camera.
-    reverse: undo white balance.
+    White balance compensates for the color temperature of the scene illumination. Indoor
+    tungsten lighting appears orange to cameras calibrated for daylight; fluorescent lighting
+    appears greenish. Without white balance correction, colors are distorted—what should be
+    neutral gray appears tinted.
+
+    Camera sensors measure scene radiance, which is the product of surface reflectance and
+    illumination spectrum. Under tungsten lighting, a white surface reflects more red light
+    (because tungsten emits more red). White balance multiplies each color channel to
+    compensate: boost blue to counter the excess red, producing neutral colors.
+
+    This function applies per-channel multipliers stored in the RAW file metadata. The
+    'daylight' multipliers normalize to standard D65 daylight illuminant. The 'camera'
+    multipliers use whatever white balance the camera computed when the image was captured
+    (often auto white balance based on scene analysis).
+
+    The multipliers are normalized such that green = 1.0, with red and blue scaled relative
+    to green. Typical values might be [2.4, 1.0, 1.5], indicating the blue channel needs 1.5×
+    amplification and red needs 2.4× to neutralize a warm (low color temperature) illuminant.
+
+    Bayer vs. RGB handling:
+    For mosaiced Bayer data (shape (1, H, W)), multipliers are applied in a checkerboard
+    pattern matching the RGGB layout. For demosaiced RGB (shape (3, H, W)) or 4-channel
+    Bayer (4, H/2, W/2), multipliers apply to entire channels.
+
+    Reversing white balance:
+    Setting reverse=True divides instead of multiplies, useful for "de-white-balancing" to
+    recover original sensor measurements from already-corrected images.
+
+    Args:
+        img: Image to white balance, shape (1, H, W) for mosaiced Bayer, (3, H, W) for RGB,
+            or (4, H/2, W/2) for 4-channel Bayer
+        metadata: Dict containing '{wb_type}_whitebalance_norm' with [R, G, B, G] multipliers
+        wb_type: 'daylight' for D65 normalization or 'camera' for as-shot white balance
+        in_place: If True, modify img directly; if False, return modified copy
+        reverse: If True, divide by multipliers (undo white balance) instead of multiply
+
+    Returns:
+        None if in_place=True (img is modified), otherwise returns the corrected image
+
+    Example:
+        >>> mono, meta = raw_fpath_to_mono_img_and_metadata('IMG_0001.CR2')
+        >>> meta['daylight_whitebalance_norm']
+        array([2.3984, 1.0, 1.5234, 1.0])
+        >>> apply_whitebalance(mono, meta, wb_type='daylight')
+        >>> # Red pixels now multiplied by 2.4, blue by 1.5, greens unchanged
+        >>> # Image colors now appear as they would under daylight
+
+    Note:
+        White balance amplifies channels, which can push values above 1.0 even if the
+        original image was normalized to [0,1]. This is expected and correct—highlights
+        that were near saturation in one channel may exceed 1.0 in others after balancing.
+
+        The function assumes RGGB pattern when operating on mosaiced Bayer data. Other
+        patterns will raise NotImplementedError.
     """
     op = operator.truediv if reverse else operator.mul
     # step 5: apply camera reference white balance
@@ -484,6 +603,38 @@ def apply_whitebalance(
 
 
 def raw_fpath_to_rggb_img_and_metadata(fpath: str, return_float: bool = True):
+    """Load RAW file and return 4-channel Bayer RGGB image plus metadata.
+
+    Convenience wrapper around raw_fpath_to_mono_img_and_metadata that reshapes the
+    single-channel mosaiced data into a 4-channel representation where each channel
+    contains one color component from the Bayer pattern. This format is more convenient
+    for neural networks that process Bayer data directly, as it allows standard 2D
+    convolutions to operate independently on each color channel without mixing pixels
+    from different color filters.
+
+    The RGGB layout separates:
+    - Channel 0: Red pixels (top-left in each 2×2 block)
+    - Channel 1: Green pixels (top-right)
+    - Channel 2: Green pixels (bottom-left)
+    - Channel 3: Blue pixels (bottom-right)
+
+    Spatial resolution in each channel is half the original in each dimension
+    (width/2 × height/2), since each 2×2 Bayer block yields one pixel per channel.
+
+    Args:
+        fpath: Path to RAW camera file
+        return_float: Scale to [0,1] using black/white points if True
+
+    Returns:
+        Tuple of (rggb_img, metadata) where:
+        - rggb_img: np.ndarray of shape (4, H/2, W/2), Bayer channels separated
+        - metadata: Same as raw_fpath_to_mono_img_and_metadata
+
+    Example:
+        >>> rggb, meta = raw_fpath_to_rggb_img_and_metadata('IMG_0001.CR2')
+        >>> rggb.shape  # 4 channels, each half resolution
+        (4, 1736, 2604)
+    """
     mono_img, metadata = raw_fpath_to_mono_img_and_metadata(
         fpath, return_float=return_float
     )
@@ -493,10 +644,68 @@ def raw_fpath_to_rggb_img_and_metadata(fpath: str, return_float: bool = True):
 def demosaic(
     mono_img: np.ndarray, metadata: dict, method=cv2.COLOR_BayerRGGB2RGB_EA
 ) -> np.ndarray:
-    """
-    Transform mono image to camRGB colors.
+    """Reconstruct full-color RGB image from mosaiced Bayer sensor data.
 
-    Debayering methods include COLOR_BayerRGGB2RGB, COLOR_BayerRGGB2RGB_EA.
+    Demosaicing (also called debayering) is the process of interpolating missing color channels
+    at each pixel location. A Bayer sensor measures only one color per pixel—red, green, or
+    blue depending on the color filter at that location. To produce a full-color image, the
+    other two channels must be inferred from neighboring pixels.
+
+    This is an inherently ill-posed problem. Near edges, naïve interpolation creates color
+    fringing artifacts (false colors where sharp transitions occur). In textured regions,
+    repetitive patterns can cause moiré. The demosaicing algorithm must balance between
+    preserving sharp edges and avoiding artifacts in smooth regions.
+
+    This function uses OpenCV's demosaicing implementations, which employ edge-directed
+    interpolation: they detect edge orientation and interpolate along edges rather than
+    across them, reducing fringing. The _EA (edge-aware) variant uses more sophisticated
+    gradients for better artifact suppression.
+
+    Color space note:
+    The output is in "camera RGB"—the native color space of the sensor. The spectral
+    responses of the camera's red, green, and blue filters don't match human color perception
+    or standard color spaces. Further color correction via camRGB_to_profiledRGB_img() is
+    required to convert to perceptually meaningful colors (linear Rec.2020, sRGB, etc.).
+
+    Implementation details:
+    OpenCV's demosaicing operates on uint16 data, requiring conversion from our float
+    representation. The function preserves the original dynamic range, including values
+    outside [0,1] (highlights that exceed white point) and below 0 (possible after black
+    point subtraction). This is achieved by tracking minimum value offset and maximum scale,
+    applying them to fit data into [0,1], demosaicing, then inverting the scaling.
+
+    Args:
+        mono_img: Mosaiced image of shape (1, H, W), single-channel Bayer pattern data
+        metadata: Dict containing 'bayer_pattern' key with value 'RGGB' (other patterns
+            should be converted to RGGB before calling this function)
+        method: OpenCV demosaicing method, either cv2.COLOR_BayerRGGB2RGB (standard bilinear)
+            or cv2.COLOR_BayerRGGB2RGB_EA (edge-aware, recommended for better quality)
+
+    Returns:
+        RGB image as np.ndarray of shape (3, H, W), in camera RGB color space, same data
+        type as input (float32). Intensity range matches input (may exceed [0,1] for HDR).
+
+    Raises:
+        AssertionError: If input is not shape (1, H, W), if bayer_pattern != 'RGGB', or
+            if demosaicing produces out-of-bounds values due to numerical errors
+
+    Example:
+        >>> mono, meta = raw_fpath_to_mono_img_and_metadata('IMG_0001.CR2')
+        >>> mono.shape
+        (1, 3472, 5208)
+        >>> camRGB = demosaic(mono, meta)
+        >>> camRGB.shape
+        (3, 3472, 5208)
+        >>> # Now apply color correction:
+        >>> pRGB = camRGB_to_profiledRGB_img(camRGB, meta, 'lin_rec2020')
+
+    Note:
+        This function assumes the input has already been converted to RGGB pattern via
+        raw_fpath_to_mono_img_and_metadata(..., force_rggb=True). Other Bayer patterns
+        (GBRG, BGGR, GRBG) will fail the assertion.
+
+        For X-Trans sensors, demosaicing requires specialized algorithms not provided here.
+        Use the xtrans_to_OpenEXR workflow instead.
     """
     assert method in (
         cv2.COLOR_BayerRGGB2RGB,
@@ -582,7 +791,64 @@ def get_camRGB_to_profiledRGB_img_matrix(
 def camRGB_to_profiledRGB_img(
     camRGB_img: np.ndarray, metadata: dict, output_color_profile: str
 ) -> np.ndarray:
-    """Convert camRGB debayered image to a given RGB color profile (in-place)."""
+    """Convert camera RGB to a standardized perceptual color space.
+
+    Camera RGB (the output of demosaicing) exists in a device-specific color space determined
+    by the spectral sensitivities of that particular camera sensor's color filters. A pixel
+    that measures as (1.0, 0.5, 0.3) in camera RGB might represent different physical
+    wavelengths on a Canon vs. a Nikon sensor. This makes camera RGB unsuitable for training
+    generalizable neural networks—models would learn camera-specific color relationships
+    rather than perceptual ones.
+
+    This function applies a 3×3 color correction matrix to transform camera RGB into a
+    standardized color space (typically linear Rec.2020 for this codebase). The matrix
+    accounts for:
+    1. The difference between the camera's actual spectral sensitivities and the target
+       color space primaries
+    2. Chromatic adaptation to a standard illuminant (typically D65 daylight)
+    3. White balance normalization
+
+    The transformation is linear (matrix multiplication), preserving radiometric relationships.
+    A pixel with twice the radiant energy will have twice the value after transformation.
+    This linearity is crucial for neural network training with perceptual loss functions.
+
+    Output color spaces:
+    - 'lin_rec2020': Linear Rec.2020, wide gamut, standard for HDR/professional work
+    - 'lin_srgb': Linear sRGB, narrower gamut but more widely supported
+    - 'gamma22': Rec.2020 with gamma 2.2 encoding (for visualization)
+    - Other gamma-encoded spaces apply a power curve after the linear transformation
+
+    Mathematical form:
+        profiledRGB = M @ camRGB
+    where M is a 3×3 matrix derived from the camera's XYZ matrix and the target color space.
+
+    Args:
+        camRGB_img: Demosaiced RGB image in camera color space, shape (3, H, W)
+        metadata: Dict containing 'rgb_xyz_matrix' (camera RGB → CIE XYZ transform)
+        output_color_profile: Target color space string ('lin_rec2020', 'lin_srgb',
+            'gamma22', etc.)
+
+    Returns:
+        RGB image in the target color space, same shape as input (3, H, W). If output
+        profile is gamma-encoded, the transfer function is applied in-place.
+
+    Example:
+        >>> mono, meta = raw_fpath_to_mono_img_and_metadata('IMG_0001.CR2')
+        >>> camRGB = demosaic(mono, meta)
+        >>> pRGB = camRGB_to_profiledRGB_img(camRGB, meta, 'lin_rec2020')
+        >>> # pRGB is now in linear Rec.2020, suitable for neural network training
+        >>> display_RGB = camRGB_to_profiledRGB_img(camRGB, meta, 'gamma22')
+        >>> # display_RGB has gamma encoding applied for human viewing
+
+    Note:
+        The operation modifies the array in-place when gamma encoding is applied, but
+        returns a new array for the linear transformation. This inconsistency is a
+        historical artifact that should be ignored—treat the return value as the output.
+
+        Values outside [0,1] are preserved (highlights exceeding white point, or
+        reconstruction artifacts from demosaicing). Clipping to [0,1] should be done
+        downstream if needed for a specific application.
+    """
     color_matrix = get_camRGB_to_profiledRGB_img_matrix(metadata, output_color_profile)
     orig_dims = camRGB_img.shape
     # color_matrix /= metadata['daylight_whitebalance'][1]

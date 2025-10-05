@@ -3,6 +3,8 @@ import trio
 
 from rawnind.dataset.Verifier import Verifier, hash_sha1
 
+pytestmark = pytest.mark.dataset
+
 
 @pytest.mark.trio
 async def test_consume_new_files_verified_file(tmp_path):

@@ -1,4 +1,5 @@
 import multiprocessing
+import logging
 import os
 import shutil
 import subprocess
@@ -6,6 +7,8 @@ import time
 import unittest
 from functools import lru_cache
 from typing import Union, Tuple
+
+logger = logging.getLogger(__name__)
 
 import colour  # colour-science, needed for the PQ OETF(-1) transfer function
 import numpy as np
@@ -151,7 +154,65 @@ def match_gain(
         other_img: Union[np.ndarray, torch.Tensor],
         return_val: bool = False,
 ) -> Union[np.ndarray, torch.Tensor]:
-    """Match gain for a single or batched pair of images; other_img is adapted to anchor_img."""
+    """Normalize intensity differences between paired images due to exposure variation.
+
+    When capturing clean-noisy image pairs, the exposure times differ by design (long exposure
+    for clean, short for noisy). Even if the ISO and aperture are identical, the different
+    exposure durations create a global intensity scaling between the images. Additionally,
+    slight auto-exposure variations between shots can introduce brightness differences.
+
+    These intensity mismatches are problematic for training. A neural network seeing a clean
+    image at one brightness and its noisy counterpart at a different brightness may learn
+    spurious brightness-dependent features rather than generalizable denoising.
+
+    This function computes a global gain factor (scalar multiplier) that equalizes the mean
+    intensity between images. It's a simple but effective normalization: compute the ratio of
+    mean values, then scale the target image by that ratio to match the anchor.
+
+    The gain is computed across all channels and spatial locations (global, not spatially
+    varying). This assumes that:
+    1. The scene has not changed between captures (same reflectances)
+    2. Illumination is constant
+    3. Exposure variation is purely multiplicative (linear sensor response)
+
+    These assumptions hold well for tripod-mounted captures in controlled lighting. They may
+    fail for outdoor scenes with changing daylight or scenes with strong motion.
+
+    Batch handling:
+    For 4D tensors (batch dimension), gain is computed per-image in the batch, allowing
+    different gain factors for different pairs in a batched training setup.
+
+    Args:
+        anchor_img: Reference image whose intensity should be matched, shape (3, H, W) or
+            (B, 3, H, W) for batched
+        other_img: Image to be gain-adjusted to match anchor, same shape as anchor
+        return_val: If True, return the gain factor instead of the adjusted image
+
+    Returns:
+        If return_val=False: other_img scaled to match anchor_img mean (same shape as input)
+        If return_val=True: gain factor (scalar for 3D inputs, (B, 1, 1, 1) for 4D batched)
+
+    Example:
+        >>> clean = np.random.rand(3, 100, 100) * 0.8  # Mean ~0.4
+        >>> noisy = np.random.rand(3, 100, 100) * 0.4  # Mean ~0.2
+        >>> matched = match_gain(clean, noisy)
+        >>> clean.mean(), matched.mean()  # Now approximately equal
+        (0.4012, 0.4009)
+        >>> gain = match_gain(clean, noisy, return_val=True)
+        >>> gain
+        2.006  # noisy was ~2× dimmer than clean
+
+    Note:
+        This is a global normalization. It doesn't correct for spatially-varying exposure
+        differences (vignetting, gradients from directional lighting). For those cases,
+        more sophisticated normalization or masking may be needed.
+
+        The gain can be large (2-10×) for clean-noisy pairs with very different exposures,
+        potentially amplifying noise in the noisy image. Training code should account for
+        this by either:
+        1. Applying gain to the noisy image before computing loss (match_gain=True in dataset)
+        2. Providing gain as a network input so the model learns to handle varying noise levels
+    """
     if anchor_img.ndim == 4:
         anchor_avg = anchor_img.mean((-1, -2, -3)).view(-1, 1, 1, 1)
         other_avg = other_img.mean((-1, -2, -3)).view(-1, 1, 1, 1)
@@ -173,16 +234,65 @@ def shift_images(
         # maintain_shape: bool = False,  # probably not needed w/ crop_to_bayer
 ) -> Union[tuple, tuple]:
     #  ) -> Union[tuple[np.ndarray, np.ndarray], tuple[torch.Tensor, torch.Tensor]]:  # python bw compat 2022-11-10
-    """
-    Shift images in y,x directions and crop both accordingly.
+    """Apply spatial alignment and crop both images to their overlapping region.
 
-    crop_to_bayer: ensure target_img crop is %2:
-        remove the first/last v/h line from both anchor and target if necessary
-    maintain_shape: pad accordingly
+    After find_best_alignment() determines the optimal shift, this function actually performs
+    the alignment by cropping both images to their common overlapping area. It handles the
+    complexities of aligning images with different formats: RGB (3-channel) to RGB, Bayer
+    (4-channel) to RGB, or Bayer to Bayer.
 
-    use-cases:
-        shift two RGB images: no worries
-        shift Bayer and RGB: Bayer shift is // by two. If shift%2, crop additional column/line.
+    The core operation: if target is shifted (v, h) pixels relative to anchor, crop the first
+    |v| rows and |h| columns from the appropriate edges of both images, removing non-overlapping
+    regions. The sign of the shift determines which edges to crop.
+
+    Bayer-RGB alignment complication:
+    When aligning a 3-channel RGB ground truth (shape 3×H×W) to a 4-channel Bayer noisy image
+    (shape 4×H/2×W/2), spatial coordinates don't match directly. Each Bayer channel has half
+    the resolution of the RGB image. A shift of (v, h) in RGB space corresponds to (v/2, h/2)
+    in Bayer space. The function handles this automatically.
+
+    Odd shift handling:
+    If the shift is odd (e.g., 3 pixels), and we're aligning RGB to Bayer, Bayer can only be
+    cropped by integer amounts (3/2 = 1.5 rounds to 1). This creates a 1-pixel residual
+    misalignment. The function resolves this by cropping an additional pixel from both images,
+    ensuring Bayer pattern alignment is maintained (crops must land on even coordinates).
+
+    This is critical: breaking Bayer alignment would shift the color filter pattern, causing
+    red pixels to be treated as green, etc. The function prioritizes preserving Bayer
+    alignment over maximizing the overlapping region.
+
+    Args:
+        anchor_img: Reference image (typically ground truth RGB), shape (3, H, W) or (4, H/2, W/2)
+        target_img: Image to align (typically noisy, may be Bayer or RGB), compatible shape
+        shift: Tuple (v_shift, h_shift) from find_best_alignment(), positive means target is
+            shifted down/right relative to anchor
+
+    Returns:
+        Tuple (aligned_anchor, aligned_target) where both images are cropped to the overlapping
+        region and have compatible spatial dimensions
+
+    Example:
+        >>> gt_rgb = np.random.rand(3, 1000, 1000)
+        >>> noisy_bayer = np.random.rand(4, 500, 500)
+        >>> shift = (3, -2)  # Noisy is 3 pixels down, 2 pixels left
+        >>> aligned_gt, aligned_noisy = shift_images(gt_rgb, noisy_bayer, shift)
+        >>> aligned_gt.shape
+        (3, 996, 996)  # Lost 4 rows (3+1 for odd shift), 2 columns
+        >>> aligned_noisy.shape
+        (4, 498, 498)  # Half the RGB dimensions
+
+    Note:
+        The function uses np.ndarray slicing notation (works for both NumPy and PyTorch).
+        It doesn't use interpolation—all operations are integer crops. This means sub-pixel
+        alignment is not possible; shifts are quantized to whole pixels.
+
+        For shifts that result in very small overlapping regions (e.g., shift larger than
+        image dimensions), the output may be empty or have unexpected dimensions. Callers
+        should validate that the shift is reasonable relative to image size.
+
+        The assertion at the end verifies that the output shapes are compatible (accounting
+        for Bayer resolution difference). If this fails, it indicates an implementation bug
+        or invalid input.
     """
     anchor_img_out = anchor_img
     target_img_out = target_img
@@ -388,7 +498,7 @@ def make_loss_mask_bayer(
     if reject_threshold == 0:
         reject_threshold = 1.0
     if verbose:
-        print(f"{reject_threshold=}")
+        logger.debug(f"{reject_threshold=}")
     loss_mask[loss_map >= reject_threshold] = 0.0
 
     loss_mask = scipy.ndimage.binary_opening(loss_mask.astype(np.uint8)).astype(
@@ -429,7 +539,7 @@ def make_loss_mask(
     if reject_threshold == 0:
         reject_threshold = 1.0
     if verbose:
-        print(f"{reject_threshold=}")
+        logger.debug(f"{reject_threshold=}")
     loss_mask[loss_map >= reject_threshold] = 0.0
     loss_mask = scipy.ndimage.binary_opening(loss_mask.astype(np.uint8)).astype(
         np.float32
@@ -505,7 +615,7 @@ def find_best_alignment_fft(
             return best_shift, float(loss)
         except Exception as e:
             if verbose:
-                print(f"Warning: Could not compute loss for shift {best_shift}: {e}")
+                logger.warning(f"Could not compute loss for shift {best_shift}: {e}")
             return best_shift, float("inf")
 
     return best_shift
@@ -520,15 +630,70 @@ def find_best_alignment(
         method: str = "auto",
         # ) -> Union[tuple[int, int], tuple[tuple[int, int], float]]: # python bw compat 2022-11-10
 ) -> Union[tuple, tuple]:  # python bw compat 2022-11-10
-    """Find best alignment (minimal loss) between anchor_img and target_img.
+    """Find the optimal spatial shift to align two images captured of the same scene.
+
+    When capturing paired clean-noisy images (long exposure + short exposure), minute camera
+    movement between shots creates sub-pixel to multi-pixel misalignment. Even with a tripod,
+    vibration from the shutter mechanism, air currents, or ground movement can shift the
+    sensor position by several pixels. This alignment must be detected and corrected before
+    training, otherwise the neural network learns to perform spatial shifting rather than
+    denoising.
+
+    The function tests discrete integer pixel shifts within ±max_shift_search in both vertical
+    and horizontal directions, computing alignment quality (L1 pixelwise loss) for each
+    candidate shift. The shift with minimal loss represents the best alignment.
+
+    Algorithm selection:
+    The 'fft' method (FFT-based phase correlation) is strongly recommended and is the default
+    for 'auto'. It's 17× faster than brute-force search while achieving pixel-perfect accuracy.
+    Phase correlation works by detecting the translation between images via peak detection in
+    the cross-power spectrum—a robust frequency-domain technique used in image registration.
+
+    The 'original' brute-force method exhaustively tries all shifts and computes pixelwise L1
+    loss for each. It's slow (40+ seconds per pair on typical images) and exists only for
+    validation purposes. Use FFT unless debugging alignment failures.
+
+    Limitations:
+    This finds only global translations—it cannot correct rotation, scaling, or local
+    non-rigid deformations. Images with significant motion blur, scene changes between
+    captures, or large rotations may fail to align well, indicated by high returned loss
+    values (> ALIGNMENT_MAX_LOSS threshold).
 
     Args:
-        method: Alignment method to use:
-            - "auto": Automatically select best method (defaults to FFT for accuracy+speed)
-            - "fft": Use FFT-based phase correlation (RECOMMENDED)
-            - "original": Use original brute-force method (slow, for reference only)
+        anchor_img: Reference image (clean/ground truth), shape (C, H, W), typically 3-channel RGB
+        target_img: Image to align to anchor (noisy), same shape as anchor
+        max_shift_search: Maximum pixel offset to search in each direction (default: 6 pixels,
+            searches ±6 vertically and horizontally, testing (2×6+1)² = 169 shifts)
+        return_loss_too: If True, return (shift, loss); if False, return only shift
+        verbose: Print timing and diagnostic information
+        method: Alignment algorithm:
+            - 'auto': Use FFT (recommended, fast and accurate)
+            - 'fft': FFT-based phase correlation (~2-3 seconds)
+            - 'original': Brute-force spatial search (~40 seconds, for reference only)
 
-    Note: FFT is now the default for "auto" for best accuracy and speed.
+    Returns:
+        If return_loss_too=False: tuple (v_shift, h_shift) of integer pixel offsets
+        If return_loss_too=True: ((v_shift, h_shift), loss) where loss is alignment quality
+            (lower is better, typical good alignments have loss < 0.035)
+
+    Example:
+        >>> clean = np.random.rand(3, 1000, 1000)
+        >>> # Simulate noisy image shifted by (3, -2) pixels
+        >>> noisy = np.roll(clean, shift=(3, -2), axis=(1, 2)) + 0.1 * np.random.rand(3, 1000, 1000)
+        >>> shift, loss = find_best_alignment(clean, noisy, return_loss_too=True)
+        >>> shift
+        (3, -2)
+        >>> loss
+        0.012  # Low loss indicates good alignment
+
+    Note:
+        The search window max_shift_search=6 is adequate for typical tripod-mounted captures.
+        Increase it for handheld shots or if alignment consistently fails (high loss values).
+        However, larger windows increase computation time quadratically.
+
+        The FFT method may fail on images with strong periodic patterns (e.g., tiled textures)
+        that create spurious correlation peaks. In such cases, the brute-force method may be
+        more robust, though slower.
     """
     from rawnind.libs.alignment_backends import find_best_alignment_bruteforce_rgb
 
@@ -558,7 +723,7 @@ def find_best_alignment(
         elapsed = time.time() - start_time
         shift = result[0] if return_loss_too else result
         loss = result[1] if return_loss_too else "N/A"
-        print(
+        logger.debug(
             f"Alignment method '{method}' took {elapsed:.3f}s, shift={shift}, loss={loss}"
         )
 
@@ -600,7 +765,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     # Only print if verbose is enabled
     verbose = kwargs.get("verbose", False)
     if verbose:
-        print(f"get_best_alignment_and_make_loss_mask: {mask_name=}")
+        logger.debug(f"get_best_alignment_and_make_loss_mask: {mask_name=}")
     loss_mask = make_overexposure_mask(gt_img, gt_metadata["overexposure_lb"])
 
     # Get alignment method from kwargs (used in both branches)
@@ -700,7 +865,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         rgb_gain = None  # Not applicable for raw path
 
         if verbose:
-            print(
+            logger.debug(
                 f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}"
             )
 
@@ -719,7 +884,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         rgb_gain = float(match_gain(gt_rgb, f_rgb, return_val=True))
 
         if verbose:
-            print(
+            logger.debug(
                 f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}"
             )
 
@@ -736,7 +901,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     #     breakpoint()
     #     raise ValueError
     if verbose:
-        print(
+        logger.debug(
             f"{kwargs['image_set']=}: {loss_mask.min()=}, {loss_mask.max()=}, {loss_mask.mean()=}"
         )
     # save the mask

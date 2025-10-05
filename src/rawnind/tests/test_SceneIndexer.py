@@ -6,6 +6,8 @@ import trio
 from rawnind.dataset.SceneIndexer import SceneIndexer
 from rawnind.dataset.SceneInfo import ImageInfo, SceneInfo
 
+pytestmark = pytest.mark.dataset
+
 
 @pytest.mark.trio
 async def test_consume_images_produce_scenes():

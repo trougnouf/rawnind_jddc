@@ -10,6 +10,17 @@ from .SceneInfo import SceneInfo, ImageInfo
 
 logger = logging.getLogger(__name__)
 
+# Valid image extensions for processing (raw formats and processed formats)
+# Based on formats supported throughout the codebase
+VALID_IMAGE_EXTENSIONS = {
+    # Raw formats
+    ".raw", ".nef", ".cr2", ".arw", ".dng", ".rw2", ".orf", ".sr2", ".raf", ".crw",
+    # Processed formats
+    ".exr", ".tif", ".tiff",
+    # Numpy arrays (for Bayer crops)
+    ".npy"
+}
+
 
 class MetadataEnricher:
 
@@ -107,6 +118,12 @@ class MetadataEnricher:
             async def enrich_noisy_image(noisy_img: ImageInfo):
                 """Enrich a noisy image with alignment/gain/mask metadata."""
                 async with semaphore:
+                    # Skip non-image files (e.g., .xmp metadata files)
+                    file_ext = Path(noisy_img.filename).suffix.lower()
+                    if file_ext not in VALID_IMAGE_EXTENSIONS:
+                        logger.debug(f"Skipping non-image file: {noisy_img.filename}")
+                        return
+                    
                     if noisy_img.local_path and noisy_img.validated:
                         # Check cache first
                         if noisy_img.sha1 in self._metadata_cache:
@@ -140,6 +157,12 @@ class MetadataEnricher:
 
     async def _enrich_clean_image(self, img_info: ImageInfo) -> None:
         """This is an example enrichment function: Enrich a clean (GT) image with basic stats."""
+        # Skip non-image files (e.g., .xmp metadata files)
+        file_ext = Path(img_info.filename).suffix.lower()
+        if file_ext not in VALID_IMAGE_EXTENSIONS:
+            logger.debug(f"Skipping non-image file: {img_info.filename}")
+            return
+        
         if img_info.sha1 in self._metadata_cache:
             img_info.metadata.update(self._metadata_cache[img_info.sha1])
             logger.debug(f"Using cached metadata for {img_info.filename}")

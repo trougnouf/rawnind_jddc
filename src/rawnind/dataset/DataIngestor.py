@@ -77,10 +77,21 @@ class DataIngestor:
         for img_data in scene_data.get("noisy_images", []):
             all_sha1s.append(img_data["sha1"])
 
-        # Build ImageInfo lists with file IDs
+        # Build ImageInfo lists with file IDs, excluding .xmp files
+        # We'll match .xmp files to their parent images afterward
         clean_images = []
+        xmp_files_clean = {}  # Map base filename to xmp filename
+        
         for img_data in scene_data.get("clean_images", []):
             filename = img_data["filename"]
+            
+            # Separate .xmp sidecar files
+            if filename.lower().endswith(".xmp"):
+                # Extract base filename (e.g., "image.cr2.xmp" -> "image.cr2")
+                base_name = filename[:-4]  # Remove .xmp extension
+                xmp_files_clean[base_name] = filename
+                continue
+            
             file_id = file_id_map.get(filename, img_data.get("file_id", ""))
             clean_images.append(
                 ImageInfo(
@@ -95,8 +106,18 @@ class DataIngestor:
             )
 
         noisy_images = []
+        xmp_files_noisy = {}  # Map base filename to xmp filename
+        
         for img_data in scene_data.get("noisy_images", []):
             filename = img_data["filename"]
+            
+            # Separate .xmp sidecar files
+            if filename.lower().endswith(".xmp"):
+                # Extract base filename
+                base_name = filename[:-4]
+                xmp_files_noisy[base_name] = filename
+                continue
+            
             file_id = file_id_map.get(filename, img_data.get("file_id", ""))
             noisy_images.append(
                 ImageInfo(
@@ -109,6 +130,17 @@ class DataIngestor:
                     file_id=file_id,
                 )
             )
+        
+        # Match .xmp files to their parent images
+        # Note: xmp_path will be set later when files are downloaded/found
+        # For now, we just store the xmp filename in metadata
+        for img_info in clean_images:
+            if img_info.filename in xmp_files_clean:
+                img_info.metadata["xmp_filename"] = xmp_files_clean[img_info.filename]
+        
+        for img_info in noisy_images:
+            if img_info.filename in xmp_files_noisy:
+                img_info.metadata["xmp_filename"] = xmp_files_noisy[img_info.filename]
 
         return SceneInfo(
             scene_name=scene_name,

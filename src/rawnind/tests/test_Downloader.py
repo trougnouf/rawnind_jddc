@@ -1,4 +1,3 @@
-# ... existing code ...
 from pathlib import Path
 
 import pytest
@@ -6,6 +5,8 @@ import trio
 
 from rawnind.dataset.Downloader import Downloader
 from rawnind.dataset.SceneInfo import ImageInfo
+
+pytestmark = pytest.mark.dataset
 
 
 @pytest.fixture

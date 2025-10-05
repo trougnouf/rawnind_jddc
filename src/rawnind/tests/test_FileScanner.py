@@ -6,7 +6,7 @@ import trio
 from rawnind.dataset.FileScanner import FileScanner
 from rawnind.dataset.SceneInfo import SceneInfo, ImageInfo
 
-pytestmark = pytest.mark.asyncio
+pytestmark = pytest.mark.dataset
 
 
 @pytest.fixture

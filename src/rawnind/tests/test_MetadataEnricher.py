@@ -6,6 +6,8 @@ import pytest
 from rawnind.dataset.MetadataEnricher import MetadataEnricher
 from rawnind.dataset.SceneInfo import SceneInfo, ImageInfo
 
+pytestmark = pytest.mark.dataset
+
 
 @pytest.fixture
 def metadata_enricher():
@@ -169,6 +171,132 @@ async def test_compute_crops_list(metadata_enricher, mocker):
 
     result = await metadata_enricher._compute_crops_list(scene_info, gt_img, noisy_img)
     assert result == crops_metadata
+
+
+@pytest.mark.trio
+async def test_enrich_clean_image_skips_non_image_files(metadata_enricher, mocker):
+    """Test that _enrich_clean_image skips non-image files like .xmp"""
+    xmp_img = ImageInfo(
+        filename="metadata.xmp",
+        sha1="xmp_sha1",
+        is_clean=True,
+        scene_name="test_scene",
+        scene_images=[],
+        cfa_type="Bayer"
+    )
+    
+    # Mock _compute_image_stats - it should NOT be called for .xmp files
+    compute_stats_mock = mocker.patch.object(metadata_enricher, '_compute_image_stats')
+    
+    await metadata_enricher._enrich_clean_image(xmp_img)
+    
+    # Verify that _compute_image_stats was NOT called
+    compute_stats_mock.assert_not_called()
+    # Verify that no metadata was added
+    assert xmp_img.metadata == {}
+    # Verify that nothing was cached
+    assert "xmp_sha1" not in metadata_enricher._metadata_cache
+
+
+@pytest.mark.trio
+async def test_enrich_clean_image_processes_valid_image_files(metadata_enricher, mocker):
+    """Test that _enrich_clean_image processes valid image files"""
+    import trio
+    
+    # Test various valid image extensions
+    valid_extensions = [".exr", ".tif", ".tiff", ".arw", ".cr2", ".nef", ".raf", ".dng"]
+    
+    for ext in valid_extensions:
+        img = ImageInfo(
+            filename=f"test{ext}",
+            sha1=f"sha1_{ext}",
+            is_clean=True,
+            scene_name="test_scene",
+            scene_images=[],
+            cfa_type="Bayer"
+        )
+        img.local_path = None  # Will skip cache check
+        
+        # Mock _compute_image_stats to return test metadata
+        test_metadata = {"test": f"metadata_for_{ext}"}
+        compute_stats_mock = mocker.patch.object(
+            metadata_enricher, 
+            '_compute_image_stats', 
+            return_value=test_metadata
+        )
+        
+        # Mock trio.to_thread.run_sync
+        mocker.patch('trio.to_thread.run_sync', new_callable=AsyncMock, return_value=test_metadata)
+        
+        await metadata_enricher._enrich_clean_image(img)
+        
+        # For valid extensions, metadata should be added
+        assert img.metadata == test_metadata
+        assert metadata_enricher._metadata_cache[f"sha1_{ext}"] == test_metadata
+
+
+@pytest.mark.trio  
+async def test_enrich_scene_skips_xmp_files_in_noisy_images(metadata_enricher, mocker):
+    """Test that _enrich_scene skips .xmp files in noisy images"""
+    gt_image = ImageInfo(
+        filename="gt_image.arw",
+        sha1="gt_sha1",
+        is_clean=True,
+        local_path="/path/to/gt.arw",
+        validated=True,
+        scene_name="test_scene",
+        scene_images=[],
+        cfa_type="Bayer"
+    )
+    
+    xmp_image = ImageInfo(
+        filename="noisy_image.xmp",
+        sha1="xmp_sha1",
+        is_clean=False,
+        local_path="/path/to/noisy.xmp",
+        validated=True,
+        scene_name="test_scene",
+        scene_images=[],
+        cfa_type="Bayer"
+    )
+    
+    valid_image = ImageInfo(
+        filename="noisy_image.arw",
+        sha1="noisy_sha1",
+        is_clean=False,
+        local_path="/path/to/noisy.arw",
+        validated=True,
+        scene_name="test_scene",
+        scene_images=[],
+        cfa_type="Bayer"
+    )
+    
+    scene_info = SceneInfo(
+        scene_name="test_scene",
+        cfa_type="Bayer",
+        unknown_sensor=False,
+        test_reserve=False,
+        clean_images=[gt_image],
+        noisy_images=[xmp_image, valid_image]
+    )
+    
+    # Mock the enrichment methods
+    mocker.patch.object(metadata_enricher, '_enrich_clean_image', new_callable=AsyncMock)
+    compute_alignment_mock = mocker.patch.object(
+        metadata_enricher, 
+        '_compute_alignment_metadata',
+        new_callable=AsyncMock,
+        return_value={"alignment": [0, 0]}
+    )
+    
+    await metadata_enricher._enrich_scene(scene_info)
+    
+    # _compute_alignment_metadata should only be called for the valid image, not the .xmp
+    assert compute_alignment_mock.call_count == 1
+    # Verify it was called with the valid image
+    call_args = compute_alignment_mock.call_args[0]
+    assert call_args[1].filename == "noisy_image.arw"
+
 
 
 if __name__ == "__main__":

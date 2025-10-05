@@ -6,6 +6,8 @@ import trio
 from rawnind.dataset.PipelineBuilder import PipelineBuilder
 from rawnind.dataset.SceneInfo import SceneInfo, ImageInfo
 
+pytestmark = pytest.mark.dataset
+
 
 @pytest.mark.trio
 async def test_pipeline_builder_initialization():

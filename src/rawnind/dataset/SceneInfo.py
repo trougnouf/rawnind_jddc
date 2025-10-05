@@ -18,6 +18,7 @@ class ImageInfo:
     file_id: str = ""  # Dataverse file ID for downloads
     retry_count: int = 0  # Track verification retry attempts
     metadata: dict = field(default_factory=dict)  # Computed metadata
+    xmp_path: Optional[Path] = None  # Path to associated .xmp sidecar file
 
     @property
     def download_url(self) -> str:

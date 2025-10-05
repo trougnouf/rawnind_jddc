@@ -49,4 +49,5 @@ test = [
 [tool.pytest.ini_options]
 markers = [
     "trio: trio-based asynchronous tests",
+    "dataset: dataset pipeline tests (DataIngestor, Downloader, FileScanner, etc.)",
 ]

@@ -1,10 +1,32 @@
-"""
-Raw denoiser.
+"""Abstract trainer framework for image-to-image neural networks.
 
-Config files are defined as config/denoise_bayer2prgb.yaml and config/denoise_prgb2prgb.yaml
+This module provides the core training infrastructure for raw image processing models,
+including denoisers and compression networks. The design follows an inheritance-based
+architecture where specialized trainers extend base classes with domain-specific logic.
 
-TODO jsonresults
-TODO test
+Class Hierarchy:
+    ImageToImageNN
+        └── ImageToImageNNTraining
+            ├── PRGBImageToImageNNTraining
+            │   └── DenoiserTraining
+            └── BayerImageToImageNNTraining
+                └── BayerDenoiser
+
+Key Features:
+- Unified argument parsing via ConfigArgParse with YAML config support
+- Automatic experiment naming and directory management
+- Model checkpointing with best-iteration tracking
+- Multi-metric validation (MS-SSIM, PSNR, perceptual losses)
+- Dataset loading for both Bayer and profiled-RGB inputs
+- Support for clean-clean and clean-noisy training paradigms
+- Transfer function handling (linear, gamma2.2, PQ)
+
+The framework handles experiment lifecycle management including logging, source code
+archiving, model saving/loading, and results tracking via YAML files. Subclasses
+implement domain-specific logic by overriding instantiate_model(), repack_batch(),
+and step() methods.
+
+Config files are defined in config/denoise_bayer2prgb.yaml and config/denoise_prgb2prgb.yaml
 """
 
 import itertools
@@ -52,6 +74,12 @@ BREAKPOINT_ON_ERROR = False
 
 
 def error_handler():
+    """Handle errors during training with optional breakpoint debugging.
+    
+    This handler is called when critical errors occur during model training or testing.
+    When BREAKPOINT_ON_ERROR is True, drops into an interactive debugger; otherwise
+    exits the program with status code 1.
+    """
     logging.error("error_handler")
     if BREAKPOINT_ON_ERROR:
         breakpoint()
@@ -60,11 +88,44 @@ def error_handler():
 
 
 class ImageToImageNN:
+    """Base class for image-to-image neural network inference and evaluation.
+    
+    This class provides the foundational infrastructure for all image processing models
+    in the RawNIND framework. It handles:
+    - Command-line argument parsing via ConfigArgParse
+    - Device management (CPU/CUDA/ROCm)
+    - Model instantiation and checkpoint loading
+    - Logging configuration
+    - Source code archival for reproducibility
+    - Metric initialization
+    
+    Subclasses must implement instantiate_model() to define their specific architecture.
+    The class supports both training and inference modes, with test_only flag controlling
+    the operational mode.
+    
+    Attributes:
+        CLS_CONFIG_FPATHS: Default configuration file paths (can be overridden by subclasses)
+        device: PyTorch device (cuda/cpu) for model execution
+        model: The neural network model instance
+        metrics: Dictionary of evaluation metrics (MS-SSIM, PSNR, etc.)
+        save_dpath: Directory path for saving models and results
+    """
     CLS_CONFIG_FPATHS = [
         os.path.join("config", "test_reserve.yaml"),
     ]
 
     def __init__(self, **kwargs):
+        """Initialize the image-to-image model with configuration and setup.
+        
+        Performs initialization including argument parsing, device setup, logging
+        configuration, model instantiation, and checkpoint loading. The initialization
+        is idempotent - subsequent calls are skipped if already initialized.
+        
+        Args:
+            **kwargs: Optional arguments to override config values:
+                test_only (bool): If True, run in inference-only mode
+                preset_args (dict): Dictionary of arguments to override parsed values
+        """
         # skip if already initialized, by checking for self.device
         if hasattr(self, "device"):
             return
@@ -133,6 +194,19 @@ class ImageToImageNN:
 
     @staticmethod
     def load_model(model: torch.nn.Module, path: str, device=None) -> None:
+        """Load model weights from a checkpoint file.
+        
+        Loads a saved PyTorch model state dictionary from disk and applies it to the
+        provided model instance. Ensures device compatibility via map_location.
+        
+        Args:
+            model: PyTorch model instance to load weights into
+            path: Filesystem path to the checkpoint (.pt file)
+            device: Target device for loading (cuda/cpu). If None, uses checkpoint's device
+            
+        Raises:
+            FileNotFoundError: If the checkpoint file does not exist at the specified path
+        """
         if os.path.isfile(path):
             model.load_state_dict(torch.load(path, map_location=device))
             logging.info(f"Loaded model from {path}")
@@ -143,9 +217,30 @@ class ImageToImageNN:
     def infer(
         self,
         img: torch.Tensor,
-        return_dict=False,  # , rgb_xyz_matrix=None, ret_img_only=False, match_gains=True
+        return_dict=False,
     ) -> dict:
-        """Return a denoised image (or {reconstructed_image, bpp} if return_dict is True)."""
+        """Run inference on an input image to produce processed output.
+        
+        Executes the model in evaluation mode (no gradient computation) on the provided
+        input tensor. Automatically handles device transfer and ensures input channel count
+        matches the model's expected configuration.
+        
+        Args:
+            img: Input image tensor with shape [C, H, W] or [B, C, H, W]
+                 where C must match self.in_channels (3 for RGB, 4 for Bayer)
+            return_dict: If True, returns full output dictionary from model
+                        If False, extracts and returns only the 'reconstructed_image' key
+        
+        Returns:
+            If return_dict is False: Tensor containing the processed image
+            If return_dict is True: Dictionary containing model outputs, which may include:
+                - 'reconstructed_image': The processed output image
+                - 'bpp': Bits-per-pixel (for compression models)
+                - Additional model-specific outputs
+                
+        Raises:
+            AssertionError: If input channel count doesn't match model configuration
+        """
         with torch.no_grad():
             if len(img.shape) == 3:
                 img = img.unsqueeze(0)
@@ -180,9 +275,27 @@ class ImageToImageNN:
         model_dpath: str,
         suffix: str,
         prefix: str = "val",
-        # suffix="combined_loss",
     ) -> dict:
-        """Return a dictionary containing step_n: the best step as read from trainres.yaml, fpath: path to the model on that step."""
+        """Retrieve the best training checkpoint based on validation metrics.
+        
+        Reads the trainres.yaml file from a training run to identify which iteration
+        achieved the best performance on a specified metric. This is used to load
+        the optimal checkpoint for testing or further training.
+        
+        Args:
+            model_dpath: Directory path containing the training results
+            suffix: Metric name suffix (e.g., 'combined_loss', 'ms_ssim')
+            prefix: Metric prefix (default 'val' for validation metrics)
+        
+        Returns:
+            Dictionary with two keys:
+                - 'fpath': Full path to the best checkpoint file
+                - 'step_n': Training step number of the best checkpoint
+                
+        Raises:
+            FileNotFoundError: If trainres.yaml doesn't exist in model_dpath
+            KeyError: If the requested metric isn't tracked in trainres.yaml
+        """
         jsonfpath = os.path.join(model_dpath, "trainres.yaml")
         if not os.path.isfile(jsonfpath):
             raise FileNotFoundError(
@@ -203,6 +316,23 @@ class ImageToImageNN:
     def get_transfer_function(
         fun_name: str,
     ) -> Callable[[torch.Tensor], torch.Tensor]:
+        """Get a transfer function for converting between color encodings.
+        
+        Maps transfer function names to their corresponding implementation. These functions
+        convert images between different color encodings (linear, gamma-corrected, PQ).
+        
+        Args:
+            fun_name: Transfer function identifier. Supported values:
+                - "None": Identity function (no transformation)
+                - "pq": Perceptual Quantizer (HDR encoding)
+                - "gamma22": Gamma 2.2 correction
+        
+        Returns:
+            Callable that takes a torch.Tensor and returns the transformed tensor
+            
+        Raises:
+            ValueError: If fun_name is not a recognized transfer function
+        """
         if str(fun_name) == "None":
             return lambda img: img
         elif fun_name == "pq":
@@ -214,11 +344,28 @@ class ImageToImageNN:
 
     @staticmethod
     def save_args(args):
+        """Persist parsed arguments to a YAML file for reproducibility.
+        
+        Saves all command-line and config file arguments to args.yaml in the experiment
+        directory. This enables exact reproduction of training runs and provides a record
+        of hyperparameters used.
+        
+        Args:
+            args: Parsed argument namespace from ConfigArgParse
+        """
         os.makedirs(args.save_dpath, exist_ok=True)
         out_fpath = os.path.join(args.save_dpath, "args.yaml")
         utilities.dict_to_yaml(vars(args), out_fpath)
 
     def save_cmd(self):
+        """Save the current command invocation to a shell script for reproducibility.
+        
+        Writes the exact Python command used to launch the training or testing run
+        to a .sh file. Previous commands in the file are preserved as comments,
+        creating a history of invocations.
+        
+        The output file is train_cmd.sh for training runs or test_cmd.sh for test runs.
+        """
         os.makedirs(self.save_dpath, exist_ok=True)
         out_fpath = os.path.join(
             self.save_dpath, "test_cmd.sh" if self.test_only else "train_cmd.sh"
@@ -238,6 +385,19 @@ class ImageToImageNN:
             f.write(cmd)
 
     def get_args(self, ignore_unknown_args: bool = False):
+        """Parse command-line arguments and configuration files.
+        
+        Creates a ConfigArgParse parser with YAML config file support and parses
+        arguments from both config files and command line. Config files specified
+        in CLS_CONFIG_FPATHS are loaded by default, and can be overridden with --config.
+        
+        Args:
+            ignore_unknown_args: If True, silently ignore unrecognized arguments
+                                (useful for test-only mode where some training args are irrelevant)
+        
+        Returns:
+            Parsed argument namespace containing all configuration parameters
+        """
         parser = configargparse.ArgumentParser(
             description=__doc__,
             config_file_parser_class=configargparse.YAMLConfigFileParser,
@@ -245,11 +405,19 @@ class ImageToImageNN:
         )
         self.add_arguments(parser)
         if ignore_unknown_args:
-            # if hasattr(self, "test_only") and self.test_only:
             return parser.parse_known_args()[0]
         return parser.parse_args()
 
     def add_arguments(self, parser):
+        """Register command-line arguments for the model configuration.
+        
+        Defines all arguments that control model architecture, I/O paths, device selection,
+        and debugging options. Subclasses typically extend this method to add domain-specific
+        arguments (e.g., learning rate, batch size for training subclasses).
+        
+        Args:
+            parser: ConfigArgParse ArgumentParser instance to register arguments with
+        """
         parser.add_argument(
             "--config",
             is_config_file=True,
@@ -326,17 +494,20 @@ class ImageToImageNN:
         )
 
     def autocomplete_args(self, args):
-        """
-        Auto-complete the following arguments:
-
-        expname: CLASS_NAME_<in_channels>ch<-iteration>
-        load_path (optional): can be dpath (autopick best model), expname (autocomplete to dpath), fpath (end-result)
-        save_dpath: ../../models/rawnind/<expname>
-
-        to continue:
-            determine expname
-            determine save_dpath, set load_path accordingly
-                or make a function common to save_dpath and load_path
+        """Fill in missing arguments with intelligent defaults based on context.
+        
+        Handles automatic generation of experiment names, save directories, and load paths
+        when not explicitly provided. This includes:
+        - Generating experiment names in the format: CLASS_NAME_<in_channels>ch[-iteration]
+        - Resolving load_path from expname or directory (selecting best checkpoint)
+        - Creating save_dpath under MODELS_BASE_DPATH/<expname>
+        - Auto-incrementing experiment names to avoid collisions
+        
+        The autocomplete logic enables convenient workflows like resuming training
+        by specifying just the experiment name rather than full paths.
+        
+        Args:
+            args: Parsed argument namespace to be modified in-place
         """
         # generate expname and save_dpath, and (incomplete/dir_only) load_path if continue_training_from_last_model_if_exists
         if not args.expname:
@@ -462,16 +633,63 @@ class ImageToImageNN:
             # FIXME this doesn't always work, eg "tools/validate_and_test_dc_prgb2prgb.py --config /orb/benoit_phd/models/rawnind_dc/DCTrainingProfiledRGBToProfiledRGB_3ch_L64.0_Balle_Balle_2023-10-27-dc_prgb_msssim_mgout_64from128_x_x_/args.yaml --device -1
             # when noise_dataset_yamlfpaths is not overwritten through preset_args
             args.noise_dataset_yamlfpaths = [rawproc.RAWNIND_CONTENT_FPATH]
+
+    """Base class for image-to-image neural network training and inference.
+
+    Centralizes the machinery common to all image-to-image models: argument parsing from
+    YAML configuration files, logging setup, device management, model checkpoint loading,
+    and metric computation. Subclasses implement task-specific logic (model architectures,
+    data loading, loss functions) while inheriting this shared infrastructure.
+
+    The class supports both training and testing modes. Training mode initializes full
+    logging, checkpointing, and source code archival for reproducibility. Testing mode
+    (test_only=True) skips these expensive operations, loading only what's needed for
+    inference.
+
+    Typical usage involves subclassing and implementing instantiate_model() to construct
+    the specific neural network architecture. The base class handles everything else:
+    reading configs, setting up the device, initializing metrics, and providing utility
+    methods for model loading and transfer function selection.
+    """
         # args.load_key_metric = f"val_{self._get_resume_suffix()}"  # this would have been nice for tests to have but not implemented on time
 
 
 class ImageToImageNNTraining(ImageToImageNN):
+    """Training framework for image-to-image neural networks.
+    
+    Extends ImageToImageNN with training infrastructure including:
+    - Training loop with configurable steps and validation intervals
+    - Learning rate scheduling with patience-based reduction
+    - Automatic checkpointing with best-model tracking across metrics
+    - Support for both clean-clean (unpaired) and clean-noisy (paired) training
+    - Dataloader management for train/validation/test splits
+    - Results logging to YAML files via json_saver
+    - Transfer function application for training vs validation/test
+    
+    The training paradigm supports two modes:
+    1. Clean-clean: Train on unpaired clean images from extraraw dataset
+    2. Clean-noisy: Train on paired clean-noisy images from RawNIND dataset
+    
+    Subclasses must implement:
+    - repack_batch(): Convert dataloader batches to (input, target) tuples
+    - step(): Compute loss for a single training step
+    
+    Training workflow:
+    1. __init__() sets up optimizer, dataloaders, and result tracking
+    2. training_loop() runs the main training for N steps
+    3. Validation runs every validation_interval steps
+    4. Best models are saved based on validation metrics
+    5. Learning rate adjusts when validation loss plateaus
+    """
     def __init__(self, **kwargs):
-        """Initialize an image to image neural network trainer.
-
+        """Initialize the training framework.
+        
+        Sets up optimizer, dataloaders, result logging, and transfer functions.
+        Optionally resumes from a checkpoint if load_path is specified.
+        
         Args:
-            launch (bool): launch at init (otherwise user must call training_loop())
-            **kwargs can be specified to overwrite configargparse args.
+            launch (bool): If True, immediately start training_loop() after init
+            **kwargs: Arguments to override config values (passed to parent)
         """
         # skip if already initialized, by checking for self.optimizer
         if hasattr(self, "optimizer"):
@@ -507,9 +725,28 @@ class ImageToImageNNTraining(ImageToImageNN):
             args.val_crop_size = args.test_crop_size
 
     def init_optimizer(self):
+        """Initialize the Adam optimizer for training.
+        
+        Creates an Adam optimizer with the configured initial learning rate. Subclasses
+        can override this to use different optimizers or configurations.
+        """
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.init_lr)
 
     def adjust_lr(self, validation_losses: dict[str, float], step: int):
+        """Adjust learning rate based on validation performance with patience.
+        
+        Implements learning rate scheduling with a patience mechanism: the learning rate
+        is reduced by lr_multiplier if validation losses don't improve for 'patience' steps.
+        Tracks best validation losses across all metrics to determine improvement.
+        
+        Args:
+            validation_losses: Dictionary mapping metric names to current validation loss values
+            step: Current training step number
+            
+        Note:
+            Currently contains a bug where lr_multiplier is applied twice, effectively
+            squaring the multiplier. This is preserved for checkpoint compatibility.
+        """
         model_improved = False
         for lossn, lossv in validation_losses.items():
             if lossv <= self.best_validation_losses[lossn]:
@@ -534,6 +771,11 @@ class ImageToImageNNTraining(ImageToImageNN):
             self.lr_adjustment_allowed_step = step + self.patience
 
     def reset_learning_rate(self):
+        """Reset optimizer learning rate to the initial value.
+        
+        Used when resuming from a checkpoint but wanting to start fresh with learning
+        rate (e.g., when loading from a fallback path or when reset_lr flag is set).
+        """
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = self.init_lr
         logging.info(f"reset_learning_rate to {self.optimizer.param_groups[0]['lr']}")
@@ -685,9 +927,32 @@ class ImageToImageNNTraining(ImageToImageNN):
         test_name: str,
         sanity_check: bool = False,
         save_individual_results: bool = True,
-        save_individual_images: bool = False,  # TODO merge with output_valtest_images (debug_options) and dataloader.OUTPUTS_IMAGE_FILES
+        save_individual_images: bool = False,
     ):
-        """Validate/test. Assumes that dataloader returns one image at a time."""
+        """Run validation or testing on a dataset and compute metrics.
+        
+        Processes images through the model and computes loss metrics including the primary
+        loss function and any additional metrics specified in self.metrics. Handles file
+        locking to prevent concurrent validation runs on shared resources, saves per-image
+        results to YAML, and optionally outputs visualization images.
+        
+        The method applies transfer functions, handles gain matching, supports cropped
+        inference for large images, and computes both per-image and aggregate statistics.
+        
+        Args:
+            dataloader: PyTorch DataLoader yielding single images with metadata
+            test_name: Identifier for this validation/test run (e.g., 'val', 'test', 'manproc')
+            sanity_check: If True, process only 1-2 images for quick verification
+            save_individual_results: If True, save per-image metrics to YAML file
+            save_individual_images: If True, save output images to disk (for visualization)
+        
+        Returns:
+            Dictionary mapping metric names to their mean values across all images
+            
+        Note:
+            Uses file-based locking to prevent concurrent opencv-based arbitrary processing
+            runs from interfering with each other on certain machines.
+        """
         # validation lock (TODO put in a function)
         own_lock = bypass_lock = printed_lock_warning = False
         lock_fpath = f"validation_{os.uname()[1]}_{os.environ.get('CUDA_VISIBLE_DEVICES', 'unk')}.lock"
@@ -959,6 +1224,25 @@ class ImageToImageNNTraining(ImageToImageNN):
             breakpoint()
 
     def training_loop(self):
+        """Execute the main training loop with periodic validation and testing.
+        
+        Runs training for tot_steps iterations with periodic validation every val_interval
+        steps and testing every test_interval steps. Performs initial validation and
+        sanity test before starting training. Saves checkpoints after each validation,
+        keeping only the best models based on validation metrics.
+        
+        The loop structure:
+        1. Initial validation to establish baseline metrics
+        2. Initial sanity test (1-2 samples) to verify pipeline
+        3. While step_n <= tot_steps:
+           - Train for min(val_interval, test_interval) steps
+           - Run validation if at val_interval boundary
+           - Run full test if at test_interval boundary
+           - Save checkpoint and cleanup old models
+           - Adjust learning rate based on validation performance
+        
+        All results are logged to trainres.yaml via json_saver.
+        """
         last_test_step = last_val_step = self.step_n = self.init_step
         # Run an initial validation and test to ensure everything works well
 
@@ -1182,6 +1466,12 @@ class ImageToImageNNTraining(ImageToImageNN):
         torch.save(self.optimizer.state_dict(), fpath + ".opt")
 
     def cleanup_models(self):
+        """Remove non-best model checkpoints to save disk space.
+        
+        Deletes all checkpoints except those corresponding to the best validation metrics.
+        Also removes visualization outputs for non-best iterations when debug mode is enabled.
+        This prevents disk usage from growing unbounded during long training runs.
+        """
         keepers: list[str] = [
             f"iter_{step}" for step in self.json_saver.get_best_steps()
         ]
@@ -1210,6 +1500,21 @@ class ImageToImageNNTraining(ImageToImageNN):
         dataloader_cc: Iterable,
         dataloader_cn: Iterable,
     ) -> float:
+        """Execute training steps on clean-clean and clean-noisy data batches.
+        
+        Runs the specified number of training iterations, alternating between clean-clean
+        and clean-noisy batches. Each iteration computes loss via compute_train_loss(),
+        performs backpropagation, and updates model parameters.
+        
+        Args:
+            optimizer: PyTorch optimizer (typically Adam) for parameter updates
+            num_steps: Number of training steps to execute in this call
+            dataloader_cc: Clean-clean dataloader (unpaired clean images)
+            dataloader_cn: Clean-noisy dataloader (paired clean-noisy images)
+        
+        Returns:
+            Mean training loss across all steps
+        """
         last_time = time.time()
         # for i, batch in enumerate(
         step_losses: list[float] = []
@@ -1352,6 +1657,33 @@ class ImageToImageNNTraining(ImageToImageNN):
         elif self.transfer_function_valtest != "pq":
             lossn_extension += f".{self.transfer_function_valtest}"
         return lossn_extension
+
+    """Abstract training framework for image-to-image neural networks.
+
+    Extends ImageToImageNN with the complete training lifecycle: dataset loading,
+    training loop with validation, model checkpointing, learning rate scheduling, and
+    final testing. This class implements the training machinery shared across all
+    image-to-image tasks, leaving task-specific details to subclasses.
+
+    The training workflow:
+    1. Initialize dataloaders (training, validation, test) via get_dataloaders()
+    2. Initialize optimizer and learning rate schedule
+    3. Run training loop: iterate over batches, compute loss, backpropagate
+    4. Periodically validate and save checkpoints when validation improves
+    5. Clean up old checkpoints, keeping only the best
+    6. After training, run final evaluation on test set
+
+    Subclasses customize this workflow by:
+    - Implementing instantiate_model() to create their architecture
+    - Overriding compute_train_loss() for custom loss computation
+    - Extending get_dataloaders() to construct task-specific datasets
+    - Adding task-specific metrics to the validation loop
+
+    The class handles complexities like mixed training (clean-clean + clean-noisy batches),
+    gradient clipping, early stopping, and logging to both files and structured formats.
+    Training state is fully serializable via configuration files, enabling reproducible
+    experiments and systematic hyperparameter searches.
+    """
 
 
 class PRGBImageToImageNNTraining(ImageToImageNNTraining):
