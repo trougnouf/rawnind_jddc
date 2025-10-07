@@ -44,7 +44,8 @@ class FileScanner:
 
                     found = False
                     for candidate in candidates:
-                        if candidate.exists():
+                        candidate_trio = trio.Path(candidate)
+                        if await candidate_trio.exists():
                             img_info.local_path = candidate
                             await new_file_send.send(img_info)
                             found = True

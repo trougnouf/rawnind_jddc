@@ -170,12 +170,14 @@ class DataIngestor:
                     await trio.sleep(0)  # Yield to scheduler
 
     async def _load_index(self) -> dict:
-        """Load from cache or fetch remote."""
+        """Load from cache or fetch remote using async I/O."""
         yaml_cache, metadata_cache = self.cache_paths
+        yaml_cache_trio = trio.Path(yaml_cache)
+        metadata_cache_trio = trio.Path(metadata_cache)
 
-        if yaml_cache.exists() and metadata_cache.exists():
-            with open(yaml_cache, "r") as f:
-                dataset_data = yaml.safe_load(f)
+        if await yaml_cache_trio.exists() and await metadata_cache_trio.exists():
+            yaml_text = await yaml_cache_trio.read_text()
+            dataset_data = yaml.safe_load(yaml_text)
         else:
             dataset_data = await self._fetch_remote_index()
 
@@ -200,9 +202,11 @@ class DataIngestor:
         dataset_data = await trio.to_thread.run_sync(fetch_yaml)
         metadata_text = await trio.to_thread.run_sync(fetch_metadata)
 
-        # Cache both files
-        yaml_cache.parent.mkdir(parents=True, exist_ok=True)
-        yaml_cache.write_text(yaml.dump(dataset_data), encoding="utf-8")
-        metadata_cache.write_text(metadata_text, encoding="utf-8")
+        # Cache both files using async I/O
+        yaml_cache_trio = trio.Path(yaml_cache)
+        metadata_cache_trio = trio.Path(metadata_cache)
+        await yaml_cache_trio.parent.mkdir(parents=True, exist_ok=True)
+        await yaml_cache_trio.write_text(yaml.dump(dataset_data), encoding="utf-8")
+        await metadata_cache_trio.write_text(metadata_text, encoding="utf-8")
 
         return dataset_data

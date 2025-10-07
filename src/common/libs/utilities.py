@@ -64,17 +64,17 @@ NUM_THREADS = os.cpu_count()
 
 def checksum(fpath, htype="sha1"):
     """Calculate the cryptographic hash of a file.
-    
+
     Computes a hash digest of the file's contents using the specified hash algorithm.
     Useful for verifying file integrity or identifying duplicate files.
-    
+
     Args:
         fpath: Path to the file to hash
         htype: Hash algorithm to use ("sha1" or "sha256")
-        
+
     Returns:
         Hexadecimal digest string of the file's hash
-        
+
     Raises:
         NotImplementedError: If an unsupported hash type is specified
         FileNotFoundError: If the file does not exist
@@ -97,11 +97,11 @@ def checksum(fpath, htype="sha1"):
 
 def cp(inpath, outpath, verbose=False, overwrite=True):
     """Copy a file with optional verbose output and overwrite control.
-    
+
     Attempts to use copy-on-write (via --reflink=auto) when available, falling back
     to standard copy if not supported. This is more efficient on filesystems that
     support CoW (like Btrfs, XFS).
-    
+
     Args:
         inpath: Source file path to copy from
         outpath: Destination file path to copy to
@@ -122,7 +122,7 @@ def cp(inpath, outpath, verbose=False, overwrite=True):
 
 def get_date() -> str:
     """Get the current date in ISO format (YYYY-MM-DD).
-    
+
     Returns:
         String containing the current date in YYYY-MM-DD format
     """
@@ -131,14 +131,14 @@ def get_date() -> str:
 
 def backup(filepaths: list):
     """Backup files with date-stamped filenames.
-    
+
     Creates a 'backup' directory in the current working directory if it doesn't exist,
     then copies each specified file into that directory with the current date
     prepended to the filename.
-    
+
     Args:
         filepaths: List of file paths to backup
-        
+
     Note:
         Backup filenames have format: YYYY-MM-DD_original_filename
     """
@@ -160,15 +160,15 @@ def mt_runner(
     progress_desc: str = "Processing",
 ) -> Iterable[Any]:
     """Execute a function in parallel across multiple processes with progress tracking.
-    
+
     This is a general-purpose multiprocessing wrapper that handles process pool management,
     progress visualization, and proper cleanup. It uses torch.multiprocessing when available
     for CUDA compatibility, falling back to standard multiprocessing otherwise.
-    
+
     The function automatically sets the spawn start method for CUDA safety and provides
     both ordered (slower but preserves sequence) and unordered (faster) execution modes.
     Single-threaded execution is supported for debugging.
-    
+
     Args:
         fun: Function to execute in parallel (should accept single argument unless starmap=True)
         argslist: List of arguments to pass to the function (one per task)
@@ -178,10 +178,10 @@ def mt_runner(
         starmap: If True, unpack each argument tuple as *args to the function
                 (requires ordered=True)
         progress_desc: Text description shown in the progress bar
-    
+
     Returns:
         List of results in the same order as argslist (if ordered=True) or completion order
-        
+
     Note:
         When verbose mode is detected in argslist, the progress bar displays scene and
         method information extracted from results (useful for dataset processing tasks).
@@ -325,7 +325,7 @@ def dict_to_json(adict, fpath):
 
 def dict_to_yaml(adict, fpath):
     """Serialize a dictionary to a YAML file.
-    
+
     Args:
         adict: Dictionary to serialize
         fpath: Output file path for the YAML file
@@ -338,18 +338,18 @@ def load_yaml(
     fpath: str, safely=True, default_type=dict, default=None, error_on_404=True
 ):
     """Load and parse a YAML file with automatic key type conversion.
-    
+
     Reads a YAML file and automatically converts string-digit keys to integers
     (e.g., "42" becomes 42). Handles missing files gracefully with configurable
     default return values.
-    
+
     Args:
         fpath: Path to the YAML file
         safely: If True, use yaml.safe_load (recommended); if False, use yaml.load
         default_type: Type to instantiate for default return value (dict or list)
         default: Explicit default value to return if file doesn't exist
         error_on_404: If False, return default instead of raising FileNotFoundError
-    
+
     Returns:
         Parsed YAML content (typically dict or list) with integer keys where applicable
     """
@@ -423,11 +423,11 @@ def save_listofdict_to_csv(listofdict, fpath, keys=None, mixed_keys=False):
 
 class Printer:
     """Simple dual-output logger that writes to both stdout and a file.
-    
+
     Provides a convenient interface for logging messages to both console and a
     persistent log file simultaneously. Useful for experiments where you want
     both interactive feedback and a permanent record.
-    
+
     Args:
         tostdout: If True, print messages to standard output
         tofile: If True, append messages to log file
@@ -435,6 +435,7 @@ class Printer:
         fn: Filename for the log file (without extension)
         save_file_path: Override full path to log file (ignores save_dir and fn if set)
     """
+
     def __init__(
         self, tostdout=True, tofile=True, save_dir=".", fn="log", save_file_path=None
     ):
@@ -465,12 +466,12 @@ def std_bpp(bpp) -> str:
 
 def get_leaf(path: str) -> str:
     """Extract the final component (filename or directory name) from a path.
-    
+
     Works correctly regardless of trailing slashes on directory paths.
-    
+
     Args:
         path: File or directory path
-        
+
     Returns:
         The leaf name (final path component)
     """
@@ -492,13 +493,13 @@ def get_file_dname(fpath: str) -> str:
 
 def freeze_dict(adict: dict) -> frozenset:
     """Recursively convert a dictionary into a hashable frozenset representation.
-    
+
     Useful for using dictionaries as dictionary keys or in sets. Nested dictionaries
     are recursively frozen as well.
-    
+
     Args:
         adict: Dictionary to freeze
-        
+
     Returns:
         Frozen representation as a frozenset of key-value tuples
     """

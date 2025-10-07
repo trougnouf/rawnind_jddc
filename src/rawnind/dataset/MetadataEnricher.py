@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 from pathlib import Path
@@ -7,30 +6,27 @@ from typing import Callable, Awaitable, Optional, Dict, Any, List, Tuple
 import trio
 
 from .SceneInfo import SceneInfo, ImageInfo
+from .cache import StreamingJSONCache
 
 logger = logging.getLogger(__name__)
 
-# Valid image extensions for processing (raw formats and processed formats)
-# Based on formats supported throughout the codebase
-VALID_IMAGE_EXTENSIONS = {
-    # Raw formats
+VALID_IMAGE_EXTENSIONS = frozenset({
     ".raw", ".nef", ".cr2", ".arw", ".dng", ".rw2", ".orf", ".sr2", ".raf", ".crw",
-    # Processed formats
-    ".exr", ".tif", ".tiff",
-    # Numpy arrays (for Bayer crops)
-    ".npy"
-}
+    ".exr", ".tif", ".tiff", ".npy"
+})
 
 
 class MetadataEnricher:
-
     def __init__(
-            self,
-            cache_path: Optional[Path] = None,
-            dataset_root: Optional[Path] = None,
-            max_concurrent: int = 4,
-            computation_fn: Optional[Callable[[ImageInfo], Awaitable[Dict[str, Any]]]] = None,
-            enable_crops_enrichment: bool = True
+        self,
+        cache_path: Optional[Path] = None,
+        dataset_root: Optional[Path] = None,
+        max_concurrent: int = 4,
+        computation_fn: Optional[
+            Callable[[ImageInfo], Awaitable[Dict[str, Any]]]
+        ] = None,
+        enable_crops_enrichment: bool = True,
+        auto_compact_threshold: int = 10,
     ):
         """
         Initialize metadata enricher.
@@ -41,41 +37,32 @@ class MetadataEnricher:
             max_concurrent (int): Maximum number of concurrent computations
             computation_fn (Optional[Callable[[ImageInfo], Awaitable[Dict[str, Any]]]]): Async function that computes metadata for an image. If None, uses default implementation.
             enable_crops_enrichment (bool): Whether to enrich with crops list metadata
+            auto_compact_threshold (int): Auto-compact cache when duplicate ratio exceeds this
 
         """
-        self.cache_path = cache_path or Path("src/rawnind/datasets/RawNIND/metadata_cache.json")
+        self.cache_path = cache_path or Path(
+            "src/rawnind/datasets/RawNIND/metadata_cache.jsonl"
+        )
         self.dataset_root = dataset_root or Path("src/rawnind/datasets/RawNIND/src")
         self.max_concurrent = max_concurrent
         self.computation_fn = computation_fn  # Can be None
         self.enable_crops_enrichment = enable_crops_enrichment
-        self._metadata_cache: Dict[str, Dict[str, Any]] = {}
-        self._load_cache()
 
-    def _load_cache(self) -> None:
-        """Load metadata cache from disk if it exists."""
-        if self.cache_path.exists():
-            try:
-                with open(self.cache_path, "r") as f:
-                    self._metadata_cache = json.load(f)
-                logger.info(f"Loaded metadata cache with {len(self._metadata_cache)} entries")
-            except Exception as e:
-                logger.warning(f"Failed to load metadata cache: {e}")
-                self._metadata_cache = {}
+        # Use StreamingJSONCache instead of in-memory dict
+        self._cache = StreamingJSONCache(
+            self.cache_path,
+            compact_threshold=auto_compact_threshold,
+            handle_corruption=True,
+        )
 
-    def _save_cache(self) -> None:
-        """Save metadata cache to disk."""
-        try:
-            self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.cache_path, "w") as f:
-                json.dump(self._metadata_cache, f, indent=2)
-            logger.info(f"Saved metadata cache with {len(self._metadata_cache)} entries")
-        except Exception as e:
-            logger.error(f"Failed to save metadata cache: {e}")
+        logger.info(
+            f"Initialized streaming cache with {len(self._cache.keys())} existing entries"
+        )
 
     async def consume_scenes_produce_enriched(
-            self,
-            scene_recv_channel: trio.MemoryReceiveChannel,
-            enriched_send_channel: trio.MemorySendChannel
+        self,
+        scene_recv_channel: trio.MemoryReceiveChannel,
+        enriched_send_channel: trio.MemorySendChannel,
     ) -> None:
         """
         Consume scenes, enrich image metadata, and produce enriched scenes.
@@ -85,13 +72,42 @@ class MetadataEnricher:
             enriched_send_channel: Sends enriched SceneInfo objects
         """
         async with scene_recv_channel, enriched_send_channel:
+            scenes_processed = 0
+
             async for scene_info in scene_recv_channel:
                 # Enrich all images in the scene concurrently
                 enriched_scene = await self._enrich_scene(scene_info)
                 await enriched_send_channel.send(enriched_scene)
 
-            # Save cache when done processing
-            self._save_cache()
+                scenes_processed += 1
+
+                # Log progress periodically
+                if scenes_processed % 10 == 0:
+                    stats = await self._cache.stats()
+                    logger.info(
+                        f"Processed {scenes_processed} scenes. "
+                        f"Cache: {stats['unique_keys']} unique entries, "
+                        f"file size: {stats['file_size'] / 1024 / 1024:.2f} MB"
+                    )
+
+            # Log final statistics and compact if needed
+            stats = await self._cache.stats()
+            logger.info(
+                f"Enrichment complete. Processed {scenes_processed} scenes. "
+                f"Final cache: {stats['unique_keys']} unique entries, "
+                f"{stats['total_entries']} total entries, "
+                f"file size: {stats['file_size'] / 1024 / 1024:.2f} MB"
+            )
+
+            if stats["needs_compaction"]:
+                logger.info("Compacting cache to remove duplicates...")
+                await self._cache.compact()
+                new_stats = await self._cache.stats()
+                logger.info(
+                    f"Compaction complete. Reduced file size from "
+                    f"{stats['file_size'] / 1024 / 1024:.2f} MB to "
+                    f"{new_stats['file_size'] / 1024 / 1024:.2f} MB"
+                )
 
     async def _enrich_scene(self, scene_info: SceneInfo) -> SceneInfo:
         """
@@ -105,7 +121,9 @@ class MetadataEnricher:
         """
         gt_img = scene_info.get_gt_image()
         if not gt_img or not gt_img.local_path or not gt_img.validated:
-            logger.warning(f"Scene {scene_info.scene_name} has no valid GT image, skipping enrichment")
+            logger.warning(
+                f"Scene {scene_info.scene_name} has no valid GT image, skipping enrichment"
+            )
             return scene_info
 
         # Enrich GT image first
@@ -123,15 +141,20 @@ class MetadataEnricher:
                     if file_ext not in VALID_IMAGE_EXTENSIONS:
                         logger.debug(f"Skipping non-image file: {noisy_img.filename}")
                         return
-                    
+
                     if noisy_img.local_path and noisy_img.validated:
                         # Check cache first
-                        if noisy_img.sha1 in self._metadata_cache:
-                            noisy_img.metadata.update(self._metadata_cache[noisy_img.sha1])
-                            logger.debug(f"Using cached metadata for {noisy_img.filename}")
+                        if noisy_img.sha1 in self._cache:
+                            cached_metadata = await self._cache.get(noisy_img.sha1)
+                            noisy_img.metadata.update(cached_metadata)
+                            logger.debug(
+                                f"Using cached metadata for {noisy_img.filename}"
+                            )
                         else:
                             try:
-                                metadata = await self._compute_alignment_metadata(gt_img, noisy_img)
+                                metadata = await self._compute_alignment_metadata(
+                                    gt_img, noisy_img
+                                )
 
                                 # Optionally enrich with crops list
                                 if self.enable_crops_enrichment:
@@ -142,7 +165,7 @@ class MetadataEnricher:
 
                                 noisy_img.metadata.update(metadata)
                                 # Cache the computed metadata
-                                self._metadata_cache[noisy_img.sha1] = metadata
+                                await self._cache.put(noisy_img.sha1, metadata)
                             except Exception as e:
                                 logger.error(
                                     f"Failed to compute metadata for {noisy_img.filename}: {e}"
@@ -162,26 +185,23 @@ class MetadataEnricher:
         if file_ext not in VALID_IMAGE_EXTENSIONS:
             logger.debug(f"Skipping non-image file: {img_info.filename}")
             return
-        
-        if img_info.sha1 in self._metadata_cache:
-            img_info.metadata.update(self._metadata_cache[img_info.sha1])
+
+        if img_info.sha1 in self._cache:
+            img_info.metadata.update(await self._cache.get(img_info.sha1))
             logger.debug(f"Using cached metadata for {img_info.filename}")
         else:
             try:
                 metadata = await trio.to_thread.run_sync(
-                    self._compute_image_stats,
-                    img_info.local_path
+                    self._compute_image_stats, img_info.local_path
                 )
                 img_info.metadata.update(metadata)
-                self._metadata_cache[img_info.sha1] = metadata
+                await self._cache.put(img_info.sha1, metadata)
             except Exception as e:
                 logger.error(f"Failed to compute metadata for {img_info.filename}: {e}")
                 img_info.metadata["enrichment_error"] = str(e)
 
     async def _compute_alignment_metadata(
-            self,
-            gt_img: ImageInfo,
-            noisy_img: ImageInfo
+        self, gt_img: ImageInfo, noisy_img: ImageInfo
     ) -> Dict[str, Any]:
         """
         Compute alignment, gain, and loss mask for a noisy image relative to GT.
@@ -204,8 +224,12 @@ class MetadataEnricher:
         def compute_sync() -> Dict[str, Any]:
             """Synchronous computation in thread."""
             # Load images
-            gt_np, gt_metadata = img_fpath_to_np_mono_flt_and_metadata(str(gt_img.local_path))
-            noisy_np, noisy_metadata = img_fpath_to_np_mono_flt_and_metadata(str(noisy_img.local_path))
+            gt_np, gt_metadata = img_fpath_to_np_mono_flt_and_metadata(
+                str(gt_img.local_path)
+            )
+            noisy_np, noisy_metadata = img_fpath_to_np_mono_flt_and_metadata(
+                str(noisy_img.local_path)
+            )
 
             # Determine if Bayer
             is_bayer = gt_np.shape[0] == 4
@@ -213,6 +237,7 @@ class MetadataEnricher:
             # Find alignment
             if is_bayer:
                 from rawnind.libs.alignment_backends import find_best_alignment_fft_cfa
+
                 best_alignment, best_alignment_loss = find_best_alignment_fft_cfa(
                     gt_np,
                     noisy_np,
@@ -235,7 +260,9 @@ class MetadataEnricher:
                 rgb_gain = float(rawproc.match_gain(gt_np, noisy_np, return_val=True))
 
             # Shift images
-            gt_aligned, noisy_aligned = rawproc.shift_images(gt_np, noisy_np, best_alignment)
+            gt_aligned, noisy_aligned = rawproc.shift_images(
+                gt_np, noisy_np, best_alignment
+            )
 
             # Make loss mask
             if is_bayer:
@@ -245,10 +272,11 @@ class MetadataEnricher:
 
             # Compute overexposure mask
             overexposure_mask = rawproc.make_overexposure_mask(
-                gt_np,
-                gt_metadata.get("overexposure_lb", 1.0)
+                gt_np, gt_metadata.get("overexposure_lb", 1.0)
             )
-            overexposure_mask_shifted = rawproc.shift_mask(overexposure_mask, best_alignment)
+            overexposure_mask_shifted = rawproc.shift_mask(
+                overexposure_mask, best_alignment
+            )
 
             # Combine masks
             final_mask = loss_mask * overexposure_mask_shifted
@@ -261,18 +289,16 @@ class MetadataEnricher:
                 "is_bayer": is_bayer,
                 "mask_mean": float(final_mask.mean()),
                 "overexposure_lb": gt_metadata.get("overexposure_lb", 1.0),
-                "rgb_xyz_matrix": gt_metadata.get("rgb_xyz_matrix",
-                                                  []).tolist() if "rgb_xyz_matrix" in gt_metadata else None,
+                "rgb_xyz_matrix": gt_metadata.get("rgb_xyz_matrix", []).tolist()
+                if "rgb_xyz_matrix" in gt_metadata
+                else None,
             }
 
         # todo: this is not ideal concurrency; need to actually do this async
         return await trio.to_thread.run_sync(compute_sync)
 
     async def _compute_crops_list(
-            self,
-            scene_info: SceneInfo,
-            gt_img: ImageInfo,
-            noisy_img: ImageInfo
+        self, scene_info: SceneInfo, gt_img: ImageInfo, noisy_img: ImageInfo
     ) -> List[Dict[str, Any]]:
         """
         Fetch list of pre-computed crops for this image pair.
@@ -300,11 +326,19 @@ class MetadataEnricher:
             f_basename = os.path.basename(noisy_img.filename)
 
             # Determine if Bayer based on file extension or metadata
-            is_bayer = gt_img.metadata.get("is_bayer", not gt_img.filename.endswith((".exr", ".tif")))
+            is_bayer = gt_img.metadata.get(
+                "is_bayer", not gt_img.filename.endswith((".exr", ".tif"))
+            )
 
             # Build paths to crops directories
             crops_base = self.dataset_root.parent / "crops"
-            prgb_image_set_dpath = crops_base / "proc" / "lin_rec2020" / scene_info.cfa_type / scene_info.scene_name
+            prgb_image_set_dpath = (
+                crops_base
+                / "proc"
+                / "lin_rec2020"
+                / scene_info.cfa_type
+                / scene_info.scene_name
+            )
 
             prgb_gt_dir = prgb_image_set_dpath / "gt"
             prgb_noisy_dir = prgb_image_set_dpath
@@ -328,7 +362,13 @@ class MetadataEnricher:
                         continue
 
             if is_bayer:
-                bayer_image_set_dpath = crops_base / "src" / "Bayer" / scene_info.cfa_type / scene_info.scene_name
+                bayer_image_set_dpath = (
+                    crops_base
+                    / "src"
+                    / "Bayer"
+                    / scene_info.cfa_type
+                    / scene_info.scene_name
+                )
 
             # Process both GT and noisy files
             for f_is_gt in (True, False):
@@ -353,16 +393,25 @@ class MetadataEnricher:
                             }
 
                             if is_bayer:
-                                f_bayer_path = bayer_image_set_dpath / (
-                                    "gt" if f_is_gt else ""
-                                ) / f_file.name.replace(".tif", ".npy")
-                                gt_bayer_path = bayer_image_set_dpath / "gt" / fn_gt.replace(".tif", ".npy")
+                                f_bayer_path = (
+                                    bayer_image_set_dpath
+                                    / ("gt" if f_is_gt else "")
+                                    / f_file.name.replace(".tif", ".npy")
+                                )
+                                gt_bayer_path = (
+                                    bayer_image_set_dpath
+                                    / "gt"
+                                    / fn_gt.replace(".tif", ".npy")
+                                )
 
                                 crop["f_bayer_fpath"] = str(f_bayer_path)
                                 crop["gt_bayer_fpath"] = str(gt_bayer_path)
 
                                 # Check if Bayer crops exist
-                                if not f_bayer_path.exists() or not gt_bayer_path.exists():
+                                if (
+                                    not f_bayer_path.exists()
+                                    or not gt_bayer_path.exists()
+                                ):
                                     logger.debug(
                                         f"Missing Bayer crop: {f_bayer_path} and/or {gt_bayer_path}"
                                     )

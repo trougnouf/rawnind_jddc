@@ -2,15 +2,33 @@
 """Smoke test for the new pipeline architecture."""
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
 import trio
 
-from rawnind.dataset import DataIngestor, FileScanner, Downloader, Verifier, SceneIndexer, MetadataEnricher
+from rawnind.dataset import (
+    DataIngestor,
+    FileScanner,
+    Downloader,
+    Verifier,
+    SceneIndexer,
+    MetadataEnricher,
+)
+from rawnind.dataset.alignment_artifact_writer import AlignmentArtifactWriter
+from rawnind.dataset.crop_producer_stage import CropProducerStage
 
-# Channel buffer size - independent of number of images to process
-CHANNEL_BUFFER_SIZE = 10
+# Default channel buffer multiplier (relative to download concurrency)
+# We don't need huge buffers - 2.5x download concurrency is enough to avoid blocking
+# while preventing excessive RAM usage from queued ImageInfo objects
+CHANNEL_BUFFER_MULTIPLIER = 2.5
+
+# Default download concurrency: 75% of CPU cores (downloads are I/O bound)
+DEFAULT_DOWNLOAD_CONCURRENCY = max(1, int(os.cpu_count() * 0.75))
+
+# Default worker pool size: 75% of CPU cores (for CPU-bound image processing)
+DEFAULT_MAX_WORKERS = max(1, int(os.cpu_count() * 0.75))
 
 # Suppress download error messages that mess up the visualization
 logging.getLogger('rawnind.dataset.Downloader').setLevel(logging.CRITICAL)
@@ -29,18 +47,21 @@ class PipelineVisualizer:
             self.GREEN = '\033[92m'
             self.YELLOW = '\033[93m'
             self.RED = '\033[91m'
+            self.BLUE = '\033[94m'
             self.BOLD = '\033[1m'
         else:
             self.RESET = ''
             self.GREEN = ''
             self.YELLOW = ''
             self.RED = ''
+            self.BLUE = ''
             self.BOLD = ''
         
         self.counters = {
             'scanned': 0,
             'found': 0,
             'missing': 0,
+            'queued': 0,
             'active': 0,
             'finished': 0,
             'verifying': 0,
@@ -51,6 +72,10 @@ class PipelineVisualizer:
             'complete': 0,
             'enriching': 0,
             'enriched': 0,
+            'aligning': 0,
+            'aligned': 0,
+            'cropping': 0,
+            'cropped': 0,
         }
         # Track when counters become zero (for yellow/red transitions)
         self.zero_since = {}
@@ -78,10 +103,6 @@ class PipelineVisualizer:
                 del self.zero_since[counter_name]
             return self.GREEN
 
-        # If there's no downstream consumer waiting, stay white
-        if not has_downstream:
-            return self.RESET
-
         # Track how long this counter has been at zero
         current_time = trio.current_time()
         if counter_name not in self.zero_since:
@@ -89,12 +110,12 @@ class PipelineVisualizer:
 
         time_at_zero = current_time - self.zero_since[counter_name]
 
-        # Red if stalled for > 10 seconds
-        if time_at_zero > 10:
-            return self.RED
-        # Yellow if at zero with downstream waiting
+        # Blue if at zero for > 1.5 seconds (shows stage is idle/done)
+        if time_at_zero > 1.5:
+            return self.BLUE
+        # Otherwise stay white (neutral)
         else:
-            return self.YELLOW
+            return self.RESET
 
     def _format_time(self, seconds):
         """Format seconds into HH:MM:SS or MM:SS."""
@@ -138,71 +159,48 @@ class PipelineVisualizer:
         downloader_color = self._get_color('active', has_downstream=True)
         verifier_color = self._get_color('verifying', has_downstream=True)
         indexer_color = self._get_color('indexing', has_downstream=True)
+        aligning_color = self._get_color('aligning', has_downstream=True)
+        cropping_color = self._get_color('cropping', has_downstream=True)
 
         # Time tracking
         elapsed = trio.current_time() - self._start_time
         elapsed_str = self._format_time(elapsed)
 
-        eta = self._estimate_time_remaining()
-        if eta is not None:
-            eta_str = self._format_time(eta)
-            progress_pct = (self.counters['complete'] / self.total_items * 100) if self.total_items else 0
-            time_info = f"│ Elapsed: {elapsed_str}     │\n│ ETA: {eta_str}         │\n│ Progress: {progress_pct:5.1f}%  │"
-        else:
-            time_info = f"│ Elapsed: {elapsed_str}     │\n│ ETA: --:--         │\n│ Progress: --.--%  │"
-
+        pct = (self.counters['complete'] / self.total_items * 100) if self.total_items else 0
+        eta_str = self._format_time(self._estimate_time_remaining()) if self._estimate_time_remaining() else '--:--'
+        
+        # Format header with proper padding (box is 62 chars, need space for "║ " and " ║")
+        header_content = f"{elapsed_str} │ {pct:4.1f}% │ ETA {eta_str}"
+        header_padding = 58 - len(header_content)  # 62 total - "║ " (2) - " ║" (2) = 58 for content+padding
+        
         return f"""
-╔═════════════════════════════════════════════════════════════════════╗
-║                    PIPELINE PROGRESS MONITOR                        ║
-╚═════════════════════════════════════════════════════════════════════╝
-
-┌─────────────────┐                                      ┌──────────────────┐
-│  DataIngestor   │  {scanner_color}Scanned: {self.counters['scanned']:3d}{self.RESET}                 │ Elapsed: {self._format_time(trio.current_time() - self._start_time) if self._start_time else '00:00'}     │
-└────────┬────────┘                                      │ ETA: {self._format_time(self._estimate_time_remaining()) if self._estimate_time_remaining() else '--:--'}         │
-         │                                               │ Progress: {(self.counters['complete'] / self.total_items * 100) if self.total_items else 0:5.1f}%  │
-         ▼                                               └──────────────────┘
-┌─────────────────┐
-│  FileScanner    │  Found: {self.counters['found']:3d}  Missing: {self.counters['missing']:3d}
-└────┬────────┬───┘
-     │        │
-     │        └────────────────┐
-     │                         ▼
-     │                ┌─────────────────┐
-     │                │  Downloader     │  {downloader_color}Active: {self.counters['active']:3d}{self.RESET}
-     │                └────────┬────────┘  Finished: {self.counters['finished']:3d}
-     │                         │
-     │          ┌──────────────┘
-     │          │
-     ▼          ▼
-┌─────────────────────┐
-│  Merge Channels     │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────┐
-│   Verifier      │  {verifier_color}Verifying: {self.counters['verifying']:3d}{self.RESET}
-└────┬────────┬───┘  Verified:  {self.counters['verified']:3d}
-     │        │       Failed:    {self.counters['failed']:3d}
-     │        │       Errors:    {self.counters['errors']:3d}
-     │        └────────────────────┐
-     │                      (retry loop)
-     ▼
-┌─────────────────┐
-│ SceneIndexer    │  {indexer_color}Indexing: {self.counters['indexing']:3d}{self.RESET}
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│MetadataEnricher │  Enriching: {self.counters['enriching']:3d}
-└────────┬────────┘  Enriched:  {self.counters['enriched']:3d}
-         │
-         ▼
-┌─────────────────┐
-│ Final Consumer  │  Complete: {self.counters['complete']:3d}
-└─────────────────┘
-
-{self._render_status_bars()}
-"""
+╔════════════════════════════════════════════════════════════╗
+║ {header_content}{' ' * header_padding} ║
+╚════════════════════════════════════════════════════════════╝
+│ DataIngestor │ {scanner_color}Scanned: {self.counters['scanned']:3d}{self.RESET}
+└──▼
+│ FileScanner  │ Found: {self.counters['found']:3d} │ Missing: {self.counters['missing']:3d}
+└──┬───────────┴─────────────┐
+   │ (exists)        (missing)│
+   ▼                          ▼
+   │                  ┌───Downloader───┐ Queued: {self.counters['queued']:3d} │ {downloader_color}Active: {self.counters['active']:3d}{self.RESET} │ Finished: {self.counters['finished']:3d}
+   │                  └───────┬────────┘
+   │◄─────────────────────────┘
+   ▼
+│ Verifier     │ {verifier_color}Verifying: {self.counters['verifying']:3d}{self.RESET} │ OK: {self.counters['verified']:3d} │ Fail: {self.counters['failed']:3d} │ Err: {self.counters['errors']:3d}
+└──┬────────────────┐
+   │         (retry)│
+   ▼                │
+│ SceneIndexer │ {indexer_color}Indexing: {self.counters['indexing']:3d}{self.RESET}
+└──▼
+│MetadataEnrich│ Enriching: {self.counters['enriching']:3d} │ Enriched: {self.counters['enriched']:3d}
+└──▼
+│AlignArtifact │ {aligning_color}Aligning: {self.counters['aligning']:3d}{self.RESET} │ Aligned: {self.counters['aligned']:3d}
+└──▼
+│ CropProducer │ {cropping_color}Cropping: {self.counters['cropping']:3d}{self.RESET} │ Cropped: {self.counters['cropped']:3d}
+└──▼
+│FinalConsumer │ {self.BOLD}{self.GREEN}Complete: {self.counters['complete']:3d}{self.RESET}
+{self._render_status_bars()}"""
 
     def _render_status_bars(self):
         """Render status bars at the bottom of the display."""
@@ -321,9 +319,9 @@ class PipelineVisualizer:
 # finalized. Instead, start the producer task from a regular async function
 # and read from an internal channel.
 
-async def _start_producer_and_limit(ingestor, max_scenes, outbound_send):
+async def _start_producer_and_limit(ingestor, max_scenes, outbound_send, channel_buffer_size):
     """Start ingestor.produce_scenes into an internal channel then forward up to max_scenes to outbound_send."""
-    internal_send, internal_recv = trio.open_memory_channel(CHANNEL_BUFFER_SIZE)
+    internal_send, internal_recv = trio.open_memory_channel(channel_buffer_size)
 
     async with trio.open_nursery() as prod_nursery:
         # Start the real producer feeding the internal_send channel.
@@ -341,7 +339,7 @@ async def _start_producer_and_limit(ingestor, max_scenes, outbound_send):
                     break
 
 
-async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False, download_concurrency=2):
+async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False, download_concurrency=None):
     """
     Smoke test for the pipeline architecture.
 
@@ -349,8 +347,12 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
         max_images: Maximum number of complete scenes to process. If None, processes all scenes in dataset.
         timeout_seconds: Maximum time to run in seconds. If None, runs until completion.
         debug: If True, print debug information about enrichment process.
-        download_concurrency: Maximum number of concurrent downloads (default: 2).
+        download_concurrency: Maximum number of concurrent downloads. If None, defaults to 75% of CPU cores.
     """
+    # Set default download concurrency if not specified
+    if download_concurrency is None:
+        download_concurrency = DEFAULT_DOWNLOAD_CONCURRENCY
+
     dataset_root = Path("tmp/rawnind_dataset")
 
     # Create visualizer with expected number of scenes to complete
@@ -364,14 +366,20 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
         if timeout_seconds is not None:
             nursery.cancel_scope.deadline = trio.current_time() + timeout_seconds
         
-        # Create channels with fixed buffer size
-        (scene_send, scene_recv) = trio.open_memory_channel(CHANNEL_BUFFER_SIZE)
-        (new_file_send, new_file_recv) = trio.open_memory_channel(CHANNEL_BUFFER_SIZE)
-        (missing_send, missing_recv) = trio.open_memory_channel(CHANNEL_BUFFER_SIZE)
-        (downloaded_send, downloaded_recv) = trio.open_memory_channel(CHANNEL_BUFFER_SIZE)
-        (verified_send, verified_recv) = trio.open_memory_channel(CHANNEL_BUFFER_SIZE)
-        (complete_scene_send, complete_scene_recv) = trio.open_memory_channel(CHANNEL_BUFFER_SIZE)
-        (enriched_send, enriched_recv) = trio.open_memory_channel(CHANNEL_BUFFER_SIZE)
+        # Calculate channel buffer size based on download concurrency
+        # Use 2.5x multiplier to allow some queueing without excessive RAM usage
+        channel_buffer_size = int(download_concurrency * CHANNEL_BUFFER_MULTIPLIER)
+
+        # Create channels with dynamic buffer size
+        (scene_send, scene_recv) = trio.open_memory_channel(channel_buffer_size)
+        (new_file_send, new_file_recv) = trio.open_memory_channel(channel_buffer_size)
+        (missing_send, missing_recv) = trio.open_memory_channel(channel_buffer_size)
+        (downloaded_send, downloaded_recv) = trio.open_memory_channel(channel_buffer_size)
+        (verified_send, verified_recv) = trio.open_memory_channel(channel_buffer_size)
+        (complete_scene_send, complete_scene_recv) = trio.open_memory_channel(channel_buffer_size)
+        (enriched_send, enriched_recv) = trio.open_memory_channel(channel_buffer_size)
+        (aligned_send, aligned_recv) = trio.open_memory_channel(channel_buffer_size)
+        (cropped_send, cropped_recv) = trio.open_memory_channel(channel_buffer_size)
 
         # Initialize components
         ingestor = DataIngestor(dataset_root=dataset_root)
@@ -380,12 +388,22 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
         verifier = Verifier(max_retries=2)
         indexer = SceneIndexer(dataset_root)
         enricher = MetadataEnricher(dataset_root=dataset_root, enable_crops_enrichment=False)
+        aligner = AlignmentArtifactWriter(
+            output_dir=dataset_root / "alignment_artifacts",
+            max_workers=DEFAULT_MAX_WORKERS
+        )
+        cropper = CropProducerStage(
+            output_dir=dataset_root / "crops",
+            crop_size=256,
+            num_crops=5,
+            max_workers=DEFAULT_MAX_WORKERS
+        )
 
         # Producer - limits scenes if max_images (max_scenes) is specified
         async def limited_produce_scenes(send_channel):
             if max_images is not None:
                 # Use the helper function to limit scenes
-                await _start_producer_and_limit(ingestor, max_scenes=max_images, outbound_send=send_channel)
+                await _start_producer_and_limit(ingestor, max_scenes=max_images, outbound_send=send_channel, channel_buffer_size=channel_buffer_size)
             else:
                 # No limit - produce all scenes
                 await ingestor.produce_scenes(send_channel)
@@ -417,46 +435,91 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
 
                         if not found:
                             img_info.local_path = candidates[0] if candidates else None
+                            # Clear any cached image data to save RAM while in download queue
+                            img_info.unload_image()
                             await viz.update(missing=1)
                             await missing.send(img_info)
 
         # Downloader with stats tracking
         async def run_downloader(recv, send):
             # Create internal channels for tracking
-            internal_missing_send, internal_missing_recv = trio.open_memory_channel(CHANNEL_BUFFER_SIZE)
-            internal_downloaded_send, internal_downloaded_recv = trio.open_memory_channel(CHANNEL_BUFFER_SIZE)
-            
+            internal_missing_send, internal_missing_recv = trio.open_memory_channel(channel_buffer_size)
+            internal_downloaded_send, internal_downloaded_recv = trio.open_memory_channel(channel_buffer_size)
+
+            # Track total items in the download pipeline
+            total_in_pipeline = 0
+            pipeline_lock = trio.Lock()
+
             async def track_downloads():
                 """Track download requests and completions"""
+                nonlocal total_in_pipeline
+
                 async with trio.open_nursery() as track_nursery:
                     # Track incoming download requests
                     async def track_incoming():
+                        nonlocal total_in_pipeline
                         async with recv:
                             async for img_info in recv:
-                                await viz.update(active=1)
+                                async with pipeline_lock:
+                                    total_in_pipeline += 1
+                                # Track download start time and total count
+                                if viz.download_start_time is None:
+                                    viz.download_start_time = trio.current_time()
+                                viz.total_downloads += 1
                                 await internal_missing_send.send(img_info)
                         await internal_missing_send.aclose()
-                    
+
                     # Track completed downloads
                     async def track_outgoing():
+                        nonlocal total_in_pipeline
                         async with internal_downloaded_recv:
                             async for img_info in internal_downloaded_recv:
-                                await viz.update(active=-1, finished=1)
+                                async with pipeline_lock:
+                                    total_in_pipeline -= 1
+                                await viz.update(finished=1)
                                 await send.send(img_info)
                         await send.aclose()
-                    
+
+                    # Periodically update queued/active from actual state
+                    async def monitor_pipeline():
+                        nonlocal total_in_pipeline
+                        prev_queued = 0
+                        prev_active = 0
+
+                        while True:
+                            await trio.sleep(0.1)  # Update every 100ms
+                            stats = internal_missing_send.statistics()
+                            queued_count = stats.current_buffer_used
+
+                            async with pipeline_lock:
+                                # Active = total in pipeline - queued in buffer
+                                # (capped at download_concurrency since that's max possible)
+                                active_count = min(total_in_pipeline - queued_count, download_concurrency)
+                                active_count = max(0, active_count)
+
+                                # Calculate deltas and update via proper method
+                                queued_delta = queued_count - prev_queued
+                                active_delta = active_count - prev_active
+
+                                if queued_delta != 0 or active_delta != 0:
+                                    await viz.update(queued=queued_delta, active=active_delta)
+
+                                prev_queued = queued_count
+                                prev_active = active_count
+
                     # Run the actual downloader
                     async def run_actual_downloader():
                         await downloader.consume_missing(internal_missing_recv, internal_downloaded_send)
-                    
+
                     track_nursery.start_soon(track_incoming)
+                    track_nursery.start_soon(monitor_pipeline)
                     track_nursery.start_soon(run_actual_downloader)
                     track_nursery.start_soon(track_outgoing)
-            
+
             await track_downloads()
 
         # Merge channels
-        merged_send, merged_recv = trio.open_memory_channel(CHANNEL_BUFFER_SIZE)
+        merged_send, merged_recv = trio.open_memory_channel(channel_buffer_size)
 
         async def merge_inputs():
             async with merged_send:
@@ -546,11 +609,37 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
                             # Still send the scene even if enrichment fails
                             await send.send(scene_info)
             finally:
-                # Save cache when done
-                if debug:
-                    print(f"\nDEBUG: Saving cache with {len(enricher._metadata_cache)} entries")
-                enricher._save_cache()
                 await send.aclose()
+
+        # Aligner with stats
+        async def aligner_with_stats(recv, send):
+            async with recv, send:
+                async for scene_info in recv:
+                    await viz.update(aligning=1)
+                    try:
+                        aligned_scene = await aligner.process_scene(scene_info)
+                        await viz.update(aligning=-1, aligned=1)
+                        await send.send(aligned_scene)
+                    except Exception as e:
+                        if debug:
+                            print(f"  ERROR during alignment: {e}")
+                        await viz.update(aligning=-1, errors=1)
+                        await send.send(scene_info)
+
+        # Cropper with stats
+        async def cropper_with_stats(recv, send):
+            async with recv, send:
+                async for scene_info in recv:
+                    await viz.update(cropping=1)
+                    try:
+                        cropped_scene = await cropper.process_scene(scene_info)
+                        await viz.update(cropping=-1, cropped=1)
+                        await send.send(cropped_scene)
+                    except Exception as e:
+                        if debug:
+                            print(f"  ERROR during cropping: {e}")
+                        await viz.update(cropping=-1, errors=1)
+                        await send.send(scene_info)
 
         # Final consumer
         async def final_consumer(recv):
@@ -571,10 +660,32 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
         nursery.start_soon(verifier_with_stats, merged_recv, verified_send, missing_send)
         nursery.start_soon(indexer_with_stats, verified_recv, complete_scene_send)
         nursery.start_soon(enricher_with_stats, complete_scene_recv, enriched_send)
-        nursery.start_soon(final_consumer, enriched_recv)
+        nursery.start_soon(aligner_with_stats, enriched_recv, aligned_send)
+        nursery.start_soon(cropper_with_stats, aligned_recv, cropped_send)
+        nursery.start_soon(final_consumer, cropped_recv)
 
     # Final display is already shown by the visualizer
-    print("\n\nPipeline completed successfully!")
+    print("\n\n" + "="*60)
+    print("Pipeline completed!")
+    print("="*60)
+
+    # Show summary of errors if any
+    total_errors = viz.counters['errors']
+    failed_verifications = viz.counters['failed']
+
+    if total_errors > 0 or failed_verifications > 0:
+        print("\n⚠️  ISSUES DETECTED:")
+        if failed_verifications > 0:
+            print(f"  • {failed_verifications} files failed verification (hash mismatch)")
+        if total_errors > 0:
+            print(f"  • {total_errors} errors occurred during processing")
+        print("\n💡 Check logs for details:")
+        print("  - Re-run with --debug flag for enrichment details")
+        print("  - Check dataset logs in tmp/rawnind_dataset/")
+    else:
+        print("\n✅ No errors detected!")
+
+    print()
 
 
 if __name__ == "__main__":
@@ -600,8 +711,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--download-concurrency",
         type=int,
-        default=2,
-        help="Maximum number of concurrent downloads (default: 2)"
+        default=None,
+        help=f"Maximum number of concurrent downloads (default: {DEFAULT_DOWNLOAD_CONCURRENCY}, which is 75%% of {os.cpu_count()} CPU cores)"
     )
     
     args = parser.parse_args()

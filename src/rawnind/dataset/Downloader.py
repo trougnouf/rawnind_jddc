@@ -66,6 +66,8 @@ class Downloader:
         for attempt in range(self.max_retries):
             try:
                 await self._download_file(img_info.download_url, img_info.local_path)
+                # Opportunistically load tensor into cache (page cache makes this fast)
+                await img_info.load_image(as_torch=True)
                 return True
             except Exception as e:
                 logger.warning(
@@ -79,12 +81,13 @@ class Downloader:
     
     async def _download_file(self, url: str, dest_path: Path) -> None:
         """Download a file asynchronously."""
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        dest_path_trio = trio.Path(dest_path)
+        await dest_path_trio.parent.mkdir(parents=True, exist_ok=True)
         
         async with httpx.AsyncClient(timeout=300.0) as client:
             async with client.stream("GET", url) as response:
                 response.raise_for_status()
                 
-                with open(dest_path, "wb") as f:
+                async with await dest_path_trio.open("wb") as f:
                     async for chunk in response.aiter_bytes(chunk_size=8192):
-                        f.write(chunk)
+                        await f.write(chunk)
