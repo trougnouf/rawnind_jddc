@@ -18,6 +18,7 @@ from rawnind.dataset import (
 )
 from rawnind.dataset.alignment_artifact_writer import AlignmentArtifactWriter
 from rawnind.dataset.crop_producer_stage import CropProducerStage
+from rawnind.dataset.YAMLArtifactWriter import YAMLArtifactWriter
 
 # Default channel buffer multiplier (relative to download concurrency)
 # We don't need huge buffers - 2.5x download concurrency is enough to avoid blocking
@@ -30,8 +31,20 @@ DEFAULT_DOWNLOAD_CONCURRENCY = max(1, int(os.cpu_count() * 0.75))
 # Default worker pool size: 75% of CPU cores (for CPU-bound image processing)
 DEFAULT_MAX_WORKERS = max(1, int(os.cpu_count() * 0.75))
 
+# Configure file logging to capture detailed debug info
+log_file = Path('/tmp/smoke_test.log')
+file_handler = logging.FileHandler(log_file, mode='w')
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logging.root.addHandler(file_handler)
+logging.root.setLevel(logging.DEBUG)
+
 # Suppress download error messages that mess up the visualization
 logging.getLogger('rawnind.dataset.Downloader').setLevel(logging.CRITICAL)
+# Enable debug logging for MetadataEnricher to diagnose blocking
+logging.getLogger('rawnind.dataset.MetadataEnricher').setLevel(logging.INFO)
+
+print(f"Logging to: {log_file}")
 
 
 class PipelineVisualizer:
@@ -68,7 +81,7 @@ class PipelineVisualizer:
             'verified': 0,
             'failed': 0,
             'errors': 0,
-            'indexing': 0,
+            'Indexed': 0,
             'complete': 0,
             'enriching': 0,
             'enriched': 0,
@@ -76,6 +89,8 @@ class PipelineVisualizer:
             'aligned': 0,
             'cropping': 0,
             'cropped': 0,
+            'yaml_writing': 0,
+            'yaml_written': 0,
         }
         # Track when counters become zero (for yellow/red transitions)
         self.zero_since = {}
@@ -158,9 +173,10 @@ class PipelineVisualizer:
         scanner_color = self._get_color('scanned', has_downstream=True)
         downloader_color = self._get_color('active', has_downstream=True)
         verifier_color = self._get_color('verifying', has_downstream=True)
-        indexer_color = self._get_color('indexing', has_downstream=True)
+        indexer_color = self._get_color('Indexed', has_downstream=True)
         aligning_color = self._get_color('aligning', has_downstream=True)
         cropping_color = self._get_color('cropping', has_downstream=True)
+        yaml_writing_color = self._get_color('yaml_writing', has_downstream=True)
 
         # Time tracking
         elapsed = trio.current_time() - self._start_time
@@ -191,13 +207,15 @@ class PipelineVisualizer:
 └──┬────────────────┐
    │         (retry)│
    ▼                │
-│ SceneIndexer │ {indexer_color}Indexing: {self.counters['indexing']:3d}{self.RESET}
+│ SceneIndexer │ {indexer_color}Indexed: {self.counters['Indexed']:3d}{self.RESET}
 └──▼
 │MetadataEnrich│ Enriching: {self.counters['enriching']:3d} │ Enriched: {self.counters['enriched']:3d}
 └──▼
 │AlignArtifact │ {aligning_color}Aligning: {self.counters['aligning']:3d}{self.RESET} │ Aligned: {self.counters['aligned']:3d}
 └──▼
 │ CropProducer │ {cropping_color}Cropping: {self.counters['cropping']:3d}{self.RESET} │ Cropped: {self.counters['cropped']:3d}
+└──▼
+│ YAMLArtifact │ {yaml_writing_color}Writing: {self.counters['yaml_writing']:3d}{self.RESET} │ Written: {self.counters['yaml_written']:3d}
 └──▼
 │FinalConsumer │ {self.BOLD}{self.GREEN}Complete: {self.counters['complete']:3d}{self.RESET}
 {self._render_status_bars()}"""
@@ -380,6 +398,7 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
         (enriched_send, enriched_recv) = trio.open_memory_channel(channel_buffer_size)
         (aligned_send, aligned_recv) = trio.open_memory_channel(channel_buffer_size)
         (cropped_send, cropped_recv) = trio.open_memory_channel(channel_buffer_size)
+        (yaml_send, yaml_recv) = trio.open_memory_channel(channel_buffer_size)
 
         # Initialize components
         ingestor = DataIngestor(dataset_root=dataset_root)
@@ -397,6 +416,10 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
             crop_size=256,
             num_crops=5,
             max_workers=DEFAULT_MAX_WORKERS
+        )
+        yaml_writer = YAMLArtifactWriter(
+            output_dir=dataset_root,
+            output_filename="pipeline_output.yaml"
         )
 
         # Producer - limits scenes if max_images (max_scenes) is specified
@@ -568,7 +591,7 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
         async def indexer_with_stats(recv, send):
             async with recv, send:
                 async for img_info in recv:
-                    await viz.update(indexing=1)
+                    await viz.update(Indexed=1)
                     indexer._add_image_to_index(img_info)
 
                     scene_key = (img_info.cfa_type, img_info.scene_name)
@@ -581,6 +604,10 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
 
         # Enricher with stats
         async def enricher_with_stats(recv, send):
+            # Load cache before enrichment loop
+            await enricher._cache.load()
+            logging.info(f"Enricher cache loaded with {len(enricher._cache.keys())} entries")
+            
             try:
                 async with recv:
                     async for scene_info in recv:
@@ -588,17 +615,17 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
                         try:
                             if debug:
                                 gt_img = scene_info.get_gt_image()
-                                print(f"\nDEBUG: Enriching scene {scene_info.scene_name}")
+                                print(f"DEBUG: Enriching scene {scene_info.scene_name}")
                                 print(f"  GT image: {gt_img.filename if gt_img else 'None'}")
                                 if gt_img:
                                     print(f"  GT local_path: {gt_img.local_path}")
                                     print(f"  GT validated: {gt_img.validated}")
-                                print(f"  Cache size before: {len(enricher._metadata_cache)}")
+                                print(f"  Cache size before: {len(enricher._cache.keys())}")
                             
                             enriched_scene = await enricher._enrich_scene(scene_info)
                             
                             if debug:
-                                print(f"  Cache size after: {len(enricher._metadata_cache)}")
+                                print(f"  Cache size after: {len(enricher._cache.keys())}")
                             
                             await viz.update(enriching=-1, enriched=1)
                             await send.send(enriched_scene)
@@ -613,33 +640,64 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
 
         # Aligner with stats
         async def aligner_with_stats(recv, send):
-            async with recv, send:
-                async for scene_info in recv:
-                    await viz.update(aligning=1)
-                    try:
-                        aligned_scene = await aligner.process_scene(scene_info)
-                        await viz.update(aligning=-1, aligned=1)
-                        await send.send(aligned_scene)
-                    except Exception as e:
-                        if debug:
-                            print(f"  ERROR during alignment: {e}")
-                        await viz.update(aligning=-1, errors=1)
-                        await send.send(scene_info)
+            # Start aligner
+            await aligner.startup()
+            try:
+                async with recv, send:
+                    async for scene_info in recv:
+                        await viz.update(aligning=1)
+                        try:
+                            aligned_scene = await aligner.process_scene(scene_info)
+                            await viz.update(aligning=-1, aligned=1)
+                            await send.send(aligned_scene)
+                        except Exception as e:
+                            if debug:
+                                print(f"  ERROR during alignment: {e}")
+                            await viz.update(aligning=-1, errors=1)
+                            await send.send(scene_info)
+            finally:
+                await aligner.shutdown()
 
         # Cropper with stats
         async def cropper_with_stats(recv, send):
-            async with recv, send:
-                async for scene_info in recv:
-                    await viz.update(cropping=1)
-                    try:
-                        cropped_scene = await cropper.process_scene(scene_info)
-                        await viz.update(cropping=-1, cropped=1)
-                        await send.send(cropped_scene)
-                    except Exception as e:
-                        if debug:
-                            print(f"  ERROR during cropping: {e}")
-                        await viz.update(cropping=-1, errors=1)
-                        await send.send(scene_info)
+            # Start cropper
+            await cropper.startup()
+            try:
+                async with recv, send:
+                    async for scene_info in recv:
+                        await viz.update(cropping=1)
+                        try:
+                            cropped_scene = await cropper.process_scene(scene_info)
+                            await viz.update(cropping=-1, cropped=1)
+                            await send.send(cropped_scene)
+                        except Exception as e:
+                            if debug:
+                                print(f"  ERROR during cropping: {e}")
+                            await viz.update(cropping=-1, errors=1)
+                            await send.send(scene_info)
+            finally:
+                await cropper.shutdown()
+
+        # YAML writer with stats
+        async def yaml_writer_with_stats(recv, send):
+            # Start writer
+            await yaml_writer.startup()
+            try:
+                async with recv, send:
+                    async for scene_info in recv:
+                        await viz.update(yaml_writing=1)
+                        try:
+                            yaml_scene = await yaml_writer.process_scene(scene_info)
+                            await viz.update(yaml_writing=-1, yaml_written=1)
+                            await send.send(yaml_scene)
+                        except Exception as e:
+                            if debug:
+                                print(f"  ERROR during YAML writing: {e}")
+                            await viz.update(yaml_writing=-1, errors=1)
+                            await send.send(scene_info)
+            finally:
+                # Ensure YAML is written on completion
+                await yaml_writer.shutdown()
 
         # Final consumer
         async def final_consumer(recv):
@@ -662,7 +720,8 @@ async def limited_smoke_test(max_images=None, timeout_seconds=None, debug=False,
         nursery.start_soon(enricher_with_stats, complete_scene_recv, enriched_send)
         nursery.start_soon(aligner_with_stats, enriched_recv, aligned_send)
         nursery.start_soon(cropper_with_stats, aligned_recv, cropped_send)
-        nursery.start_soon(final_consumer, cropped_recv)
+        nursery.start_soon(yaml_writer_with_stats, cropped_recv, yaml_send)
+        nursery.start_soon(final_consumer, yaml_recv)
 
     # Final display is already shown by the visualizer
     print("\n\n" + "="*60)

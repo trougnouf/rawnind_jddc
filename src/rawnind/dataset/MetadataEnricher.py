@@ -54,10 +54,7 @@ class MetadataEnricher:
             compact_threshold=auto_compact_threshold,
             handle_corruption=True,
         )
-
-        logger.info(
-            f"Initialized streaming cache with {len(self._cache.keys())} existing entries"
-        )
+        # Note: cache will be loaded when consume_scenes_produce_enriched() starts
 
     async def consume_scenes_produce_enriched(
         self,
@@ -71,6 +68,12 @@ class MetadataEnricher:
             scene_recv_channel: Receives SceneInfo objects
             enriched_send_channel: Sends enriched SceneInfo objects
         """
+        # Load cache before starting enrichment
+        await self._cache.load()
+        logger.info(
+            f"Loaded streaming cache with {len(self._cache.keys())} existing entries"
+        )
+
         async with scene_recv_channel, enriched_send_channel:
             scenes_processed = 0
 
@@ -180,25 +183,32 @@ class MetadataEnricher:
 
     async def _enrich_clean_image(self, img_info: ImageInfo) -> None:
         """This is an example enrichment function: Enrich a clean (GT) image with basic stats."""
+        logger.info(f"Starting _enrich_clean_image for {img_info.filename}")
         # Skip non-image files (e.g., .xmp metadata files)
         file_ext = Path(img_info.filename).suffix.lower()
         if file_ext not in VALID_IMAGE_EXTENSIONS:
             logger.debug(f"Skipping non-image file: {img_info.filename}")
             return
 
+        logger.info(f"Checking cache for {img_info.sha1}")
         if img_info.sha1 in self._cache:
+            logger.info(f"Cache hit for {img_info.sha1}")
             img_info.metadata.update(await self._cache.get(img_info.sha1))
             logger.debug(f"Using cached metadata for {img_info.filename}")
         else:
+            logger.info(f"Cache miss for {img_info.sha1}, computing stats")
             try:
                 metadata = await trio.to_thread.run_sync(
                     self._compute_image_stats, img_info.local_path
                 )
+                logger.info(f"Computed stats for {img_info.sha1}, putting in cache")
                 img_info.metadata.update(metadata)
                 await self._cache.put(img_info.sha1, metadata)
+                logger.info(f"Cache put complete for {img_info.sha1}")
             except Exception as e:
                 logger.error(f"Failed to compute metadata for {img_info.filename}: {e}")
                 img_info.metadata["enrichment_error"] = str(e)
+        logger.info(f"Finished _enrich_clean_image for {img_info.filename}")
 
     async def _compute_alignment_metadata(
         self, gt_img: ImageInfo, noisy_img: ImageInfo

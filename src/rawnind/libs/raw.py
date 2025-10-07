@@ -47,7 +47,6 @@ except ImportError:
     TIFF_PROVIDER = "OpenCV"
 import torch  # for typing only
 
-
 # import colour
 try:
     import imageio  # used in libraw_process sample, should be easy to replace
