@@ -14,8 +14,9 @@ from typing import Dict, Any, List, Optional
 import trio
 import yaml
 
-from .post_download_worker import PostDownloadWorker
+from .PostDownloadWorker import PostDownloadWorker
 from .SceneInfo import SceneInfo, ImageInfo
+from .pipeline_decorators import stage
 
 logger = logging.getLogger(__name__)
 
@@ -140,12 +141,21 @@ class YAMLArtifactWriter(PostDownloadWorker):
             f"YAMLArtifactWriter initialized: output={self.yaml_path}"
         )
 
+        # Support for visualizer attachment
+        self._viz = None
+
+    def attach_visualizer(self, viz):
+        """Attach visualizer for automatic progress tracking."""
+        self._viz = viz
+        return self
+
     async def startup(self):
         """Initialize writer resources."""
         await super().startup()
         self.descriptors = []
         logger.info("YAMLArtifactWriter ready")
 
+    @stage(progress=("yaml_writing", "yaml_written"), skip_on_error=True)
     async def process_scene(self, scene: SceneInfo) -> SceneInfo:
         """
         Process a single scene and buffer its descriptor.

@@ -1119,6 +1119,17 @@ def fft_phase_correlate_cfa(
     else:
         raise ValueError(f"Unknown method: {method}")
 
+    # Snap to CFA block boundaries
+    # Bayer: 2x2 blocks, X-Trans: 3x3 processing blocks (per vkdt)
+    if pattern_shape == (6, 6):
+        # X-Trans: snap to 3x3 blocks
+        dy_final = (dy_final // 3) * 3
+        dx_final = (dx_final // 3) * 3
+    elif pattern_shape == (2, 2):
+        # Bayer: snap to 2x2 blocks
+        dy_final = (dy_final // 2) * 2
+        dx_final = (dx_final // 2) * 2
+
     return (dy_final, dx_final), channel_shifts
 
 

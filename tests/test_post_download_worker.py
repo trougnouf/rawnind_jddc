@@ -7,7 +7,7 @@ import trio
 from pathlib import Path
 from unittest import TestCase, main
 
-from src.rawnind.dataset.post_download_worker import PostDownloadWorker
+from src.rawnind.dataset.PostDownloadWorker import PostDownloadWorker
 from src.rawnind.dataset.SceneInfo import SceneInfo
 
 

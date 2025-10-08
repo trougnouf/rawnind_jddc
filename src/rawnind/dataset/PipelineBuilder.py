@@ -10,9 +10,9 @@ from .FileScanner import FileScanner
 from .Downloader import Downloader
 from .Verifier import Verifier
 from .MetadataEnricher import MetadataEnricher
-from .post_download_worker import PostDownloadWorker
+from .PostDownloadWorker import PostDownloadWorker
 from .crop_producer_stage import CropProducerStage
-from .alignment_artifact_writer import AlignmentArtifactWriter
+from .Aligner import Aligner
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ class PipelineBuilder:
 
         if self.postprocessor_config.get("enable_alignment_artifacts", True):
             self.postprocessors.append(
-                AlignmentArtifactWriter(
+                Aligner(
                     output_dir=artifacts_dir / "alignment",
                     write_masks=True,
                     write_metadata=True,

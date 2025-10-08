@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 import trio
 
-from .post_download_worker import PostDownloadWorker
+from .PostDownloadWorker import PostDownloadWorker
 from .SceneInfo import SceneInfo, ImageInfo
+from .pipeline_decorators import stage
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,15 @@ class CropProducerStage(PostDownloadWorker):
         for crop_type in self.crop_types:
             (self.output_dir / crop_type).mkdir(parents=True, exist_ok=True)
 
+        # Support for visualizer attachment
+        self._viz = None
+
+    def attach_visualizer(self, viz):
+        """Attach visualizer for automatic progress tracking."""
+        self._viz = viz
+        return self
+
+    @stage(progress=("cropping", "cropped"), skip_on_error=True)
     async def process_scene(self, scene: SceneInfo) -> SceneInfo:
         """
         Generate crops for all image pairs in the scene.
