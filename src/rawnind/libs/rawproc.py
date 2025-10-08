@@ -520,6 +520,111 @@ def make_loss_mask_bayer(
     return loss_mask
 
 
+def make_loss_mask_msssim_bayer(
+    anchor_img: np.ndarray,
+    target_img: np.ndarray,
+    ssim_threshold: float = 0.7,
+    l1_threshold: float = LOSS_THRESHOLD,
+    window_size: int = 192,
+    stride: int = 96,
+) -> np.ndarray:
+    """Loss mask using MS-SSIM + L1 combo on 4D RGGB tensors.
+    
+    MS-SSIM + L1 is the standard for perceptual losses in image restoration.
+    Computes MS-SSIM in overlapping windows to create a spatial similarity map,
+    then combines with L1-based filtering (both conditions must be met).
+    
+    Low MS-SSIM indicates structural dissimilarity (misalignment/artifacts).
+    High L1 indicates intensity mismatch after gain correction.
+    
+    Args:
+        anchor_img: Ground truth Bayer image (4, H, W) RGGB
+        target_img: Target Bayer image (4, H, W) RGGB
+        ssim_threshold: Minimum MS-SSIM for valid regions (default 0.7)
+        l1_threshold: Maximum L1 loss for valid regions (default LOSS_THRESHOLD)
+        window_size: Size of sliding window for MS-SSIM computation (default 64)
+        stride: Stride for sliding windows (default 32, gives 50% overlap)
+    
+    Returns:
+        Binary mask (H, W) where 1=use, 0=ignore
+    """
+    import torch
+    from common.libs.pt_losses import MS_SSIM_metric
+    
+    # Convert to torch tensors
+    if isinstance(anchor_img, np.ndarray):
+        anchor_torch = torch.from_numpy(anchor_img).float()
+        target_torch = torch.from_numpy(target_img).float()
+    else:
+        anchor_torch = anchor_img.float()
+        target_torch = target_img.float()
+    
+    # Match gain
+    target_matched = match_gain(anchor_img, target_img)
+    if isinstance(target_matched, np.ndarray):
+        target_matched_torch = torch.from_numpy(target_matched).float()
+    else:
+        target_matched_torch = target_matched.float()
+    
+    # Compute MS-SSIM per channel (R, G1, G2, B)
+    num_channels, H, W = anchor_torch.shape
+    
+    # Create per-channel MS-SSIM spatial maps using sliding windows
+    # We'll compute SSIM for each of the 4 RGGB channels and average
+    ssim_maps = []
+    
+    # Use channel=1 for single-channel RGGB processing
+    ms_ssim = MS_SSIM_metric(data_range=1.0, size_average=False, channel=1)
+    
+    # Compute MS-SSIM per channel
+    for ch in range(num_channels):
+        ssim_map = np.ones((H, W), dtype=np.float32)
+        count_map = np.zeros((H, W), dtype=np.float32)
+        
+        # Extract single channel and expand to (1, 1, H, W) for MS-SSIM
+        anchor_ch = anchor_torch[ch:ch+1]
+        target_ch = target_matched_torch[ch:ch+1]
+        
+        # Slide windows across image
+        for y in range(0, H - window_size + 1, stride):
+            for x in range(0, W - window_size + 1, stride):
+                # Extract window: (1, H, W) → (1, 1, window, window)
+                # MS_SSIM with channel=1 handles single-channel input directly
+                anchor_window = anchor_ch[:, y:y+window_size, x:x+window_size].unsqueeze(0)
+                target_window = target_ch[:, y:y+window_size, x:x+window_size].unsqueeze(0)
+                
+                # Compute MS-SSIM for this window
+                with torch.no_grad():
+                    ssim_score = ms_ssim(anchor_window, target_window).item()
+                
+                # Accumulate into spatial map
+                ssim_map[y:y+window_size, x:x+window_size] += ssim_score
+                count_map[y:y+window_size, x:x+window_size] += 1
+        
+        # Average overlapping windows
+        ssim_map = np.divide(ssim_map, count_map, where=count_map>0)
+        ssim_maps.append(ssim_map)
+    
+    # Average MS-SSIM across all 4 RGGB channels
+    ssim_map = np.mean(ssim_maps, axis=0)
+    
+    # Threshold MS-SSIM map
+    ssim_mask = (ssim_map > ssim_threshold).astype(np.float32)
+    
+    # Combine with L1-based filtering (REQUIRED - MS-SSIM + L1 combo is standard)
+    l1_map = np_l1(gamma(anchor_img), gamma(target_matched), avg=False)
+    l1_map = l1_map.sum(axis=0)
+    l1_mask = (l1_map < l1_threshold).astype(np.float32)
+    
+    # Both conditions must be met
+    loss_mask = ssim_mask * l1_mask
+    
+    # Apply morphological cleanup
+    loss_mask = scipy.ndimage.binary_opening(loss_mask.astype(np.uint8)).astype(np.float32)
+    
+    return loss_mask
+
+
 def make_loss_mask(
         anchor_img: np.ndarray,
         target_img: np.ndarray,

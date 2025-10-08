@@ -127,12 +127,24 @@ class CropProducerStage(PostDownloadWorker):
         overexposure_lb = noisy_img.metadata.get("overexposure_lb", 1.0)
         is_bayer = noisy_img.metadata.get("is_bayer", True)
 
+        # Load images using cached tensors (tensor-native architecture)
+        # ImageInfo._image_tensor is already loaded by MetadataEnricher
+        gt_data = await gt_img.load_image(as_torch=True)
+        noisy_data = await noisy_img.load_image(as_torch=True)
+        
+        # Convert to numpy for process pool (torch tensors don't serialize well)
+        import torch
+        if isinstance(gt_data, torch.Tensor):
+            gt_data = gt_data.cpu().numpy()
+        if isinstance(noisy_data, torch.Tensor):
+            noisy_data = noisy_data.cpu().numpy()
+
         # Offload CPU-intensive crop extraction to process pool
         crop_metadata = await self.run_cpu_bound(
             self._extract_and_save_crops,
             scene.scene_name,
-            gt_img.local_path,
-            noisy_img.local_path,
+            gt_data,
+            noisy_data,
             alignment,
             gain,
             gt_img.sha1,
@@ -147,8 +159,8 @@ class CropProducerStage(PostDownloadWorker):
     def _extract_and_save_crops(
         self,
         scene_name: str,
-        gt_path: Path,
-        noisy_path: Path,
+        gt_data: np.ndarray,
+        noisy_data: np.ndarray,
         alignment: List[int],
         gain: float,
         gt_sha1: str,
@@ -165,19 +177,20 @@ class CropProducerStage(PostDownloadWorker):
 
         Args:
             scene_name: Name of the scene
-            gt_path: Path to ground truth image
-            noisy_path: Path to noisy image
+            gt_data: Ground truth image data (numpy array)
+            noisy_data: Noisy image data (numpy array)
             alignment: [y_offset, x_offset] alignment
             gain: Gain factor for the noisy image
             gt_sha1: SHA1 of ground truth image
             noisy_sha1: SHA1 of noisy image
             cfa_type: CFA type ('Bayer' or 'X-Trans')
+            overexposure_lb: Overexposure threshold
+            is_bayer: Whether this is Bayer CFA data
 
         Returns:
             List of crop metadata
         """
         # Import here to avoid issues with process pool serialization
-        import rawpy
         import numpy as np
         from PIL import Image
         import sys
@@ -189,23 +202,8 @@ class CropProducerStage(PostDownloadWorker):
         MAX_RANDOM_CROP_ATTEMPTS = 10  # Retry attempts for finding valid crops
 
         try:
-            # Load images based on type
-            if gt_path.suffix.lower() in [".npy"]:
-                gt_data = np.load(gt_path)
-                noisy_data = np.load(noisy_path)
-            elif gt_path.suffix.lower() in [".exr", ".tif", ".tiff"]:
-                # Load processed images
-                import OpenEXR
-                import Imath
-                # Simplified - actual implementation would handle EXR properly
-                logger.warning("EXR/TIFF loading not fully implemented in example")
-                return []
-            else:
-                # Load RAW images
-                with rawpy.imread(str(gt_path)) as gt_raw:
-                    gt_data = gt_raw.raw_image_visible.copy()
-                with rawpy.imread(str(noisy_path)) as noisy_raw:
-                    noisy_data = noisy_raw.raw_image_visible.copy()
+            # Images are already loaded from ImageInfo cache (tensor-native architecture)
+            # No disk I/O needed here - data comes from memory
 
             # Snap alignment offsets to CFA block boundaries
             y_offset, x_offset = alignment
@@ -239,10 +237,49 @@ class CropProducerStage(PostDownloadWorker):
             # Masks are cheap to recompute but expensive to store
             # Detect format: 2D Bayer or 3D RGB
             if gt_data.ndim == 2:
-                # 2D Bayer format (H, W)
-                loss_mask = rawproc.make_loss_mask_bayer(gt_data, noisy_data)
+                # 2D Bayer format (H, W) - convert to 4D RGGB for mask computation
+                # Strided slicing is cheap (no copy), extracts 4 color channels
+                import torch
+                if isinstance(gt_data, torch.Tensor):
+                    gt_rggb = torch.stack([
+                        gt_data[0::2, 0::2],  # R
+                        gt_data[0::2, 1::2],  # G1
+                        gt_data[1::2, 0::2],  # G2
+                        gt_data[1::2, 1::2],  # B
+                    ])
+                    noisy_rggb = torch.stack([
+                        noisy_data[0::2, 0::2],
+                        noisy_data[0::2, 1::2],
+                        noisy_data[1::2, 0::2],
+                        noisy_data[1::2, 1::2],
+                    ])
+                    # Convert to numpy for rawproc functions (they expect numpy)
+                    gt_rggb = gt_rggb.cpu().numpy()
+                    noisy_rggb = noisy_rggb.cpu().numpy()
+                else:
+                    gt_rggb = np.stack([
+                        gt_data[0::2, 0::2],
+                        gt_data[0::2, 1::2],
+                        gt_data[1::2, 0::2],
+                        gt_data[1::2, 1::2],
+                    ])
+                    noisy_rggb = np.stack([
+                        noisy_data[0::2, 0::2],
+                        noisy_data[0::2, 1::2],
+                        noisy_data[1::2, 0::2],
+                        noisy_data[1::2, 1::2],
+                    ])
+                
+                # Use MS-SSIM + L1 combo (standard for perceptual losses)
+                loss_mask_rggb = rawproc.make_loss_mask_msssim_bayer(gt_rggb, noisy_rggb)
+                # Upsample loss_mask from RGGB resolution (H/2, W/2) back to full (H, W)
+                # Use repeat to match the strided downsampling
+                loss_mask = np.repeat(np.repeat(loss_mask_rggb, 2, axis=0), 2, axis=1)
+                
+                # Overexposure mask works on 2D directly
                 overexposure_mask = rawproc.make_overexposure_mask_bayer(
-                    gt_data, overexposure_lb
+                    gt_data.cpu().numpy() if isinstance(gt_data, torch.Tensor) else gt_data,
+                    overexposure_lb
                 )
             elif gt_data.ndim == 3:
                 # 3D RGB format (C, H, W)
@@ -267,7 +304,13 @@ class CropProducerStage(PostDownloadWorker):
             Image.fromarray(mask_uint8).save(mask_path)
 
             # Extract random crops with vectorized validation
-            h, w = gt_data.shape[:2]
+            # Fix dimension extraction for both 2D (H,W) and 3D (C,H,W) formats
+            if gt_data.ndim == 2:
+                h, w = gt_data.shape
+            elif gt_data.ndim == 3:
+                _, h, w = gt_data.shape
+            else:
+                raise ValueError(f"Unexpected tensor shape: {gt_data.shape}")
             if h < self.crop_size or w < self.crop_size:
                 logger.warning(f"Image too small for {self.crop_size}x{self.crop_size} crops")
                 return []

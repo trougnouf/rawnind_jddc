@@ -91,11 +91,9 @@ def test_bayer_crop_positions_are_even(temp_output_dir, mock_bayer_scene):
     scene, gt_img, noisy_img = mock_bayer_scene
     
     # Create mock image data
-    h, w = 512, 512
+    h, w = 1024, 1024
     gt_data = np.random.rand(h, w).astype(np.float32)
-    noisy_data = np.random.rand(h, w).astype(np.float32)
-    gt_img.local_path = Path("/fake/gt.cr2")
-    noisy_img.local_path = Path("/fake/noisy.cr2")
+    noisy_data = gt_data + np.random.randn(h, w).astype(np.float32) * 0.05  # Add correlated noise
     
     stage = CropProducerStage(
         output_dir=temp_output_dir,
@@ -103,25 +101,19 @@ def test_bayer_crop_positions_are_even(temp_output_dir, mock_bayer_scene):
         num_crops=10
     )
     
-    # Mock the image loading
-    with patch('rawpy.imread') as mock_imread:
-        mock_raw = Mock()
-        mock_raw.__enter__ = Mock(return_value=Mock(raw_image_visible=gt_data))
-        mock_raw.__exit__ = Mock(return_value=False)
-        mock_imread.return_value = mock_raw
-        
-        crop_metadata = stage._extract_and_save_crops(
-            scene.scene_name,
-            gt_img.local_path,
-            noisy_img.local_path,
+    # Pass numpy arrays directly (tensor-native architecture)
+    crop_metadata = stage._extract_and_save_crops(
+        scene.scene_name,
+        gt_data,
+        noisy_data,
             noisy_img.metadata["alignment"],
             noisy_img.metadata["gain"],
             gt_img.sha1,
             noisy_img.sha1,
             gt_img.cfa_type,
-            1.0,  # overexposure_lb
-            True  # is_bayer
-        )
+        1.0,  # overexposure_lb
+        True  # is_bayer
+    )
     
     # Check all crop positions are even
     for crop in crop_metadata:
@@ -138,8 +130,6 @@ def test_xtrans_crop_positions_multiple_of_3(temp_output_dir, mock_xtrans_scene)
     h, w = 513, 513  # Multiple of 3
     gt_data = np.random.rand(h, w).astype(np.float32)
     noisy_data = np.random.rand(h, w).astype(np.float32)
-    gt_img.local_path = Path("/fake/gt.raf")
-    noisy_img.local_path = Path("/fake/noisy.raf")
     
     stage = CropProducerStage(
         output_dir=temp_output_dir,
@@ -147,25 +137,19 @@ def test_xtrans_crop_positions_multiple_of_3(temp_output_dir, mock_xtrans_scene)
         num_crops=10
     )
     
-    # Mock the image loading
-    with patch('rawpy.imread') as mock_imread:
-        mock_raw = Mock()
-        mock_raw.__enter__ = Mock(return_value=Mock(raw_image_visible=gt_data))
-        mock_raw.__exit__ = Mock(return_value=False)
-        mock_imread.return_value = mock_raw
-        
-        crop_metadata = stage._extract_and_save_crops(
-            scene.scene_name,
-            gt_img.local_path,
-            noisy_img.local_path,
-            noisy_img.metadata["alignment"],
-            noisy_img.metadata["gain"],
-            gt_img.sha1,
-            noisy_img.sha1,
-            gt_img.cfa_type,
-            1.0,  # overexposure_lb
-            True  # is_bayer
-        )
+    # Pass numpy arrays directly (tensor-native architecture)
+    crop_metadata = stage._extract_and_save_crops(
+        scene.scene_name,
+        gt_data,
+        noisy_data,
+        noisy_img.metadata["alignment"],
+        noisy_img.metadata["gain"],
+        gt_img.sha1,
+        noisy_img.sha1,
+        gt_img.cfa_type,
+        1.0,  # overexposure_lb
+        True  # is_bayer
+    )
     
     # Check all crop positions are multiples of 3
     for crop in crop_metadata:
@@ -181,11 +165,9 @@ def test_bayer_alignment_offsets_snapped_to_even(temp_output_dir, mock_bayer_sce
     # Odd alignment offsets - should be snapped to even
     noisy_img.metadata["alignment"] = [3, 5]
     
-    h, w = 512, 512
+    h, w = 1024, 1024
     gt_data = np.random.rand(h, w).astype(np.float32)
-    noisy_data = np.random.rand(h, w).astype(np.float32)
-    gt_img.local_path = Path("/fake/gt.cr2")
-    noisy_img.local_path = Path("/fake/noisy.cr2")
+    noisy_data = gt_data + np.random.randn(h, w).astype(np.float32) * 0.05  # Add correlated noise
     
     stage = CropProducerStage(
         output_dir=temp_output_dir,
@@ -193,64 +175,24 @@ def test_bayer_alignment_offsets_snapped_to_even(temp_output_dir, mock_bayer_sce
         num_crops=1
     )
     
-    # We need to inspect what alignment was actually used
-    # The implementation should snap [3, 5] to [2, 4] or [4, 6]
-    with patch('rawpy.imread') as mock_imread:
-        # Track the actual cropping that happens
-        calls = []
-        
-        def track_slice(obj):
-            """Mock object that tracks array slicing."""
-            class TrackedArray:
-                def __init__(self, data):
-                    self.data = data
-                    self.shape = data.shape
-                    
-                def __getitem__(self, key):
-                    calls.append(key)
-                    return self.data[key]
-                
-                def copy(self):
-                    return self.data.copy()
-            
-            return TrackedArray(obj)
-        
-        mock_raw_gt = Mock()
-        mock_raw_gt.__enter__ = Mock(return_value=Mock(raw_image_visible=track_slice(gt_data)))
-        mock_raw_gt.__exit__ = Mock(return_value=False)
-        
-        mock_raw_noisy = Mock()
-        mock_raw_noisy.__enter__ = Mock(return_value=Mock(raw_image_visible=track_slice(noisy_data)))
-        mock_raw_noisy.__exit__ = Mock(return_value=False)
-        
-        def mock_imread_side_effect(path):
-            if 'gt' in str(path):
-                return mock_raw_gt
-            return mock_raw_noisy
-        
-        mock_imread.side_effect = mock_imread_side_effect
-        
-        crop_metadata = stage._extract_and_save_crops(
-            scene.scene_name,
-            gt_img.local_path,
-            noisy_img.local_path,
+    # Pass numpy arrays directly (tensor-native architecture)
+    # Alignment snapping happens inside _extract_and_save_crops
+    crop_metadata = stage._extract_and_save_crops(
+        scene.scene_name,
+        gt_data,
+        noisy_data,
             noisy_img.metadata["alignment"],
             noisy_img.metadata["gain"],
             gt_img.sha1,
             noisy_img.sha1,
             gt_img.cfa_type,
-            1.0,  # overexposure_lb
-            True  # is_bayer
-        )
+        1.0,  # overexposure_lb
+        True  # is_bayer
+    )
     
-    # The alignment slicing should have used even offsets
-    # Check the first slice operation (alignment application)
-    if len(calls) >= 2:
-        # First slice should be GT with even offset
-        # Second slice should be noisy with even offset
-        # We can't easily verify the exact slices, but we can verify
-        # that the resulting crops don't violate block boundaries
-        pass
+    # Alignment snapping happens internally
+    # Just verify the function doesn't crash with odd alignment offsets
+    # (snapping from [3,5] to [2,4] or [4,6] happens inside _extract_and_save_crops)
 
 
 def test_xtrans_alignment_offsets_snapped_to_multiple_of_3(temp_output_dir, mock_xtrans_scene):
@@ -263,8 +205,6 @@ def test_xtrans_alignment_offsets_snapped_to_multiple_of_3(temp_output_dir, mock
     h, w = 513, 513
     gt_data = np.random.rand(h, w).astype(np.float32)
     noisy_data = np.random.rand(h, w).astype(np.float32)
-    gt_img.local_path = Path("/fake/gt.raf")
-    noisy_img.local_path = Path("/fake/noisy.raf")
     
     stage = CropProducerStage(
         output_dir=temp_output_dir,
@@ -274,31 +214,25 @@ def test_xtrans_alignment_offsets_snapped_to_multiple_of_3(temp_output_dir, mock
     
     # Similar to Bayer test - verify no assertion errors occur
     # and that the snapping happens correctly
-    with patch('rawpy.imread') as mock_imread:
-        mock_raw = Mock()
-        mock_raw.__enter__ = Mock(return_value=Mock(raw_image_visible=gt_data))
-        mock_raw.__exit__ = Mock(return_value=False)
-        mock_imread.return_value = mock_raw
-        
-        # Should not raise - alignment should be snapped internally
-        crop_metadata = stage._extract_and_save_crops(
-            scene.scene_name,
-            gt_img.local_path,
-            noisy_img.local_path,
-            noisy_img.metadata["alignment"],
-            noisy_img.metadata["gain"],
-            gt_img.sha1,
-            noisy_img.sha1,
-            gt_img.cfa_type,
-            1.0,  # overexposure_lb
-            True  # is_bayer
-        )
-        
-        # Crop positions should all be multiples of 3
-        for crop in crop_metadata:
-            y, x = crop["position"]
-            assert y % 3 == 0, f"X-Trans crop Y position {y} is not multiple of 3"
-            assert x % 3 == 0, f"X-Trans crop X position {x} is not multiple of 3"
+    # Pass numpy arrays directly (tensor-native architecture)
+    crop_metadata = stage._extract_and_save_crops(
+        scene.scene_name,
+        gt_data,
+        noisy_data,
+        noisy_img.metadata["alignment"],
+        noisy_img.metadata["gain"],
+        gt_img.sha1,
+        noisy_img.sha1,
+        gt_img.cfa_type,
+        1.0,  # overexposure_lb
+        True  # is_bayer
+    )
+    
+    # Crop positions should all be multiples of 3
+    for crop in crop_metadata:
+        y, x = crop["position"]
+        assert y % 3 == 0, f"X-Trans crop Y position {y} is not multiple of 3"
+        assert x % 3 == 0, f"X-Trans crop X position {x} is not multiple of 3"
 
 
 def test_mask_png_saved_to_disk(temp_output_dir, mock_bayer_scene):
@@ -316,12 +250,10 @@ def test_mask_png_saved_to_disk(temp_output_dir, mock_bayer_scene):
         "is_bayer": True
     })
 
-    h, w = 512, 512
-    # Create 3-channel RGB for rawproc functions (they expect CHW format)
+    h, w = 1024, 1024
+    # Create 3-channel RGB tensors with correlation (simulates real aligned pairs)
     gt_data = np.random.rand(3, h, w).astype(np.float32) * 0.5  # Valid range
-    noisy_data = np.random.rand(3, h, w).astype(np.float32) * 0.5
-    gt_img.local_path = Path("/fake/gt.cr2")
-    noisy_img.local_path = Path("/fake/noisy.cr2")
+    noisy_data = gt_data + np.random.randn(3, h, w).astype(np.float32) * 0.05  # Add noise
 
     stage = CropProducerStage(
         output_dir=temp_output_dir,
@@ -329,34 +261,28 @@ def test_mask_png_saved_to_disk(temp_output_dir, mock_bayer_scene):
         num_crops=1
     )
 
-    # Mock only image loading, let rawproc run
-    with patch('rawpy.imread') as mock_imread:
-        mock_raw = Mock()
-        mock_raw.__enter__ = Mock(return_value=Mock(raw_image_visible=gt_data))
-        mock_raw.__exit__ = Mock(return_value=False)
-        mock_imread.return_value = mock_raw
+    # Pass numpy arrays directly (tensor-native architecture, no disk I/O)
+    crop_metadata = stage._extract_and_save_crops(
+        scene.scene_name,
+        gt_data,
+        noisy_data,
+        noisy_img.metadata["alignment"],
+        noisy_img.metadata["gain"],
+        gt_img.sha1,
+        noisy_img.sha1,
+        gt_img.cfa_type,
+        noisy_img.metadata["overexposure_lb"],
+        noisy_img.metadata["is_bayer"]
+    )
 
-        crop_metadata = stage._extract_and_save_crops(
-            scene.scene_name,
-            gt_img.local_path,
-            noisy_img.local_path,
-            noisy_img.metadata["alignment"],
-            noisy_img.metadata["gain"],
-            gt_img.sha1,
-            noisy_img.sha1,
-            gt_img.cfa_type,
-            noisy_img.metadata["overexposure_lb"],
-            noisy_img.metadata["is_bayer"]
-        )
+    # Verify mask file was created
+    expected_mask_path = temp_output_dir / "masks" / f"{scene.scene_name}_{noisy_img.sha1[:8]}_mask.png"
+    assert expected_mask_path.exists(), f"Mask PNG not found at {expected_mask_path}"
 
-        # Verify mask file was created
-        expected_mask_path = temp_output_dir / "masks" / f"{scene.scene_name}_{noisy_img.sha1[:8]}_mask.png"
-        assert expected_mask_path.exists(), f"Mask PNG not found at {expected_mask_path}"
-
-        # Verify it's a valid PNG with correct dimensions
-        from PIL import Image
-        mask_img = Image.open(expected_mask_path)
-        assert mask_img.size == (w, h), f"Mask dimensions {mask_img.size} != image {(w, h)}"
+    # Verify it's a valid PNG with correct dimensions
+    from PIL import Image
+    mask_img = Image.open(expected_mask_path)
+    assert mask_img.size == (w, h), f"Mask dimensions {mask_img.size} != image {(w, h)}"
 
 
 def test_mask_fpath_added_to_crop_metadata(temp_output_dir, mock_bayer_scene):
@@ -373,11 +299,9 @@ def test_mask_fpath_added_to_crop_metadata(temp_output_dir, mock_bayer_scene):
         "is_bayer": True
     })
 
-    h, w = 512, 512
+    h, w = 1024, 1024
     gt_data = np.random.rand(3, h, w).astype(np.float32) * 0.5
-    noisy_data = np.random.rand(3, h, w).astype(np.float32) * 0.5
-    gt_img.local_path = Path("/fake/gt.cr2")
-    noisy_img.local_path = Path("/fake/noisy.cr2")
+    noisy_data = gt_data + np.random.randn(3, h, w).astype(np.float32) * 0.05  # Add correlated noise
 
     stage = CropProducerStage(
         output_dir=temp_output_dir,
@@ -385,34 +309,29 @@ def test_mask_fpath_added_to_crop_metadata(temp_output_dir, mock_bayer_scene):
         num_crops=3
     )
 
-    with patch('rawpy.imread') as mock_imread:
-        mock_raw = Mock()
-        mock_raw.__enter__ = Mock(return_value=Mock(raw_image_visible=gt_data))
-        mock_raw.__exit__ = Mock(return_value=False)
-        mock_imread.return_value = mock_raw
-
-        crop_metadata = stage._extract_and_save_crops(
-            scene.scene_name,
-            gt_img.local_path,
-            noisy_img.local_path,
+    # Pass numpy arrays directly (tensor-native architecture)
+    crop_metadata = stage._extract_and_save_crops(
+        scene.scene_name,
+        gt_data,
+        noisy_data,
             noisy_img.metadata["alignment"],
             noisy_img.metadata["gain"],
             gt_img.sha1,
             noisy_img.sha1,
             gt_img.cfa_type,
             noisy_img.metadata["overexposure_lb"],
-            noisy_img.metadata["is_bayer"]
-        )
+        noisy_img.metadata["is_bayer"]
+    )
 
-        # Verify all crops have mask_fpath
-        assert len(crop_metadata) > 0, "No crops generated"
-        for crop in crop_metadata:
-            assert "mask_fpath" in crop, "mask_fpath missing from crop metadata"
-            mask_path = Path(crop["mask_fpath"])
-            assert mask_path.name.endswith("_mask.png"), f"Invalid mask filename: {mask_path.name}"
-            assert "masks" in str(mask_path), f"Mask not in masks/ directory: {mask_path}"
-            # Verify the path points to the same file for all crops (one mask per pair)
-            assert mask_path.exists(), f"Mask file doesn't exist: {mask_path}"
+    # Verify all crops have mask_fpath
+    assert len(crop_metadata) > 0, "No crops generated"
+    for crop in crop_metadata:
+        assert "mask_fpath" in crop, "mask_fpath missing from crop metadata"
+        mask_path = Path(crop["mask_fpath"])
+        assert mask_path.name.endswith("_mask.png"), f"Invalid mask filename: {mask_path.name}"
+        assert "masks" in str(mask_path), f"Mask not in masks/ directory: {mask_path}"
+        # Verify the path points to the same file for all crops (one mask per pair)
+        assert mask_path.exists(), f"Mask file doesn't exist: {mask_path}"
 
 
 def test_vectorized_batch_validation_finds_valid_crops(temp_output_dir, mock_bayer_scene):
@@ -430,14 +349,13 @@ def test_vectorized_batch_validation_finds_valid_crops(temp_output_dir, mock_bay
         "is_bayer": True
     })
 
-    h, w = 512, 512
+    h, w = 1024, 1024
     # Create images where top-left has high values (will be masked), rest is valid
     gt_data = np.ones((3, h, w), dtype=np.float32) * 0.5
     gt_data[:, :256, :256] = 1.5  # Overexposed region (all channels)
 
-    noisy_data = np.random.rand(3, h, w).astype(np.float32) * 0.5
-    gt_img.local_path = Path("/fake/gt.cr2")
-    noisy_img.local_path = Path("/fake/noisy.cr2")
+    # Noisy should match structure with added noise
+    noisy_data = gt_data.copy() + np.random.randn(3, h, w).astype(np.float32) * 0.05
 
     stage = CropProducerStage(
         output_dir=temp_output_dir,
@@ -445,37 +363,32 @@ def test_vectorized_batch_validation_finds_valid_crops(temp_output_dir, mock_bay
         num_crops=5  # Request 5 crops
     )
 
-    with patch('rawpy.imread') as mock_imread:
-        mock_raw = Mock()
-        mock_raw.__enter__ = Mock(return_value=Mock(raw_image_visible=gt_data))
-        mock_raw.__exit__ = Mock(return_value=False)
-        mock_imread.return_value = mock_raw
-
-        crop_metadata = stage._extract_and_save_crops(
-            scene.scene_name,
-            gt_img.local_path,
-            noisy_img.local_path,
+    # Pass numpy arrays directly (tensor-native architecture)
+    crop_metadata = stage._extract_and_save_crops(
+        scene.scene_name,
+        gt_data,
+        noisy_data,
             noisy_img.metadata["alignment"],
             noisy_img.metadata["gain"],
             gt_img.sha1,
             noisy_img.sha1,
             gt_img.cfa_type,
             noisy_img.metadata["overexposure_lb"],
-            noisy_img.metadata["is_bayer"]
-        )
+        noisy_img.metadata["is_bayer"]
+    )
 
-        # Should generate some crops (may be <5 if heavily masked)
-        assert len(crop_metadata) > 0, "No valid crops found"
+    # Should generate some crops (may be <5 if heavily masked)
+    assert len(crop_metadata) > 0, "No valid crops found"
 
-        # All generated crops should avoid the top-left overexposed region
-        # (since it will be masked and violate MAX_MASKED threshold)
-        for crop in crop_metadata:
-            y, x = crop["position"]
-            # Crop shouldn't be entirely in top-left quadrant
-            # (at least not starting at 0,0 since that's heavily masked)
-            if y == 0 and x == 0:
-                # This crop would be heavily masked, should have been rejected
-                pytest.fail(f"Crop at (0,0) should have been rejected due to masking")
+    # All generated crops should avoid the top-left overexposed region
+    # (since it will be masked and violate MAX_MASKED threshold)
+    for crop in crop_metadata:
+        y, x = crop["position"]
+        # Crop shouldn't be entirely in top-left quadrant
+        # (at least not starting at 0,0 since that's heavily masked)
+        if y == 0 and x == 0:
+            # This crop would be heavily masked, should have been rejected
+            pytest.fail(f"Crop at (0,0) should have been rejected due to masking")
 
 
 def test_mask_png_saved_to_disk_2d_bayer(temp_output_dir, mock_bayer_scene):
@@ -493,12 +406,10 @@ def test_mask_png_saved_to_disk_2d_bayer(temp_output_dir, mock_bayer_scene):
         "is_bayer": True
     })
 
-    h, w = 512, 512
-    # Create 2D Bayer data (what raw_image_visible actually returns)
+    h, w = 1024, 1024
+    # Create 2D Bayer data with correlation (simulates real aligned pairs)
     gt_data = np.random.rand(h, w).astype(np.float32) * 0.5  # 2D Bayer
-    noisy_data = np.random.rand(h, w).astype(np.float32) * 0.5
-    gt_img.local_path = Path("/fake/gt.cr2")
-    noisy_img.local_path = Path("/fake/noisy.cr2")
+    noisy_data = gt_data + np.random.randn(h, w).astype(np.float32) * 0.05  # Add noise
 
     stage = CropProducerStage(
         output_dir=temp_output_dir,
@@ -506,35 +417,29 @@ def test_mask_png_saved_to_disk_2d_bayer(temp_output_dir, mock_bayer_scene):
         num_crops=1
     )
 
-    # Mock only image loading, let rawproc run
-    with patch('rawpy.imread') as mock_imread:
-        mock_raw = Mock()
-        mock_raw.__enter__ = Mock(return_value=Mock(raw_image_visible=gt_data))
-        mock_raw.__exit__ = Mock(return_value=False)
-        mock_imread.return_value = mock_raw
-
-        crop_metadata = stage._extract_and_save_crops(
-            scene.scene_name,
-            gt_img.local_path,
-            noisy_img.local_path,
+    # Pass numpy arrays directly (tensor-native architecture)
+    crop_metadata = stage._extract_and_save_crops(
+        scene.scene_name,
+        gt_data,
+        noisy_data,
             noisy_img.metadata["alignment"],
             noisy_img.metadata["gain"],
             gt_img.sha1,
             noisy_img.sha1,
             gt_img.cfa_type,
             noisy_img.metadata["overexposure_lb"],
-            noisy_img.metadata["is_bayer"]
-        )
+        noisy_img.metadata["is_bayer"]
+    )
 
-        # Verify all crops have mask_fpath
-        assert len(crop_metadata) > 0, "No crops generated"
-        for crop in crop_metadata:
-            assert "mask_fpath" in crop, "mask_fpath missing from crop metadata"
-            mask_path = Path(crop["mask_fpath"])
-            assert mask_path.name.endswith("_mask.png"), f"Invalid mask filename: {mask_path.name}"
-            assert "masks" in str(mask_path), f"Mask not in masks/ directory: {mask_path}"
-            # Verify the path points to the same file for all crops (one mask per pair)
-            assert mask_path.exists(), f"Mask file doesn't exist: {mask_path}"
+    # Verify all crops have mask_fpath
+    assert len(crop_metadata) > 0, "No crops generated"
+    for crop in crop_metadata:
+        assert "mask_fpath" in crop, "mask_fpath missing from crop metadata"
+        mask_path = Path(crop["mask_fpath"])
+        assert mask_path.name.endswith("_mask.png"), f"Invalid mask filename: {mask_path.name}"
+        assert "masks" in str(mask_path), f"Mask not in masks/ directory: {mask_path}"
+        # Verify the path points to the same file for all crops (one mask per pair)
+        assert mask_path.exists(), f"Mask file doesn't exist: {mask_path}"
 
 
 if __name__ == "__main__":
