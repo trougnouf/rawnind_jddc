@@ -26,7 +26,8 @@ class CropProducerStage(PostDownloadWorker):
         max_workers: int = 4,
         save_format: str = "npy",  # "npy" or "tif"
         crop_types: Optional[List[str]] = None,
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
+        cfa_type: Optional[str] = None
     ):
         """
         Initialize the crop producer.
@@ -39,8 +40,16 @@ class CropProducerStage(PostDownloadWorker):
             save_format: Format for saving crops ("npy" or "tif")
             crop_types: List of crop types to produce (e.g., ["bayer", "prgb"])
             config: Additional configuration
+            cfa_type: CFA type ('Bayer' or 'X-Trans') for validation. If None, validation is skipped.
         """
         super().__init__(output_dir, max_workers, use_process_pool=True, config=config)
+        
+        # Validate crop_size respects CFA block boundaries
+        if cfa_type == "Bayer":
+            assert crop_size % 2 == 0, f"Bayer crop_size must be even: {crop_size}"
+        elif cfa_type == "X-Trans":
+            assert crop_size % 3 == 0, f"X-Trans crop_size must be multiple of 3: {crop_size}"
+        
         self.crop_size = crop_size
         self.num_crops = num_crops
         self.save_format = save_format
@@ -125,7 +134,8 @@ class CropProducerStage(PostDownloadWorker):
             alignment,
             gain,
             gt_img.sha1,
-            noisy_img.sha1
+            noisy_img.sha1,
+            gt_img.cfa_type
         )
 
         return crop_metadata
@@ -138,7 +148,8 @@ class CropProducerStage(PostDownloadWorker):
         alignment: List[int],
         gain: float,
         gt_sha1: str,
-        noisy_sha1: str
+        noisy_sha1: str,
+        cfa_type: str
     ) -> List[Dict[str, Any]]:
         """
         Extract and save crops (runs in process pool).
@@ -154,6 +165,7 @@ class CropProducerStage(PostDownloadWorker):
             gain: Gain factor for the noisy image
             gt_sha1: SHA1 of ground truth image
             noisy_sha1: SHA1 of noisy image
+            cfa_type: CFA type ('Bayer' or 'X-Trans')
 
         Returns:
             List of crop metadata
@@ -183,8 +195,16 @@ class CropProducerStage(PostDownloadWorker):
                 with rawpy.imread(str(noisy_path)) as noisy_raw:
                     noisy_data = noisy_raw.raw_image_visible.copy()
 
-            # Apply alignment
+            # Snap alignment offsets to CFA block boundaries
             y_offset, x_offset = alignment
+            if cfa_type == "Bayer":
+                y_offset = (y_offset // 2) * 2
+                x_offset = (x_offset // 2) * 2
+            elif cfa_type == "X-Trans":
+                y_offset = (y_offset // 3) * 3
+                x_offset = (x_offset // 3) * 3
+            
+            # Apply alignment
             if y_offset != 0 or x_offset != 0:
                 # Crop to aligned region
                 h, w = gt_data.shape[:2]
@@ -210,9 +230,17 @@ class CropProducerStage(PostDownloadWorker):
                 return []
 
             for i in range(self.num_crops):
-                # Random crop position
-                y = np.random.randint(0, h - self.crop_size + 1)
-                x = np.random.randint(0, w - self.crop_size + 1)
+                # Random crop position - snap to CFA block boundaries
+                if cfa_type == "Bayer":
+                    y = (np.random.randint(0, h - self.crop_size + 1) // 2) * 2
+                    x = (np.random.randint(0, w - self.crop_size + 1) // 2) * 2
+                elif cfa_type == "X-Trans":
+                    y = (np.random.randint(0, h - self.crop_size + 1) // 3) * 3
+                    x = (np.random.randint(0, w - self.crop_size + 1) // 3) * 3
+                else:
+                    # No CFA constraints
+                    y = np.random.randint(0, h - self.crop_size + 1)
+                    x = np.random.randint(0, w - self.crop_size + 1)
 
                 gt_crop = gt_data[y:y + self.crop_size, x:x + self.crop_size]
                 noisy_crop = noisy_data[y:y + self.crop_size, x:x + self.crop_size]
