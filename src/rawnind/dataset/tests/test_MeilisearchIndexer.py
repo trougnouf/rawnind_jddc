@@ -360,7 +360,7 @@ async def test_search_scenes():
 
 def test_inherits_from_post_download_worker(tmp_path):
     """Test that MeilisearchIndexer properly inherits from PostDownloadWorker."""
-    from rawnind.dataset.post_download_worker import PostDownloadWorker
+    from rawnind.dataset.PostDownloadWorker import PostDownloadWorker
 
     indexer = MeilisearchIndexer(output_dir=tmp_path)
 

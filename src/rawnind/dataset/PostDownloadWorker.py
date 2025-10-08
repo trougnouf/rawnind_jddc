@@ -58,7 +58,7 @@ class PostDownloadWorker(ABC):
         """Async context manager exit with cleanup."""
         await self.shutdown()
         if self._executor:
-            self._executor.shutdown(wait=True)
+            await trio.to_thread.run_sync(self._executor.shutdown, wait=True)
 
     async def startup(self):
         """
@@ -157,9 +157,10 @@ class PostDownloadWorker(ABC):
         """
         if self.use_process_pool and self._executor:
             # Run in process pool for true parallelism
-            return await trio.to_thread.run_sync(
+            future = await trio.to_thread.run_sync(
                 self._executor.submit, func, *args, **kwargs
-            ).result()
+            )
+            return await trio.to_thread.run_sync(future.result)
         else:
             # Run in thread pool (default)
             return await trio.to_thread.run_sync(func, *args, **kwargs)

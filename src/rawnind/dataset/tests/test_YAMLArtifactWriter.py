@@ -556,7 +556,7 @@ async def test_writer_with_custom_filename(minimal_scene, tmp_path):
 
 def test_inherits_from_post_download_worker(tmp_path):
     """Test that YAMLArtifactWriter properly inherits from PostDownloadWorker."""
-    from rawnind.dataset.post_download_worker import PostDownloadWorker
+    from rawnind.dataset.PostDownloadWorker import PostDownloadWorker
 
     writer = YAMLArtifactWriter(output_dir=tmp_path)
 

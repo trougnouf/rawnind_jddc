@@ -9,13 +9,14 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import trio
 
-from .post_download_worker import PostDownloadWorker
+from .PostDownloadWorker import PostDownloadWorker
 from .SceneInfo import SceneInfo, ImageInfo
+from .pipeline_decorators import stage
 
 logger = logging.getLogger(__name__)
 
 
-class AlignmentArtifactWriter(PostDownloadWorker):
+class Aligner(PostDownloadWorker):
     """Writes alignment masks and metadata to disk."""
 
     def __init__(
@@ -46,6 +47,15 @@ class AlignmentArtifactWriter(PostDownloadWorker):
         if self.write_metadata:
             (self.output_dir / "metadata").mkdir(parents=True, exist_ok=True)
 
+        # Support for visualizer attachment
+        self._viz = None
+
+    def attach_visualizer(self, viz):
+        """Attach visualizer for automatic progress tracking."""
+        self._viz = viz
+        return self
+
+    @stage(progress=("aligning", "aligned"), skip_on_error=True)
     async def process_scene(self, scene: SceneInfo) -> SceneInfo:
         """
         Write alignment artifacts for the scene.
