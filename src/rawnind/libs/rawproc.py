@@ -438,6 +438,19 @@ def make_overexposure_mask(
     return (anchor_img < gt_overexposure_lb).all(axis=0)
 
 
+def make_overexposure_mask_bayer(anchor_img: np.ndarray, gt_overexposure_lb: float):
+    """Overexposure mask for 2D Bayer data.
+    
+    Args:
+        anchor_img: 2D Bayer array (H, W)
+        gt_overexposure_lb: Overexposure threshold
+        
+    Returns:
+        2D boolean mask (H, W)
+    """
+    return anchor_img < gt_overexposure_lb
+
+
 # def make_loss_mask(
 #     anchor_img: np.ndarray,
 #     target_img: np.ndarray,

@@ -124,6 +124,8 @@ class CropProducerStage(PostDownloadWorker):
         """
         alignment = noisy_img.metadata.get("alignment", [0, 0])
         gain = noisy_img.metadata.get("gain", 1.0)
+        overexposure_lb = noisy_img.metadata.get("overexposure_lb", 1.0)
+        is_bayer = noisy_img.metadata.get("is_bayer", True)
 
         # Offload CPU-intensive crop extraction to process pool
         crop_metadata = await self.run_cpu_bound(
@@ -135,7 +137,9 @@ class CropProducerStage(PostDownloadWorker):
             gain,
             gt_img.sha1,
             noisy_img.sha1,
-            gt_img.cfa_type
+            gt_img.cfa_type,
+            overexposure_lb,
+            is_bayer
         )
 
         return crop_metadata
@@ -149,7 +153,9 @@ class CropProducerStage(PostDownloadWorker):
         gain: float,
         gt_sha1: str,
         noisy_sha1: str,
-        cfa_type: str
+        cfa_type: str,
+        overexposure_lb: float,
+        is_bayer: bool
     ) -> List[Dict[str, Any]]:
         """
         Extract and save crops (runs in process pool).
@@ -173,8 +179,14 @@ class CropProducerStage(PostDownloadWorker):
         # Import here to avoid issues with process pool serialization
         import rawpy
         import numpy as np
+        from PIL import Image
+        import sys
+        sys.path.append(str(Path(__file__).parent.parent.parent))
+        from rawnind.libs import rawproc
 
         crop_metadata = []
+        MAX_MASKED = 0.5  # Maximum fraction of masked pixels allowed
+        MAX_RANDOM_CROP_ATTEMPTS = 10  # Retry attempts for finding valid crops
 
         try:
             # Load images based on type
@@ -223,24 +235,80 @@ class CropProducerStage(PostDownloadWorker):
             if gain != 1.0:
                 noisy_data = noisy_data * gain
 
-            # Extract random crops
+            # Regenerate masks from cached metadata (temporal locality optimization)
+            # Masks are cheap to recompute but expensive to store
+            # Detect format: 2D Bayer or 3D RGB
+            if gt_data.ndim == 2:
+                # 2D Bayer format (H, W)
+                loss_mask = rawproc.make_loss_mask_bayer(gt_data, noisy_data)
+                overexposure_mask = rawproc.make_overexposure_mask_bayer(
+                    gt_data, overexposure_lb
+                )
+            elif gt_data.ndim == 3:
+                # 3D RGB format (C, H, W)
+                if is_bayer:
+                    loss_mask = rawproc.make_loss_mask_bayer(gt_data, noisy_data)
+                else:
+                    loss_mask = rawproc.make_loss_mask(gt_data, noisy_data)
+                
+                overexposure_mask = rawproc.make_overexposure_mask(gt_data, overexposure_lb)
+            else:
+                raise ValueError(f"Unexpected data format: {gt_data.shape}")
+
+            final_mask = loss_mask * overexposure_mask
+
+            # Save mask PNG to disk (will be hot in page cache for legacy loaders)
+            mask_dir = self.output_dir / "masks"
+            mask_dir.mkdir(parents=True, exist_ok=True)
+            mask_path = mask_dir / f"{scene_name}_{noisy_sha1[:8]}_mask.png"
+
+            # Convert mask to uint8 for PNG saving
+            mask_uint8 = (final_mask * 255).astype(np.uint8)
+            Image.fromarray(mask_uint8).save(mask_path)
+
+            # Extract random crops with vectorized validation
             h, w = gt_data.shape[:2]
             if h < self.crop_size or w < self.crop_size:
                 logger.warning(f"Image too small for {self.crop_size}x{self.crop_size} crops")
                 return []
 
-            for i in range(self.num_crops):
-                # Random crop position - snap to CFA block boundaries
-                if cfa_type == "Bayer":
-                    y = (np.random.randint(0, h - self.crop_size + 1) // 2) * 2
-                    x = (np.random.randint(0, w - self.crop_size + 1) // 2) * 2
-                elif cfa_type == "X-Trans":
-                    y = (np.random.randint(0, h - self.crop_size + 1) // 3) * 3
-                    x = (np.random.randint(0, w - self.crop_size + 1) // 3) * 3
-                else:
-                    # No CFA constraints
-                    y = np.random.randint(0, h - self.crop_size + 1)
-                    x = np.random.randint(0, w - self.crop_size + 1)
+            # Generate candidate positions (oversample for safety)
+            num_candidates = self.num_crops * 20
+            candidates_y = np.random.randint(0, h - self.crop_size + 1, size=num_candidates)
+            candidates_x = np.random.randint(0, w - self.crop_size + 1, size=num_candidates)
+
+            # Snap to CFA boundaries (vectorized)
+            if cfa_type == "Bayer":
+                candidates_y = (candidates_y // 2) * 2
+                candidates_x = (candidates_x // 2) * 2
+            elif cfa_type == "X-Trans":
+                candidates_y = (candidates_y // 3) * 3
+                candidates_x = (candidates_x // 3) * 3
+
+            # Validate all candidates (vectorized)
+            valid_mask = np.zeros(num_candidates, dtype=bool)
+            for idx in range(num_candidates):
+                y, x = candidates_y[idx], candidates_x[idx]
+                mask_crop = final_mask[y:y + self.crop_size, x:x + self.crop_size]
+                valid_mask[idx] = (mask_crop.sum() / (self.crop_size ** 2)) >= MAX_MASKED
+
+            valid_indices = np.where(valid_mask)[0]
+
+            if len(valid_indices) < self.num_crops:
+                logger.warning(
+                    f"Only found {len(valid_indices)} valid crops out of {self.num_crops} needed "
+                    f"for {scene_name}"
+                )
+
+            # Random sample from valid positions (no replacement)
+            num_to_sample = min(self.num_crops, len(valid_indices))
+            selected_indices = np.random.choice(valid_indices, size=num_to_sample, replace=False)
+
+            # Extract and save crops at selected positions
+            for i, idx in enumerate(selected_indices):
+                # Use pre-validated position
+                y = candidates_y[idx]
+                x = candidates_x[idx]
 
                 gt_crop = gt_data[y:y + self.crop_size, x:x + self.crop_size]
                 noisy_crop = noisy_data[y:y + self.crop_size, x:x + self.crop_size]
@@ -266,7 +334,8 @@ class CropProducerStage(PostDownloadWorker):
                     "position": [y, x],
                     "size": self.crop_size,
                     "gt_path": str(gt_path),
-                    "noisy_path": str(noisy_path)
+                    "noisy_path": str(noisy_path),
+                    "mask_fpath": str(mask_path)
                 })
 
         except Exception as e:
