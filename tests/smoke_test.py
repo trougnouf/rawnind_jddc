@@ -239,14 +239,9 @@ async def test_dataloader_integration(dataset_root, viz):
     try:
         # Create dataset from YAML
         await viz.update(dataloader_init=1)
-        dataset = CleanProfiledRGBNoisyBayerImageCropsDataset(
-            content_fpaths=[str(yaml_path)],
-            num_crops=2,  # Small for smoke test
-            crop_size=256,
-            test_reserve=[],  # Use all scenes (smoke test already filtered)
-            bayer_only=True,
-            test=False
-        )
+        dataset = CleanProfiledRGBNoisyBayerImageCropsDataset(num_crops=2, crop_size=256, test_reserve=[],
+                                                              bayer_only=True, content_fpaths=[str(yaml_path)],
+                                                              test=False)
 
         print(f"✓ Dataset created: {len(dataset)} scenes")
         await viz.update(dataloader_images=len(dataset))
@@ -357,8 +352,7 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
         output_dir=dataset_root / "crops",
         crop_size=256,
         num_crops=5,
-        max_workers=DEFAULT_MAX_WORKERS,
-        use_process_pool=False  # Use threads to avoid venv inheritance issues
+        max_workers=DEFAULT_MAX_WORKERS
     ).attach_visualizer(viz)
 
     # AsyncPipelineBridge replaces YAMLArtifactWriter - no disk writes, in-memory only

@@ -1,4 +1,4 @@
-"""Implement and test X-Trans channel-split FFT."""
+"""Implement and test x-trans channel-split FFT."""
 
 import numpy as np
 import sys
@@ -17,9 +17,9 @@ def load_raw_image(fpath: str):
 
 def extract_xtrans_channels(img):
     """
-    Extract 3 color channels from X-Trans mosaiced image.
+    Extract 3 color channels from x-trans mosaiced image.
 
-    X-Trans pattern (6x6):
+    x-trans pattern (6x6):
     G B G G R G
     R G R B G B
     G B G G R G
@@ -125,7 +125,7 @@ def create_dense_channel_image(mask, values, shape):
 
 def extract_xtrans_channels_dense(img):
     """
-    Extract X-Trans channels as dense downsampled arrays.
+    Extract x-trans channels as dense downsampled arrays.
     Returns: (R_dense, G_dense, B_dense)
     """
     img_2d = img[0]
@@ -201,11 +201,11 @@ def fft_phase_correlate_single_channel(anchor_ch, target_ch):
 
 def fft_phase_correlate_xtrans(anchor, target, method="median"):
     """
-    FFT phase correlation with X-Trans channel splitting.
+    FFT phase correlation with x-trans channel splitting.
 
     Args:
-        anchor: [1, H, W] mosaiced X-Trans image
-        target: [1, H, W] mosaiced X-Trans image
+        anchor: [1, H, W] mosaiced x-trans image
+        target: [1, H, W] mosaiced x-trans image
         method: "median", "mean", or "mode" for combining channel results
 
     Returns:
@@ -256,7 +256,7 @@ print("=" * 80)
 print()
 
 # First, let's just try to load an X-Trans image
-base_path = Path("src/rawnind/datasets/RawNIND/src/X-Trans")
+base_path = Path("src/rawnind/datasets/RawNIND/src/x-trans")
 
 # Find a valid X-Trans scene
 test_scenes = ["books", "banana", "beads", "bloop"]
@@ -292,7 +292,7 @@ for scene_name in test_scenes:
         )
 
         # Test channel extraction
-        print("  Extracting X-Trans channels...")
+        print("  Extracting x-trans channels...")
         R_dense, G_dense, B_dense = extract_xtrans_channels_dense(gt_img)
         print(f"    R channel: {R_dense.shape}")
         print(f"    G channel: {G_dense.shape}")
@@ -317,7 +317,7 @@ for scene_name in test_scenes:
         noisy_matched = match_gain(gt_img, noisy_img)
 
         # Test X-Trans FFT
-        print("  Running X-Trans channel-split FFT...")
+        print("  Running x-trans channel-split FFT...")
         shift, channel_shifts = fft_phase_correlate_xtrans(
             gt_img, noisy_matched, method="median"
         )
@@ -356,5 +356,5 @@ for scene_name in test_scenes:
 print("=" * 80)
 print("X-TRANS IMPLEMENTATION STATUS")
 print("=" * 80)
-print("If successful, X-Trans channel-split FFT is working!")
-print("The 6x6 pattern is more complex than Bayer 2x2, but the same principle applies.")
+print("If successful, x-trans channel-split FFT is working!")
+print("The 6x6 pattern is more complex than bayer 2x2, but the same principle applies.")

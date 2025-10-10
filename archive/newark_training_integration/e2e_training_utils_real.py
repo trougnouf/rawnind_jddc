@@ -138,7 +138,7 @@ class E2EDatasetWrapper(Dataset):
             idx: Index within this split
             
         Returns:
-            Dictionary with "input" (Bayer), "target" (RGB), and optionally "mask"
+            Dictionary with "input" (bayer), "target" (RGB), and optionally "mask"
         """
         # Map split index to global scene index
         global_idx = self.start_idx + idx
@@ -198,9 +198,9 @@ class E2EDatasetWrapper(Dataset):
         return result
     
     def _scene_to_bayer_tensor(self, scene: SceneInfo) -> torch.Tensor:
-        """Convert scene to Bayer tensor (4 channels: RGGB) by loading REAL noisy raw images.
+        """Convert scene to bayer tensor (4 channels: RGGB) by loading REAL noisy raw images.
         
-        This loads the actual downloaded raw files and converts them to Bayer tensors.
+        This loads the actual downloaded raw files and converts them to bayer tensors.
         """
         # Get the first noisy image from the scene
         if not scene.noisy_images:
@@ -229,7 +229,7 @@ class E2EDatasetWrapper(Dataset):
             if bayer_tensor.shape[0] == 3:
                 # If it's RGB, convert to Bayer pattern (simplified)
                 # In reality, we'd need proper Bayer pattern extraction
-                logger.warning(f"Got RGB instead of Bayer for {noisy_img.filename}, converting")
+                logger.warning(f"Got RGB instead of bayer for {noisy_img.filename}, converting")
                 h, w = bayer_tensor.shape[1], bayer_tensor.shape[2]
                 bayer = torch.zeros(4, h//2, w//2)
                 # Simple RGB to Bayer conversion (not accurate but works for testing)

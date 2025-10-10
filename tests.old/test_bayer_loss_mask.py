@@ -1,12 +1,12 @@
 """
-Test that Bayer-domain loss mask computation produces results comparable to RGB-domain computation.
+Test that bayer-domain loss mask computation produces results comparable to RGB-domain computation.
 
 This test validates that:
-1. Aligning in Bayer domain, then demosaicing produces similar results to demosaic-then-align
-2. Loss masks computed on Bayer vs RGB data are comparable
+1. Aligning in bayer domain, then demosaicing produces similar results to demosaic-then-align
+2. Loss masks computed on bayer vs RGB data are comparable
 
-The test loads raw Bayer images, processes them through both pipelines, and compares:
-- Aligned images (after demosaicing the Bayer path)
+The test loads raw bayer images, processes them through both pipelines, and compares:
+- Aligned images (after demosaicing the bayer path)
 - Loss masks from both methods
 """
 
@@ -31,7 +31,7 @@ from rawnind.libs.alignment_backends import find_best_alignment_fft_cfa
 
 
 def test_bayer_vs_rgb_pipeline():
-    """Compare Bayer-domain pipeline to RGB-domain pipeline."""
+    """Compare bayer-domain pipeline to RGB-domain pipeline."""
 
     # Find test images from the dataset
     bayer_ds_path = rawproc.BAYER_DS_DPATH
@@ -96,7 +96,7 @@ def test_bayer_vs_rgb_pipeline():
         # ========================================
         # PIPELINE 1: Bayer-domain (NEW)
         # ========================================
-        print("\n  Pipeline 1: Bayer-domain alignment + loss mask")
+        print("\n  Pipeline 1: bayer-domain alignment + loss mask")
 
         # Align in Bayer domain
         bayer_alignment, bayer_loss = find_best_alignment_fft_cfa(
@@ -126,10 +126,10 @@ def test_bayer_vs_rgb_pipeline():
         noisy_rgb_from_bayer = raw.demosaic(noisy_bayer_aligned, noisy_metadata)
 
         print(
-            f"    Loss mask (Bayer): mean={loss_mask_bayer.mean():.4f}, "
+            f"    Loss mask (bayer): mean={loss_mask_bayer.mean():.4f}, "
             f"min={loss_mask_bayer.min():.4f}, max={loss_mask_bayer.max():.4f}"
         )
-        print(f"    Aligned RGB (from Bayer): {gt_rgb_from_bayer.shape}")
+        print(f"    Aligned RGB (from bayer): {gt_rgb_from_bayer.shape}")
 
         # ========================================
         # PIPELINE 2: RGB-domain (ORIGINAL)
@@ -174,7 +174,7 @@ def test_bayer_vs_rgb_pipeline():
         alignment_match = bayer_alignment == rgb_alignment
         print(f"    Alignments match: {alignment_match}")
         if not alignment_match:
-            print(f"      Bayer: {bayer_alignment}, RGB: {rgb_alignment}")
+            print(f"      bayer: {bayer_alignment}, RGB: {rgb_alignment}")
             print(
                 f"      Difference: ({bayer_alignment[0] - rgb_alignment[0]}, {bayer_alignment[1] - rgb_alignment[1]})"
             )
@@ -195,7 +195,7 @@ def test_bayer_vs_rgb_pipeline():
             )
         else:
             print(f"    Image shapes differ (expected due to cropping):")
-            print(f"      Bayer path: {gt_rgb_from_bayer.shape}")
+            print(f"      bayer path: {gt_rgb_from_bayer.shape}")
             print(f"      RGB path: {gt_rgb_aligned.shape}")
             img_mae = None
             noisy_mae = None
@@ -219,12 +219,12 @@ def test_bayer_vs_rgb_pipeline():
             bayer_only = (loss_mask_bayer == 1) & (loss_mask_rgb == 0)
             rgb_only = (loss_mask_bayer == 0) & (loss_mask_rgb == 1)
             print(
-                f"    Pixels accepted by Bayer but rejected by RGB: {bayer_only.sum()}"
+                f"    Pixels accepted by bayer but rejected by RGB: {bayer_only.sum()}"
             )
-            print(f"    Pixels rejected by Bayer but accepted by RGB: {rgb_only.sum()}")
+            print(f"    Pixels rejected by bayer but accepted by RGB: {rgb_only.sum()}")
         else:
             print(f"    Loss mask shapes differ:")
-            print(f"      Bayer path: {loss_mask_bayer.shape}")
+            print(f"      bayer path: {loss_mask_bayer.shape}")
             print(f"      RGB path: {loss_mask_rgb.shape}")
             mask_mae = None
             agreement_pct = None
@@ -257,7 +257,7 @@ def test_bayer_vs_rgb_pipeline():
     valid_img_comparisons = [r for r in results if r["img_mae"] is not None]
     if valid_img_comparisons:
         avg_img_mae = np.mean([r["img_mae"] for r in valid_img_comparisons])
-        print(f"\nAligned GT images (after demosaicing Bayer):")
+        print(f"\nAligned GT images (after demosaicing bayer):")
         print(f"  Average MAE: {avg_img_mae:.6f}")
         for r in valid_img_comparisons:
             print(f"    {r['image_set']}: MAE={r['img_mae']:.6f}")
@@ -284,7 +284,7 @@ def test_bayer_vs_rgb_pipeline():
     print("""
 Expected behavior:
 - Alignments may differ slightly (±1-2 pixels) due to demosaicing artifacts
-- Aligned images should be very similar (MAE < 0.01) after demosaicing Bayer path
+- Aligned images should be very similar (MAE < 0.01) after demosaicing bayer path
 - Loss masks should have high agreement (>95%) since they use same threshold logic
 - Small differences are acceptable and expected due to:
   * Demosaicing introduces interpolation (RGB path demosaics before alignment)

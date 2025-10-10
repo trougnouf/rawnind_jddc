@@ -10,7 +10,7 @@ from rawnind.libs.rawproc import shift_images, match_gain
 
 
 def load_raw_image(fpath: str):
-    """Load RAW image as [1, H, W] mosaiced Bayer."""
+    """Load RAW image as [1, H, W] mosaiced bayer."""
     img, metadata = raw.raw_fpath_to_mono_img_and_metadata(fpath)
     return img, metadata
 
@@ -121,7 +121,7 @@ print("=" * 80)
 print()
 
 # Load real RAW image
-base_dir = Path("src/rawnind/datasets/RawNIND/src/Bayer")
+base_dir = Path("src/rawnind/datasets/RawNIND/src/bayer")
 gt_path = (
     base_dir
     / "Bark"

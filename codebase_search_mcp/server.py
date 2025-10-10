@@ -4,7 +4,7 @@
 import os
 from typing import TypedDict
 import httpx
-from mcp import FastMCP
+from fastmcp import FastMCP
 
 # Configuration
 QDRANT_URL = os.getenv("QDRANT_URL", "https://qdrant.woodpecker-garibaldi.ts.net:443")

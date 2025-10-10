@@ -121,7 +121,7 @@ class E2EDatasetWrapper(Dataset):
             idx: Index within this split
             
         Returns:
-            Dictionary with "input" (Bayer) and "target" (RGB) tensors
+            Dictionary with "input" (bayer) and "target" (RGB) tensors
         """
         # Map split index to global scene index
         global_idx = self.start_idx + idx
@@ -149,10 +149,10 @@ class E2EDatasetWrapper(Dataset):
         }
     
     def _scene_to_bayer_tensor(self, scene: SceneInfo) -> torch.Tensor:
-        """Convert scene to Bayer tensor (4 channels: RGGB).
+        """Convert scene to bayer tensor (4 channels: RGGB).
         
         This is a placeholder - actual implementation would load
-        and process the raw Bayer data.
+        and process the raw bayer data.
         """
         # For testing, create synthetic Bayer data
         h, w = 256, 256  # Full size before cropping

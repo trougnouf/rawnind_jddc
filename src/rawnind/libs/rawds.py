@@ -20,7 +20,6 @@ import tqdm
 
 import torch
 
-sys.path.append("..")
 from common.libs import pt_helpers, utilities
 from rawnind.libs import raw
 from rawnind.libs import rawproc
@@ -336,9 +335,9 @@ class CleanProfiledRGBCleanBayerImageCropsDataset(
 
     def __init__(
         self,
-        content_fpaths: Optional[list[str]] = None,
         num_crops: int,
         crop_size: int,
+        content_fpaths: Optional[list[str]] = None,
         toy_dataset: bool = False,
     ):
         super().__init__(num_crops=num_crops, crop_size=crop_size)
@@ -422,9 +421,9 @@ class CleanProfiledRGBCleanProfiledRGBImageCropsDataset(
 
     def __init__(
         self,
-        content_fpaths: Optional[list[str]] = None,
         num_crops: int,
         crop_size: int,
+        content_fpaths: Optional[list[str]] = None,
         toy_dataset: bool = False,
         arbitrary_proc_method: bool = False,
     ):
@@ -519,11 +518,11 @@ class CleanProfiledRGBNoisyBayerImageCropsDataset(
 
     def __init__(
         self,
-        content_fpaths: Optional[list[str]] = None,
         num_crops: int,
         crop_size: int,
         # test_reserve: list[str],  # python 3.8 incompat
         test_reserve: list,
+        content_fpaths: Optional[list[str]] = None,
         bayer_only: bool = True,
         alignment_max_loss: float = ALIGNMENT_MAX_LOSS,
         mask_mean_min: float = MASK_MEAN_MIN,
@@ -698,12 +697,12 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsDataset(
 
     def __init__(
         self,
-        content_fpaths: Optional[list[str]] = None,
         num_crops: int,
         crop_size: int,
         # test_reserve: list[str],
         test_reserve,  # python 38 incompat
         bayer_only: bool,
+        content_fpaths: Optional[list[str]] = None,
         alignment_max_loss: float = ALIGNMENT_MAX_LOSS,
         mask_mean_min: float = MASK_MEAN_MIN,
         test: bool = False,
@@ -895,11 +894,11 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsValidationDataset(
 
     def __init__(
         self,
-        content_fpaths: Optional[list[str]] = None,
         crop_size: int,
         # test_reserve: list[str],
         test_reserve,  # python38 incompat
         bayer_only: bool,
+        content_fpaths: Optional[list[str]] = None,
         alignment_max_loss: float = ALIGNMENT_MAX_LOSS,
         mask_mean_min: float = MASK_MEAN_MIN,
         toy_dataset: bool = False,
@@ -1019,11 +1018,11 @@ class CleanProfiledRGBNoisyBayerImageCropsValidationDataset(
 
     def __init__(
         self,
-        content_fpaths: Optional[list[str]] = None,
         crop_size: int,
         # test_reserve: list[str],
         test_reserve,  # python 38 incompat
         bayer_only: bool,
+        content_fpaths: Optional[list[str]] = None,
         alignment_max_loss: float = ALIGNMENT_MAX_LOSS,
         mask_mean_min: float = MASK_MEAN_MIN,
         toy_dataset=False,
@@ -1117,11 +1116,11 @@ class CleanProfiledRGBNoisyBayerImageCropsTestDataloader(
 
     def __init__(
         self,
-        content_fpaths: Optional[list[str]] = None,
         crop_size: int,
         # test_reserve: list[str],
         test_reserve,  # python38 incompat
         bayer_only: bool,
+        content_fpaths: Optional[list[str]] = None,
         alignment_max_loss: float = ALIGNMENT_MAX_LOSS,
         mask_mean_min: float = MASK_MEAN_MIN,
         toy_dataset=False,
@@ -1242,11 +1241,11 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsTestDataloader(
 
     def __init__(
         self,
-        content_fpaths: Optional[list[str]] = None,
         crop_size: int,
         # test_reserve: list[str],
         test_reserve,  # python38 incompat
         bayer_only: bool,
+        content_fpaths: Optional[list[str]] = None,
         alignment_max_loss: float = ALIGNMENT_MAX_LOSS,
         mask_mean_min: float = MASK_MEAN_MIN,
         toy_dataset=False,
@@ -1549,9 +1548,9 @@ if __name__ == "__main__":
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     logging.info(f"# python {' '.join(sys.argv)}")
 
-    cleanRGB_noisyBayer_ds = CleanProfiledRGBNoisyBayerImageDataset(
+    cleanRGB_noisyBayer_ds = CleanProfiledRGBNoisyBayerImageCropsDataset(
         content_fpaths=[rawproc.RAWNIND_CONTENT_FPATH], num_crops=4, crop_size=256
     )
-    cleanRGB_noisyRGB_ds = CleanProfiledRGBNoisyProfiledRGBImageDataset(
+    cleanRGB_noisyRGB_ds = CleanProfiledRGBNoisyProfiledRGBImageCropsDataset(
         content_fpaths=[rawproc.RAWNIND_CONTENT_FPATH], num_crops=4, crop_size=256
     )

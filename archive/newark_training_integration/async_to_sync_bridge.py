@@ -18,7 +18,7 @@ Example Usage:
     >>>     async with trio.open_nursery() as nursery:
     >>>         send_channel, recv_channel = trio.open_memory_channel(10)
     >>>         nursery.start_soon(pipeline.run, send_channel)
-    >>>         nursery.start_soon(bridge.collect_scenes_async, recv_channel)
+    >>>         nursery.start_soon(bridge.consume, recv_channel)
     >>>
     >>> # Access collected scenes
     >>> scene = bridge.get_scene(0)
@@ -279,7 +279,7 @@ class AsyncPipelineBridge:
                 from src.rawnind.dataset.SceneInfo import ImageInfo
                 
                 scene_name = f"mock_scene_{i:03d}"
-                cfa_type = "Bayer" if i % 2 == 0 else "X-Trans"
+                cfa_type = "bayer" if i % 2 == 0 else "x-trans"
                 
                 clean_img = ImageInfo(
                     filename=f"clean_{i:03d}.exr",

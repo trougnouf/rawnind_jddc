@@ -50,7 +50,7 @@ class CropProducerStage(PostDownloadWorker):
         if max_workers is None:
             max_workers = max(1, int(os.cpu_count() * 0.75))
 
-        super().__init__(output_dir, max_workers, use_process_pool=True, config=config)
+        super().__init__(output_dir, max_workers, use_process_pool=False, config=config)
         
         # Validate crop_size respects CFA block boundaries
         if cfa_type == "Bayer":

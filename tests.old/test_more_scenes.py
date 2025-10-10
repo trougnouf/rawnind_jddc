@@ -10,7 +10,7 @@ from rawnind.libs.rawproc import shift_images, match_gain
 
 
 def load_raw_image(fpath: str):
-    """Load RAW image as [1, H, W] mosaiced Bayer."""
+    """Load RAW image as [1, H, W] mosaiced bayer."""
     img, metadata = raw.raw_fpath_to_mono_img_and_metadata(fpath)
     return img, metadata
 
@@ -55,7 +55,7 @@ def find_alignment_simple(anchor_img, candidate_img, max_shift=128, neighborhood
 
 
 # Find all Bayer scenes
-bayer_dir = Path("src/rawnind/datasets/RawNIND/src/Bayer")
+bayer_dir = Path("src/rawnind/datasets/RawNIND/src/bayer")
 scene_dirs = sorted([d for d in bayer_dir.iterdir() if d.is_dir()])
 
 print(f"Found {len(scene_dirs)} total scenes")

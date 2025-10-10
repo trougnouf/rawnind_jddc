@@ -88,11 +88,11 @@ def discover_test_cases(cfa_filter="all"):
 
     # Determine which CFA types to scan
     if cfa_filter == "all":
-        cfa_types = ["Bayer", "X-Trans"]
+        cfa_types = ["bayer", "x-trans"]
     elif cfa_filter == "bayer":
-        cfa_types = ["Bayer"]
+        cfa_types = ["bayer"]
     elif cfa_filter == "xtrans":
-        cfa_types = ["X-Trans"]
+        cfa_types = ["x-trans"]
     else:
         raise ValueError(f"Invalid cfa_filter: {cfa_filter}")
 
@@ -160,21 +160,21 @@ def test_alignment_comparison(test_cases=None, num_images=None):
     print("\n" + "=" * 80)
     print("ALIGNMENT METHOD COMPARISON: FFT-CFA vs Bruteforce-RGB")
     print("=" * 80)
-    print("\nFFT-CFA: Fast phase correlation on raw Bayer/X-Trans data")
+    print("\nFFT-CFA: Fast phase correlation on raw bayer/x-trans data")
     print("Bruteforce-RGB: Slow exhaustive search after demosaicing to RGB\n")
 
     if test_cases is None:
         # Use default hardcoded test cases
         test_cases = [
             {
-                "name": "Bark ISO65535 (Bayer)",
-                "gt": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
-                "noisy": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/Bayer_Bark_ISO65535_sha1=6ba8ed5f7fff42c4c900812c02701649f4f2d49e.cr2",
+                "name": "Bark ISO65535 (bayer)",
+                "gt": "src/rawnind/datasets/RawNIND/src/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
+                "noisy": "src/rawnind/datasets/RawNIND/src/bayer/Bark/Bayer_Bark_ISO65535_sha1=6ba8ed5f7fff42c4c900812c02701649f4f2d49e.cr2",
             },
             {
-                "name": "Bark ISO800 (Bayer)",
-                "gt": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
-                "noisy": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/Bayer_Bark_ISO800_sha1=ba86f1da64a4bb534d9216e96c1c72177ed1e625.cr2",
+                "name": "Bark ISO800 (bayer)",
+                "gt": "src/rawnind/datasets/RawNIND/src/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
+                "noisy": "src/rawnind/datasets/RawNIND/src/bayer/Bark/Bayer_Bark_ISO800_sha1=ba86f1da64a4bb534d9216e96c1c72177ed1e625.cr2",
             },
         ]
 
@@ -199,7 +199,7 @@ def test_alignment_comparison(test_cases=None, num_images=None):
         )
 
         # ===== METHOD 1: FFT-CFA on RAW data =====
-        print("\n  [1] FFT-CFA (operates on raw Bayer data)")
+        print("\n  [1] FFT-CFA (operates on raw bayer data)")
 
         shift_fft = alignment_backends.find_best_alignment_fft_cfa(
             gt_raw, noisy_raw, gt_meta, verbose=False
@@ -327,13 +327,13 @@ Examples:
   # Run first 5 test cases
   python tests/test_alignment_comparison.py --discover --num_images 5
   
-  # Run only Bayer images
+  # Run only bayer images
   python tests/test_alignment_comparison.py --discover --cfa bayer
   
-  # Run only X-Trans images
+  # Run only x-trans images
   python tests/test_alignment_comparison.py --discover --cfa xtrans
   
-  # Run first 3 X-Trans images
+  # Run first 3 x-trans images
   python tests/test_alignment_comparison.py --discover --cfa xtrans --num_images 3
         """,
     )

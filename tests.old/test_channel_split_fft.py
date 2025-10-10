@@ -1,4 +1,4 @@
-"""Test channel-split FFT on Bayer CFA data."""
+"""Test channel-split FFT on bayer CFA data."""
 
 import numpy as np
 import sys
@@ -11,14 +11,14 @@ from rawnind.libs.rawproc import shift_images, match_gain
 
 
 def load_raw_image(fpath: str):
-    """Load RAW image as [1, H, W] mosaiced Bayer."""
+    """Load RAW image as [1, H, W] mosaiced bayer."""
     img, metadata = raw.raw_fpath_to_mono_img_and_metadata(fpath)
     return img, metadata
 
 
 def extract_bayer_channels(img):
     """
-    Extract 4 Bayer channels from mosaiced image.
+    Extract 4 bayer channels from mosaiced image.
     Assumes RGGB pattern (most common).
 
     Returns: (R, G1, G2, B) channels, each with shape matching their sampling.
@@ -75,11 +75,11 @@ def fft_phase_correlate_single_channel(anchor_ch, target_ch):
 
 def fft_phase_correlate_channel_split(anchor, target, method="median"):
     """
-    FFT phase correlation with Bayer channel splitting.
+    FFT phase correlation with bayer channel splitting.
 
     Args:
-        anchor: [1, H, W] mosaiced Bayer image
-        target: [1, H, W] mosaiced Bayer image
+        anchor: [1, H, W] mosaiced bayer image
+        target: [1, H, W] mosaiced bayer image
         method: "median", "mean", or "mode" for combining channel results
 
     Returns:

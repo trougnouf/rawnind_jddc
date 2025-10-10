@@ -161,7 +161,7 @@ class ImageProcessor(ABC):
 
 
 class BayerProcessor(ImageProcessor):
-    """Process scene data into Bayer tensor format."""
+    """Process scene data into bayer tensor format."""
 
     def __init__(self, height: int = SYNTHETIC_IMAGE_HEIGHT,
                  width: int = SYNTHETIC_IMAGE_WIDTH):
@@ -169,13 +169,13 @@ class BayerProcessor(ImageProcessor):
         self.width = width
 
     def process(self, scene: SceneInfo) -> torch.Tensor:
-        """Convert scene to Bayer tensor (4 channels: RGGB).
+        """Convert scene to bayer tensor (4 channels: RGGB).
 
         Args:
             scene: SceneInfo containing image data
 
         Returns:
-            Bayer tensor with shape (4, H, W)
+            bayer tensor with shape (4, H, W)
         """
         # For testing, create synthetic Bayer data
         bayer = torch.randn(DEFAULT_BAYER_CHANNELS, self.height, self.width)
@@ -375,7 +375,7 @@ class E2EDatasetWrapper(Dataset):
             idx: Index within this split
 
         Returns:
-            Dictionary with "input" (Bayer) and "target" (RGB) tensors
+            Dictionary with "input" (bayer) and "target" (RGB) tensors
         """
         # Map split index to global scene index
         global_idx = self.start_idx + idx

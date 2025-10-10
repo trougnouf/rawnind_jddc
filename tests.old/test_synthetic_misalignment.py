@@ -53,7 +53,7 @@ def shift_images(anchor, target, shift):
 
 
 def extract_bayer_channel(img, metadata, channel):
-    """Extract one Bayer channel and downsample."""
+    """Extract one bayer channel and downsample."""
     pattern = metadata["RGBG_pattern"]
     h, w = img.shape[-2:]
 
@@ -69,7 +69,7 @@ def extract_bayer_channel(img, metadata, channel):
 
 
 def fft_phase_correlate_bayer(anchor, target, anchor_meta, method="median"):
-    """Bayer channel-split FFT."""
+    """bayer channel-split FFT."""
     channels = ["R", "G1", "G2", "B"]
     shifts = []
 
@@ -138,7 +138,7 @@ def create_dense_channel_image(values, mask):
 
 
 def extract_xtrans_channels_dense(img, metadata):
-    """Extract X-Trans channels as dense downsampled arrays."""
+    """Extract x-trans channels as dense downsampled arrays."""
     pattern = metadata["RGBG_pattern"]
     color_desc = metadata.get("color_desc", "RGBG")
 
@@ -162,7 +162,7 @@ def extract_xtrans_channels_dense(img, metadata):
 
 
 def fft_phase_correlate_xtrans(anchor, target, anchor_meta, method="median"):
-    """X-Trans channel-split FFT."""
+    """x-trans channel-split FFT."""
     anchor_R, anchor_G, anchor_B = extract_xtrans_channels_dense(anchor, anchor_meta)
     target_R, target_G, target_B = extract_xtrans_channels_dense(target, anchor_meta)
 
@@ -232,20 +232,20 @@ def create_synthetic_pair(img, offset):
 
 
 def test_synthetic_bayer():
-    """Test Bayer channel-split FFT with synthetic misalignments."""
+    """Test bayer channel-split FFT with synthetic misalignments."""
     print("=" * 80)
     print("TESTING BAYER SYNTHETIC MISALIGNMENTS")
     print("=" * 80)
 
     # Load a Bayer image pair
-    base_path = Path("src/rawnind/datasets/RawNIND/src/Bayer/Bark")
+    base_path = Path("src/rawnind/datasets/RawNIND/src/bayer/Bark")
     gt_file = (
         base_path
         / "gt"
         / "Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2"
     )
 
-    print(f"\nLoading Bayer test image: {gt_file.name}")
+    print(f"\nLoading bayer test image: {gt_file.name}")
     gt_img, gt_meta = load_raw_image(str(gt_file))
     print(f"  Shape: {gt_img.shape}")
     print(f"  Pattern shape: {gt_meta['RGBG_pattern'].shape}")
@@ -298,21 +298,21 @@ def test_synthetic_bayer():
 
 
 def test_synthetic_xtrans():
-    """Test X-Trans channel-split FFT with synthetic misalignments."""
+    """Test x-trans channel-split FFT with synthetic misalignments."""
     print("\n\n")
     print("=" * 80)
     print("TESTING X-TRANS SYNTHETIC MISALIGNMENTS")
     print("=" * 80)
 
     # Load an X-Trans image
-    base_path = Path("src/rawnind/datasets/RawNIND/src/X-Trans/books")
+    base_path = Path("src/rawnind/datasets/RawNIND/src/x-trans/books")
     gt_file = (
         base_path
         / "gt"
         / "X-Trans_books_GT_ISO200_sha1=b2add962f3fd1cd828a1cd5e3c29f7226aebb6df.raf"
     )
 
-    print(f"\nLoading X-Trans test image: {gt_file.name}")
+    print(f"\nLoading x-trans test image: {gt_file.name}")
     gt_img, gt_meta = load_raw_image(str(gt_file))
     print(f"  Shape: {gt_img.shape}")
     print(f"  Pattern shape: {gt_meta['RGBG_pattern'].shape}")
@@ -379,8 +379,8 @@ if __name__ == "__main__":
     print("=" * 80)
     print("SYNTHETIC MISALIGNMENT VALIDATION COMPLETE")
     print("=" * 80)
-    print(f"Bayer:   {bayer_perfect}/{len(bayer_results)} perfect")
-    print(f"X-Trans: {xtrans_perfect}/{len(xtrans_results)} perfect")
+    print(f"bayer:   {bayer_perfect}/{len(bayer_results)} perfect")
+    print(f"x-trans: {xtrans_perfect}/{len(xtrans_results)} perfect")
     print()
 
     if bayer_perfect == len(bayer_results) and xtrans_perfect == len(xtrans_results):

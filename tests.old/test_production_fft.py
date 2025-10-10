@@ -45,28 +45,28 @@ def shift_images(anchor, target, shift):
 TEST_CASES = [
     # Bayer - known misalignments
     {
-        "name": "Bark ISO65535 (Bayer)",
-        "anchor": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
-        "target": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/Bayer_Bark_ISO65535_sha1=6ba8ed5f7fff42c4c900812c02701649f4f2d49e.cr2",
+        "name": "Bark ISO65535 (bayer)",
+        "anchor": "src/rawnind/datasets/RawNIND/src/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
+        "target": "src/rawnind/datasets/RawNIND/src/bayer/Bark/Bayer_Bark_ISO65535_sha1=6ba8ed5f7fff42c4c900812c02701649f4f2d49e.cr2",
         "expected": (12, -10),
     },
     {
-        "name": "Bark ISO800 (Bayer)",
-        "anchor": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
-        "target": "src/rawnind/datasets/RawNIND/src/Bayer/Bark/Bayer_Bark_ISO800_sha1=ba86f1da64a4bb534d9216e96c1c72177ed1e625.cr2",
+        "name": "Bark ISO800 (bayer)",
+        "anchor": "src/rawnind/datasets/RawNIND/src/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
+        "target": "src/rawnind/datasets/RawNIND/src/bayer/Bark/Bayer_Bark_ISO800_sha1=ba86f1da64a4bb534d9216e96c1c72177ed1e625.cr2",
         "expected": (4, -4),
     },
     {
-        "name": "Kortlek ISO51200 (Bayer)",
-        "anchor": "src/rawnind/datasets/RawNIND/src/Bayer/Kortlek/gt/Bayer_Kortlek_GT_ISO100_sha1=b5a564cd9291224caf363b6b03054365d59d316b.cr2",
-        "target": "src/rawnind/datasets/RawNIND/src/Bayer/Kortlek/Bayer_Kortlek_ISO51200_sha1=8fed453fdfb162673bb9ed41f9c5f03095331e3b.cr2",
+        "name": "Kortlek ISO51200 (bayer)",
+        "anchor": "src/rawnind/datasets/RawNIND/src/bayer/Kortlek/gt/Bayer_Kortlek_GT_ISO100_sha1=b5a564cd9291224caf363b6b03054365d59d316b.cr2",
+        "target": "src/rawnind/datasets/RawNIND/src/bayer/Kortlek/Bayer_Kortlek_ISO51200_sha1=8fed453fdfb162673bb9ed41f9c5f03095331e3b.cr2",
         "expected": (0, -4),
     },
     # X-Trans - already aligned
     {
-        "name": "MuseeL-pedestal ISO6400 (X-Trans)",
-        "anchor": "src/rawnind/datasets/RawNIND/src/X-Trans/MuseeL-pedestal/gt/X-Trans_MuseeL-pedestal_GT_ISO200_sha1=161b21f545c4c4ed7fc4fce014f637bb7040d8aa.raf",
-        "target": "src/rawnind/datasets/RawNIND/src/X-Trans/MuseeL-pedestal/X-Trans_MuseeL-pedestal_ISO6400_sha1=693af8d1f36f89ad3c4cb8c0eb0e41c924684140.raf",
+        "name": "MuseeL-pedestal ISO6400 (x-trans)",
+        "anchor": "src/rawnind/datasets/RawNIND/src/x-trans/MuseeL-pedestal/gt/X-Trans_MuseeL-pedestal_GT_ISO200_sha1=161b21f545c4c4ed7fc4fce014f637bb7040d8aa.raf",
+        "target": "src/rawnind/datasets/RawNIND/src/x-trans/MuseeL-pedestal/X-Trans_MuseeL-pedestal_ISO6400_sha1=693af8d1f36f89ad3c4cb8c0eb0e41c924684140.raf",
         "expected": (0, 0),
     },
 ]
