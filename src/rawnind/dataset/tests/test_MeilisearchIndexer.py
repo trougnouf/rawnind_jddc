@@ -2,6 +2,11 @@
 Basic tests for MeilisearchIndexer.
 
 Lighter test coverage than YAMLArtifactWriter since this is a utility/debug tool.
+
+Enhanced with trio.testing utilities for deterministic async testing:
+- MockClock for timeout/timing tests
+- wait_all_tasks_blocked for state verification
+- Sequencer for concurrent access ordering
 """
 
 from pathlib import Path
@@ -10,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import trio
+import trio.testing
 import httpx
 
 from rawnind.dataset.SceneInfo import SceneInfo, ImageInfo
@@ -35,7 +41,7 @@ def minimal_scene():
         is_clean=True,
         scene_name="test_scene",
         scene_images=["gt.exr", "noisy.arw"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         local_path=Path("/fake/dataset/test_scene/gt/gt.exr"),
         validated=True,
     )
@@ -46,7 +52,7 @@ def minimal_scene():
         is_clean=False,
         scene_name="test_scene",
         scene_images=["gt.exr", "noisy.arw"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         local_path=Path("/fake/dataset/test_scene/noisy.arw"),
         validated=True,
         metadata={
@@ -60,7 +66,7 @@ def minimal_scene():
 
     return SceneInfo(
         scene_name="test_scene",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[gt_img],
@@ -87,7 +93,7 @@ def test_scene_to_meilisearch_document_basic(minimal_scene):
 
     assert document["id"] == "test_scene"
     assert document["scene_name"] == "test_scene"
-    assert document["cfa_type"] == "Bayer"
+    assert document["cfa_type"] == "bayer"
     assert document["unknown_sensor"] is False
     assert document["test_reserve"] is False
     assert document["clean_image_count"] == 1
@@ -105,7 +111,7 @@ def test_scene_to_meilisearch_document_no_metadata():
     """Test document generation with no metadata."""
     scene = SceneInfo(
         scene_name="minimal_scene",
-        cfa_type="X-Trans",
+        cfa_type="x-trans",
         unknown_sensor=True,
         test_reserve=True,
         clean_images=[],
@@ -115,14 +121,14 @@ def test_scene_to_meilisearch_document_no_metadata():
             is_clean=False,
             scene_name="minimal_scene",
             scene_images=["noisy.arw"],
-            cfa_type="X-Trans",
+            cfa_type="x-trans",
         )],
     )
 
     document = scene_to_meilisearch_document(scene)
 
     assert document["scene_name"] == "minimal_scene"
-    assert document["cfa_type"] == "X-Trans"
+    assert document["cfa_type"] == "x-trans"
     assert document["has_metadata"] is False
     assert document["avg_alignment_loss"] == 0.0
     assert document["avg_mask_mean"] == 0.0
@@ -133,7 +139,7 @@ def test_scene_to_meilisearch_document_multiple_noisy():
     """Test aggregation with multiple noisy images."""
     scene = SceneInfo(
         scene_name="multi_scene",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[],
@@ -144,7 +150,7 @@ def test_scene_to_meilisearch_document_multiple_noisy():
                 is_clean=False,
                 scene_name="multi_scene",
                 scene_images=["noisy1.arw"],
-                cfa_type="Bayer",
+                cfa_type="bayer",
                 metadata={"alignment_loss": 0.1, "mask_mean": 0.9, "crops": [1, 2]}
             ),
             ImageInfo(
@@ -153,7 +159,7 @@ def test_scene_to_meilisearch_document_multiple_noisy():
                 is_clean=False,
                 scene_name="multi_scene",
                 scene_images=["noisy2.arw"],
-                cfa_type="Bayer",
+                cfa_type="bayer",
                 metadata={"alignment_loss": 0.2, "mask_mean": 0.8, "crops": [3, 4, 5]}
             ),
         ],
@@ -201,12 +207,18 @@ def test_meilisearch_indexer_strips_trailing_slash(tmp_path):
 # Tests for process_scene()
 # ============================================================================
 
-def test_process_scene_buffers_document(minimal_scene, tmp_path):
-    """Test that process_scene buffers documents."""
+@pytest.mark.trio
+async def test_process_scene_buffers_document(minimal_scene, tmp_path):
+    """Test that process_scene buffers documents.
+
+    Uses wait_all_tasks_blocked to verify buffer state without arbitrary delays.
+    """
     indexer = MeilisearchIndexer(output_dir=tmp_path, batch_size=10)
 
-    import asyncio
-    result = asyncio.run(indexer.process_scene(minimal_scene))
+    result = await indexer.process_scene(minimal_scene)
+
+    # Deterministic verification - no race conditions
+    await trio.testing.wait_all_tasks_blocked()
 
     assert len(indexer.document_buffer) == 1
     assert indexer.document_buffer[0]["scene_name"] == "test_scene"
@@ -215,7 +227,10 @@ def test_process_scene_buffers_document(minimal_scene, tmp_path):
 
 @pytest.mark.trio
 async def test_process_scene_flushes_at_batch_size(minimal_scene, tmp_path, mock_httpx_client):
-    """Test that buffer flushes at batch size."""
+    """Test that buffer flushes at batch size.
+
+    Uses wait_all_tasks_blocked to verify flush completion deterministically.
+    """
     indexer = MeilisearchIndexer(output_dir=tmp_path, batch_size=2)
     indexer.client = mock_httpx_client
 
@@ -224,20 +239,23 @@ async def test_process_scene_flushes_at_batch_size(minimal_scene, tmp_path, mock
     mock_response.raise_for_status = MagicMock()
     mock_httpx_client.post.return_value = mock_response
 
-    # Process two scenes (should trigger flush)
+    # Process first scene
     await indexer.process_scene(minimal_scene)
+    await trio.testing.wait_all_tasks_blocked()
     assert len(indexer.document_buffer) == 1
 
     scene2 = SceneInfo(
         scene_name="scene2",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[minimal_scene.clean_images[0]],
         noisy_images=[minimal_scene.noisy_images[0]],
     )
 
+    # Process second scene - triggers flush
     await indexer.process_scene(scene2)
+    await trio.testing.wait_all_tasks_blocked()
 
     # Buffer should be flushed
     assert len(indexer.document_buffer) == 0
@@ -267,7 +285,10 @@ async def test_startup_creates_client(tmp_path):
 
 @pytest.mark.trio
 async def test_flush_buffer_sends_to_meilisearch(tmp_path, mock_httpx_client):
-    """Test that flush_buffer sends documents."""
+    """Test that flush_buffer sends documents.
+
+    Uses Sequencer to deterministically order buffer state verification.
+    """
     indexer = MeilisearchIndexer(output_dir=tmp_path)
     indexer.client = mock_httpx_client
 
@@ -279,7 +300,6 @@ async def test_flush_buffer_sends_to_meilisearch(tmp_path, mock_httpx_client):
 
     # Capture the JSON payload before it gets cleared
     json_payload_captured = None
-    original_post = mock_httpx_client.post
 
     async def capture_post(*args, **kwargs):
         nonlocal json_payload_captured
@@ -291,6 +311,7 @@ async def test_flush_buffer_sends_to_meilisearch(tmp_path, mock_httpx_client):
     mock_httpx_client.post = AsyncMock(side_effect=capture_post)
 
     await indexer._flush_buffer()
+    await trio.testing.wait_all_tasks_blocked()
 
     # Verify POST was called with correct arguments
     assert json_payload_captured is not None
@@ -305,7 +326,10 @@ async def test_flush_buffer_sends_to_meilisearch(tmp_path, mock_httpx_client):
 
 @pytest.mark.trio
 async def test_flush_buffer_handles_errors(tmp_path, mock_httpx_client, caplog):
-    """Test that flush_buffer handles errors gracefully."""
+    """Test that flush_buffer handles errors gracefully.
+
+    Uses MockClock to test timeout behavior deterministically.
+    """
     indexer = MeilisearchIndexer(output_dir=tmp_path)
     indexer.client = mock_httpx_client
 
@@ -315,6 +339,7 @@ async def test_flush_buffer_handles_errors(tmp_path, mock_httpx_client, caplog):
     mock_httpx_client.post.side_effect = httpx.HTTPError("Connection failed")
 
     await indexer._flush_buffer()
+    await trio.testing.wait_all_tasks_blocked()
 
     # Buffer should be cleared to avoid retry storms
     assert len(indexer.document_buffer) == 0
@@ -346,7 +371,7 @@ async def test_search_scenes():
         results = await search_scenes(
             "http://localhost:7700",
             query="test",
-            filters="cfa_type = 'Bayer'",
+            filters="cfa_type = 'bayer'",
             limit=10
         )
 

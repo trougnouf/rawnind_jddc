@@ -348,7 +348,7 @@ class PipelineOrchestrator:
                 )
             else:
                 collection_task = nursery.start_soon(
-                    bridge.collect_scenes_async,
+                    bridge.consume,
                     recv_channel,
                     self._progress_callback if self.metrics else None
                 )

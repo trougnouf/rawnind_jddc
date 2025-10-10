@@ -1,4 +1,4 @@
-Bayer:
+bayer:
   2pilesofplates:
     clean_images:
     - filename: Bayer_2pilesofplates_GT_ISO100_sha1=854554a34b339413462eb1538d4cb0fa95d468b5.arw

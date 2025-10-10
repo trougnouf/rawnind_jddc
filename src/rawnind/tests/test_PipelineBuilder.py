@@ -45,7 +45,7 @@ async def test_final_consumer():
     # Create a test scene
     scene_info = SceneInfo(
         scene_name="test_scene",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[],
@@ -74,7 +74,7 @@ async def test_pipeline_builder_with_mock_data(tmp_path):
 
     # Create minimal dataset
     dataset_data = {
-        "Bayer": {
+        "bayer": {
             "test_scene": {
                 "clean_images": [{"filename": "clean.png", "sha1": "abc123"}],
                 "noisy_images": [],
@@ -91,8 +91,8 @@ async def test_pipeline_builder_with_mock_data(tmp_path):
         f.write('{"data": {"latestVersion": {"files": []}}}')
 
     # Create the image file so scanner finds it
-    (dataset_root / "Bayer" / "test_scene" / "gt").mkdir(parents=True)
-    clean_file = dataset_root / "Bayer" / "test_scene" / "gt" / "clean.png"
+    (dataset_root / "bayer" / "test_scene" / "gt").mkdir(parents=True)
+    clean_file = dataset_root / "bayer" / "test_scene" / "gt" / "clean.png"
     clean_file.write_bytes(b"fake image data")
 
     pipeline = PipelineBuilder(

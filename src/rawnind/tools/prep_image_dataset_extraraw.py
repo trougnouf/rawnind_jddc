@@ -51,7 +51,7 @@ def fetch_crops_list(fpath: str, ds_base_dpath: str) -> list[dict]:
     crops = []
     basename = os.path.basename(fpath)
     prgb_image_set_dpath = os.path.join(ds_base_dpath, "crops", "proc", "lin_rec2020")
-    bayer_image_set_dpath = os.path.join(ds_base_dpath, "crops", "src", "Bayer")
+    bayer_image_set_dpath = os.path.join(ds_base_dpath, "crops", "src", "bayer")
     for fn in os.listdir(prgb_image_set_dpath):
         if fn.startswith(basename):
             coordinates = get_xy_coordinates(fn)
@@ -96,7 +96,7 @@ if __name__ == "__main__":
         extraraw_content_fpath = os.path.join(
             EXTRARAW_DS_DPATH, dataset, "crops_metadata.yaml"
         )
-        bayer_ds_dpath = os.path.join(EXTRARAW_DS_DPATH, dataset, "src", "Bayer")
+        bayer_ds_dpath = os.path.join(EXTRARAW_DS_DPATH, dataset, "src", "bayer")
         args_in = []
 
         if args.overwrite or not os.path.exists(extraraw_content_fpath):
@@ -138,7 +138,7 @@ if __name__ == "__main__":
                     f"Crops not found for {result['bayer_fpath']}. Is {dataset} cropped? (run `python tools/crop_datasets.py --dataset extraraw` if not then run this script again with --overwrite.)"
                 )
             linrec2020_fpath = (
-                result["bayer_fpath"].replace("src/Bayer", "proc/lin_rec2020") + ".tif"
+                result["bayer_fpath"].replace("src/bayer", "proc/lin_rec2020") + ".tif"
             )
             if os.path.exists(linrec2020_fpath):
                 result["linrec2020_fpath"] = linrec2020_fpath

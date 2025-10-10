@@ -18,6 +18,9 @@ class PipelineVisualizer:
             'failed': 0, 'errors': 0, 'Indexed': 0, 'complete': 0,
             'enriching': 0, 'enriched': 0, 'aligning': 0, 'aligned': 0,
             'cropping': 0, 'cropped': 0, 'yaml_writing': 0, 'yaml_written': 0,
+            'dataloader_skip': 0, 'dataloader_init': 0, 'dataloader_images': 0,
+            'dataloader_created': 0, 'dataloader_batches': 0, 'dataloader_success': 0,
+            'dataloader_errors': 0,
         }
         self.zero_since: Dict[str, float] = {}
         self.lock = trio.Lock()
@@ -128,9 +131,9 @@ class PipelineVisualizer:
 └──▼
 │ CropProducer │ {cropping_color}Cropping: {self.counters['cropping']:3d}{self.RESET} │ Cropped: {self.counters['cropped']:3d}
 └──▼
-│ YAMLArtifact │ {yaml_writing_color}Writing: {self.counters['yaml_writing']:3d}{self.RESET} │ Written: {self.counters['yaml_written']:3d}
+│ Bridge       │ {self.BOLD}{self.GREEN}Complete: {self.counters['complete']:3d}{self.RESET}
 └──▼
-│FinalConsumer │ {self.BOLD}{self.GREEN}Complete: {self.counters['complete']:3d}{self.RESET}
+│ DataLoader   │ Scenes: {self.counters['dataloader_images']:3d} │ Batches: {self.counters['dataloader_batches']:3d} │ {"✓" if self.counters['dataloader_success'] else "✗" if self.counters['dataloader_errors'] else "⋯"}
 """
 
     async def update(self, **kwargs) -> None:

@@ -6,8 +6,8 @@ from rawnind.libs.raw import fft_phase_correlate_cfa
 
 
 def test_bayer_alignment_snaps_to_even():
-    """Bayer alignment must return even-numbered shifts (2x2 block boundaries)."""
-    # Create synthetic Bayer images - use structured pattern not random noise
+    """bayer alignment must return even-numbered shifts (2x2 block boundaries)."""
+    # Create synthetic bayer images - use structured pattern not random noise
     h, w = 256, 256
     anchor = np.random.rand(1, h, w).astype(np.float32)
 
@@ -16,19 +16,19 @@ def test_bayer_alignment_snaps_to_even():
         target = np.zeros((1, h, w), dtype=np.float32)
         target[:, shift_amount:, shift_amount:] = anchor[:, :-shift_amount, :-shift_amount]
 
-        # Bayer RGGB pattern
+        # bayer RGGB pattern
         bayer_pattern = np.array([[0, 1], [1, 2]], dtype=np.uint8)
         metadata = {"RGBG_pattern": bayer_pattern}
 
         shift, _ = fft_phase_correlate_cfa(anchor, target, metadata, method="median")
 
         # Both components must be even (key constraint)
-        assert shift[0] % 2 == 0, f"Y shift {shift[0]} is not even (violates 2x2 Bayer blocks)"
-        assert shift[1] % 2 == 0, f"X shift {shift[1]} is not even (violates 2x2 Bayer blocks)"
+        assert shift[0] % 2 == 0, f"Y shift {shift[0]} is not even (violates 2x2 bayer blocks)"
+        assert shift[1] % 2 == 0, f"X shift {shift[1]} is not even (violates 2x2 bayer blocks)"
 
 
 def test_xtrans_alignment_snaps_to_multiple_of_3():
-    """X-Trans alignment must return shifts that are multiples of 3 (3x3 block boundaries)."""
+    """x-trans alignment must return shifts that are multiples of 3 (3x3 block boundaries)."""
     # Create synthetic X-Trans images
     h, w = 252, 252  # Multiple of 6 for X-Trans
     anchor = np.random.rand(1, h, w).astype(np.float32)
@@ -52,8 +52,8 @@ def test_xtrans_alignment_snaps_to_multiple_of_3():
         shift, _ = fft_phase_correlate_cfa(anchor, target, metadata, method="median")
 
         # Both components must be multiples of 3 (key constraint)
-        assert shift[0] % 3 == 0, f"Y shift {shift[0]} is not multiple of 3 (violates 3x3 X-Trans blocks)"
-        assert shift[1] % 3 == 0, f"X shift {shift[1]} is not multiple of 3 (violates 3x3 X-Trans blocks)"
+        assert shift[0] % 3 == 0, f"Y shift {shift[0]} is not multiple of 3 (violates 3x3 x-trans blocks)"
+        assert shift[1] % 3 == 0, f"X shift {shift[1]} is not multiple of 3 (violates 3x3 x-trans blocks)"
 
 
 def test_bayer_alignment_preserves_block_aligned_shifts():

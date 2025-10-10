@@ -4,7 +4,7 @@
 
 This module provides utility functions that recur across multiple components of the codebase but don't belong to any specific domain. It's the accumulation of helper functions extracted during refactoring when the same pattern appeared in three different files. Some utilities are generic (file I/O, serialization, directory operations), others are specific to PyTorch workflows (device management, loss functions, tensor conversions).
 
-The organization reflects practical evolution rather than principled taxonomy. A function lives here if it's used by both training code and evaluation scripts, or by both Bayer and RGB processing paths, or by multiple model architectures. Functions used in only one place stay in that file; functions used everywhere migrate here.
+The organization reflects practical evolution rather than principled taxonomy. A function lives here if it's used by both training code and evaluation scripts, or by both bayer and RGB processing paths, or by multiple model architectures. Functions used in only one place stay in that file; functions used everywhere migrate here.
 
 ### The Tension Between Abstraction and Specificity
 

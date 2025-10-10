@@ -24,7 +24,7 @@ async def test_consume_images_produce_scenes():
         is_clean=True,
         scene_name="scene_1",
         scene_images=["abcdef1234567890", "fedcba0987654321"],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
     img_info_2 = ImageInfo(
         filename="test_image_2.png",
@@ -32,7 +32,7 @@ async def test_consume_images_produce_scenes():
         is_clean=False,
         scene_name="scene_1",
         scene_images=["abcdef1234567890", "fedcba0987654321"],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
 
     # Run the consumer-producer task
@@ -68,7 +68,7 @@ async def test_iter_complete_scenes():
         is_clean=True,
         scene_name="scene_1",
         scene_images=["abcdef1234567890", "fedcba0987654321"],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
 
     img_info_2 = ImageInfo(
@@ -77,7 +77,7 @@ async def test_iter_complete_scenes():
         is_clean=False,
         scene_name="scene_1",
         scene_images=["abcdef1234567890", "fedcba0987654321"],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
 
     # Run the consumer-producer task
@@ -117,7 +117,7 @@ async def test_iter_incomplete_images():
         is_clean=True,
         scene_name="scene_incomplete",
         scene_images=["abcdef1234567890", "fedcba0987654321"],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
 
     # Run the consumer-producer task
@@ -150,7 +150,7 @@ async def test_scene_completion_tracking():
         is_clean=True,
         scene_name="scene_tracking",
         scene_images=["abcdef1234567890", "fedcba0987654321"],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
 
     img_info_2 = ImageInfo(
@@ -159,7 +159,7 @@ async def test_scene_completion_tracking():
         is_clean=False,
         scene_name="scene_tracking",
         scene_images=["abcdef1234567890", "fedcba0987654321"],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
 
     # Run the consumer-producer task

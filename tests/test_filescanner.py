@@ -21,7 +21,7 @@ async def temp_dataset():
     dataset_root = Path(test_dir)
 
     # Create Bayer scene structure
-    bayer_scene = dataset_root / "Bayer" / "TestScene"
+    bayer_scene = dataset_root / "bayer" / "TestScene"
     bayer_gt = bayer_scene / "gt"
     bayer_gt.mkdir(parents=True, exist_ok=True)
 
@@ -55,7 +55,7 @@ async def test_scan_finds_existing_files(temp_dataset):
         is_clean=True,
         scene_name="TestScene",
         scene_images=["abc"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="123"
     )
 
@@ -65,13 +65,13 @@ async def test_scan_finds_existing_files(temp_dataset):
         is_clean=False,
         scene_name="TestScene",
         scene_images=["abc", "def"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="456"
     )
 
     scene = SceneInfo(
         scene_name="TestScene",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[clean_img],
@@ -122,13 +122,13 @@ async def test_scan_reports_missing_files(temp_dataset):
         is_clean=False,
         scene_name="TestScene",
         scene_images=["xyz"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="789"
     )
 
     scene = SceneInfo(
         scene_name="TestScene",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[],
@@ -166,7 +166,7 @@ async def test_scan_multiple_candidates_prefers_gt_dir(temp_dataset):
     scanner = FileScanner(temp_dataset)
 
     # Create file in both gt/ and scene root
-    scene_dir = temp_dataset / "Bayer" / "TestScene"
+    scene_dir = temp_dataset / "bayer" / "TestScene"
     (scene_dir / "clean_001.cr2").write_bytes(b"in root")
 
     clean_img = ImageInfo(
@@ -175,13 +175,13 @@ async def test_scan_multiple_candidates_prefers_gt_dir(temp_dataset):
         is_clean=True,
         scene_name="TestScene",
         scene_images=["abc"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="123"
     )
 
     scene = SceneInfo(
         scene_name="TestScene",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[clean_img],
@@ -222,13 +222,13 @@ async def test_scan_noisy_images_only_check_scene_root(temp_dataset):
         is_clean=False,
         scene_name="TestScene",
         scene_images=["def"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="456"
     )
 
     scene = SceneInfo(
         scene_name="TestScene",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[],
@@ -254,7 +254,7 @@ async def test_scan_noisy_images_only_check_scene_root(temp_dataset):
         pass
 
     assert len(found) == 1
-    assert found[0].local_path == temp_dataset / "Bayer" / "TestScene" / "noisy_001.cr2"
+    assert found[0].local_path == temp_dataset / "bayer" / "TestScene" / "noisy_001.cr2"
 
 
 @pytest.mark.trio
@@ -263,7 +263,7 @@ async def test_scan_processes_multiple_scenes(temp_dataset):
     scanner = FileScanner(temp_dataset)
 
     # Create second scene
-    scene2_dir = temp_dataset / "Bayer" / "Scene2"
+    scene2_dir = temp_dataset / "bayer" / "Scene2"
     scene2_dir.mkdir(parents=True, exist_ok=True)
     (scene2_dir / "noisy_005.cr2").write_bytes(b"scene 2")
 
@@ -273,7 +273,7 @@ async def test_scan_processes_multiple_scenes(temp_dataset):
         is_clean=False,
         scene_name="TestScene",
         scene_images=["a"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="1"
     )
 
@@ -283,12 +283,12 @@ async def test_scan_processes_multiple_scenes(temp_dataset):
         is_clean=False,
         scene_name="Scene2",
         scene_images=["b"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="2"
     )
 
-    scene1 = SceneInfo("TestScene", "Bayer", False, False, [], [img1])
-    scene2 = SceneInfo("Scene2", "Bayer", False, False, [], [img2])
+    scene1 = SceneInfo("TestScene", "bayer", False, False, [], [img1])
+    scene2 = SceneInfo("Scene2", "bayer", False, False, [], [img2])
 
     recv_send, recv_recv = trio.open_memory_channel(10)
     new_send, new_recv = trio.open_memory_channel(10)

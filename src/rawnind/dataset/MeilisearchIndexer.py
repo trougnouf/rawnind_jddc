@@ -316,10 +316,10 @@ async def search_scenes(
         List of matching scene documents
 
     Example:
-        # Find Bayer scenes with good alignment
+        # Find bayer scenes with good alignment
         results = await search_scenes(
             url,
-            filters="cfa_type = 'Bayer' AND avg_alignment_loss < 0.1"
+            filters="cfa_type = 'bayer' AND avg_alignment_loss < 0.1"
         )
     """
     headers = {}

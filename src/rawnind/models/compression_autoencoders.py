@@ -66,7 +66,7 @@ class AbstractRawImageCompressor(nn.Module):
 
 class BalleEncoder(nn.Module):
     """
-    Image encoder for RGB (3ch) or Bayer (4ch) images.
+    Image encoder for RGB (3ch) or bayer (4ch) images.
     """
 
     def __init__(

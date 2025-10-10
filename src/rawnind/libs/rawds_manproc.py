@@ -281,10 +281,10 @@ def prep_manproc_dataset(
             image["gt_linrec2020_fpath"] = image["linrec2020_fpath"]
         else:
             image["f_linrec2020_fpath"] = (
-                image["f_fpath"].replace("src/Bayer", "proc/lin_rec2020") + ".tif"
+                image["f_fpath"].replace("src/bayer", "proc/lin_rec2020") + ".tif"
             )
             image["gt_linrec2020_fpath"] = (
-                image["gt_fpath"].replace("src/Bayer", "proc/lin_rec2020") + ".tif"
+                image["gt_fpath"].replace("src/bayer", "proc/lin_rec2020") + ".tif"
             )
         image["dt_xmp"] = image["gt_linrec2020_fpath"] + ".xmp"
         # figure out new and temporary paths

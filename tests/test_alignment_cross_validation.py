@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def find_test_pairs(max_pairs=20):
     """Find GT-noisy RAW file pairs for testing."""
-    bayer_dir = Path("tmp/rawnind_dataset/Bayer")
+    bayer_dir = Path("tmp/rawnind_dataset/bayer")
     if not bayer_dir.exists():
         pytest.skip("Test dataset not available")
     
@@ -120,7 +120,7 @@ def test_cfa_alignment_produces_valid_shifts(pair_idx):
     """
     Test that CFA-aware FFT alignment produces valid block-aligned shifts.
     
-    For Bayer (2x2): shifts must be even
+    For bayer (2x2): shifts must be even
     Simplified test - just verifies CFA snapping works, no RGB comparison
     """
     from rawnind.libs.alignment_backends import find_best_alignment_fft_cfa
@@ -149,21 +149,21 @@ def test_cfa_alignment_produces_valid_shifts(pair_idx):
     if pattern_shape == (2, 2):
         # Bayer - shifts must be even
         assert shift_cfa[0] % 2 == 0, (
-            f"Bayer Y shift {shift_cfa[0]} is not even (violates 2x2 blocks)"
+            f"bayer Y shift {shift_cfa[0]} is not even (violates 2x2 blocks)"
         )
         assert shift_cfa[1] % 2 == 0, (
-            f"Bayer X shift {shift_cfa[1]} is not even (violates 2x2 blocks)"
+            f"bayer X shift {shift_cfa[1]} is not even (violates 2x2 blocks)"
         )
-        logger.info(f"  ✓ Bayer shifts are even (block-aligned)")
+        logger.info(f"  ✓ bayer shifts are even (block-aligned)")
     elif pattern_shape == (6, 6):
         # X-Trans - shifts must be multiples of 3
         assert shift_cfa[0] % 3 == 0, (
-            f"X-Trans Y shift {shift_cfa[0]} is not multiple of 3 (violates 3x3 blocks)"
+            f"x-trans Y shift {shift_cfa[0]} is not multiple of 3 (violates 3x3 blocks)"
         )
         assert shift_cfa[1] % 3 == 0, (
-            f"X-Trans X shift {shift_cfa[1]} is not multiple of 3 (violates 3x3 blocks)"
+            f"x-trans X shift {shift_cfa[1]} is not multiple of 3 (violates 3x3 blocks)"
         )
-        logger.info(f"  ✓ X-Trans shifts are multiples of 3 (block-aligned)")
+        logger.info(f"  ✓ x-trans shifts are multiples of 3 (block-aligned)")
     
     # Verify loss is reasonable (not catastrophically bad)
     # Note: RAW values are in sensor units (0-16k range), so loss will be much higher than 0-1 normalized

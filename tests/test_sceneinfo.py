@@ -34,7 +34,7 @@ def sample_image_info():
         is_clean=True,
         scene_name="TestScene",
         scene_images=["abc123def456", "other_sha1"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="12345"
     )
 
@@ -45,7 +45,7 @@ async def test_imageinfo_initialization(sample_image_info):
     assert sample_image_info.filename == "test_image.cr2"
     assert sample_image_info.sha1 == "abc123def456"
     assert sample_image_info.is_clean == True
-    assert sample_image_info.cfa_type == "Bayer"
+    assert sample_image_info.cfa_type == "bayer"
     assert sample_image_info._image_tensor is None
     assert sample_image_info.local_path is None
 
@@ -248,7 +248,7 @@ async def test_sceneinfo_initialization():
         is_clean=True,
         scene_name="Scene1",
         scene_images=["clean_sha"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="1"
     )
 
@@ -258,13 +258,13 @@ async def test_sceneinfo_initialization():
         is_clean=False,
         scene_name="Scene1",
         scene_images=["noisy_sha"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="2"
     )
 
     scene = SceneInfo(
         scene_name="Scene1",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[clean_img],
@@ -272,7 +272,7 @@ async def test_sceneinfo_initialization():
     )
 
     assert scene.scene_name == "Scene1"
-    assert scene.cfa_type == "Bayer"
+    assert scene.cfa_type == "bayer"
     assert len(scene.clean_images) == 1
     assert len(scene.noisy_images) == 1
 
@@ -286,7 +286,7 @@ async def test_sceneinfo_all_images_property():
         is_clean=True,
         scene_name="Scene1",
         scene_images=["clean_sha"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="1"
     )
 
@@ -296,7 +296,7 @@ async def test_sceneinfo_all_images_property():
         is_clean=False,
         scene_name="Scene1",
         scene_images=["noisy_sha1"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="2"
     )
 
@@ -306,13 +306,13 @@ async def test_sceneinfo_all_images_property():
         is_clean=False,
         scene_name="Scene1",
         scene_images=["noisy_sha2"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="3"
     )
 
     scene = SceneInfo(
         scene_name="Scene1",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[clean_img],

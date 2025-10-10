@@ -17,7 +17,7 @@ sys.path.append("../..")
 from rawnind.libs import raw
 
 MAX_NOISY: int = 12
-CAPTURED_DPATH: str = os.path.join("..", "..", "datasets", "RawNIND", "src", "Bayer")
+CAPTURED_DPATH: str = os.path.join("..", "..", "datasets", "RawNIND", "src", "bayer")
 
 
 def get_gt_noisy_iso_values(cfg: gp.widget.CameraWidget) -> tuple[str, list[str]]:

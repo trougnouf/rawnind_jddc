@@ -93,14 +93,14 @@ def combine_images_with_dotted_line(mosaic_bayer_path, mosaic_xtrans_path, outpu
         "RGBA", (combined_width, combined_height), (255, 255, 255, 0)
     )
 
-    # Paste Bayer image on the top
+    # Paste bayer image on the top
     combined_image.paste(img_bayer, (0, 0), img_bayer)
 
     # Draw the dotted line
     draw = ImageDraw.Draw(combined_image)
     line_y = (
         img_bayer.height + 1
-    )  # Slight overlap with the bottom row of the Bayer image
+    )  # Slight overlap with the bottom row of the bayer image
     create_dotted_line(
         draw,
         (0, line_y),
@@ -135,13 +135,13 @@ if __name__ == "__main__":
         "--mosaic_bayer",
         type=str,
         default="/orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_Bayer.png",
-        help="Path to the Bayer mosaic image.",
+        help="Path to the bayer mosaic image.",
     )
     parser.add_argument(
         "--mosaic_xtrans",
         type=str,
         default="/orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_X-Trans.png",
-        help="Path to the X-Trans mosaic image.",
+        help="Path to the x-trans mosaic image.",
     )
     parser.add_argument(
         "--output",

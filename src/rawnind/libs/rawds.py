@@ -1,7 +1,7 @@
 """
 Raw dataset handlers.
 
-Returns x (clean), y (noisy). Bayer (black-white point) or
+Returns x (clean), y (noisy). bayer (black-white point) or
 ProfiledRGB (Lin. Rec2020).
 
 Loaders from whole images are deprecated (too slow). To bring up to date they would need to handle:
@@ -142,8 +142,8 @@ class RawImageDataset:
         """
         hstart = random.randrange(max_start_h)
         vstart = random.randrange(max_start_v)
-        hstart -= hstart % 2  # maintain Bayer pattern
-        vstart -= vstart % 2  # maintain Bayer pattern
+        hstart -= hstart % 2  # maintain bayer pattern
+        vstart -= vstart % 2  # maintain bayer pattern
         # print(
         #    f"{x_crops.shape=}, {ximg.shape=}, {vstart=}, {hstart=}, {self.crop_size=}, {max_start_h=}, {max_start_v=}"
         # )  # dbg
@@ -220,7 +220,7 @@ class ProfiledRGBBayerImageDataset(RawImageDataset):
     # def crop_rgb_to_bayer(
     #     rgb_img: torch.Tensor, metadata: dict
     # ) -> torch.Tensor:
-    #     """Crop an RGB image to match the crop applied to get a universal RGGB Bayer pattern."""
+    #     """Crop an RGB image to match the crop applied to get a universal RGGB bayer pattern."""
     #     assert rgb_img.dim() == 3
     #     if metadata.get("cropped_y"):
     #         rgb_img = rgb_img[:, 1:-1]
@@ -239,7 +239,7 @@ class CleanCleanImageDataset(RawImageDataset):
         super().__init__(num_crops=num_crops, crop_size=crop_size)
 
     def get_mask(self, ximg: torch.Tensor, metadata: dict) -> torch.BoolTensor:
-        # we only ever apply the mask to RGB images so interpolate if Bayer
+        # we only ever apply the mask to RGB images so interpolate if bayer
         if ximg.shape[0] == 4:
             ximg = torch.nn.functional.interpolate(
                 ximg.unsqueeze(0), scale_factor=2
@@ -336,12 +336,14 @@ class CleanProfiledRGBCleanBayerImageCropsDataset(
 
     def __init__(
         self,
-        content_fpaths: list[str],
+        content_fpaths: Optional[list[str]] = None,
         num_crops: int,
         crop_size: int,
         toy_dataset: bool = False,
     ):
         super().__init__(num_crops=num_crops, crop_size=crop_size)
+        if content_fpaths is None:
+            content_fpaths = [str(rawproc.RAWNIND_CONTENT_FPATH)]
         self.num_crops = num_crops
         # self._dataset_xy_fpaths: list[tuple[str, str]] = []  # (gt_fpath, src_fpath)  # python 3.8 incompat
         self._dataset: list[_ds_item] = []  # (gt_fpath, src_fpath)
@@ -420,13 +422,15 @@ class CleanProfiledRGBCleanProfiledRGBImageCropsDataset(
 
     def __init__(
         self,
-        content_fpaths: list[str],
+        content_fpaths: Optional[list[str]] = None,
         num_crops: int,
         crop_size: int,
         toy_dataset: bool = False,
         arbitrary_proc_method: bool = False,
     ):
         super().__init__(num_crops=num_crops, crop_size=crop_size)
+        if content_fpaths is None:
+            content_fpaths = [str(rawproc.RAWNIND_CONTENT_FPATH)]
         self.arbitrary_proc_method = arbitrary_proc_method
         self.num_crops = num_crops
         # self._dataset_xy_fpaths: list[tuple[str, str]] = []  # (gt_fpath, src_fpath)  # python 3.8 incompat
@@ -515,7 +519,7 @@ class CleanProfiledRGBNoisyBayerImageCropsDataset(
 
     def __init__(
         self,
-        content_fpaths: list[str],
+        content_fpaths: Optional[list[str]] = None,
         num_crops: int,
         crop_size: int,
         # test_reserve: list[str],  # python 3.8 incompat
@@ -542,6 +546,8 @@ class CleanProfiledRGBNoisyBayerImageCropsDataset(
         return_data
         """
         super().__init__(num_crops=num_crops, crop_size=crop_size)
+        if content_fpaths is None:
+            content_fpaths = [str(rawproc.RAWNIND_CONTENT_FPATH)]
         self.match_gain = match_gain
         assert bayer_only
         # contents: list[dict] = utilities.load_yaml(content_fpath)
@@ -609,6 +615,10 @@ class CleanProfiledRGBNoisyBayerImageCropsDataset(
         image: dict = self._dataset[i]
         # load x, y, mask
         crop = random.choice(image["crops"])
+        logging.debug(
+            f"Loading crop {crop['crop_id'] if 'crop_id' in crop else 'unknown'} "
+            f"from scene {image.get('scene_name', 'unknown')}"
+        )
         if self.data_pairing == "x_y":
             gt_img = pt_helpers.fpath_to_tensor(crop["gt_linrec2020_fpath"])
             noisy_img = pt_helpers.fpath_to_tensor(crop["f_bayer_fpath"])
@@ -688,7 +698,7 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsDataset(
 
     def __init__(
         self,
-        content_fpaths: list[str],
+        content_fpaths: Optional[list[str]] = None,
         num_crops: int,
         crop_size: int,
         # test_reserve: list[str],
@@ -714,6 +724,8 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsDataset(
             - mask_mean
         """
         super().__init__(num_crops=num_crops, crop_size=crop_size)
+        if content_fpaths is None:
+            content_fpaths = [str(rawproc.RAWNIND_CONTENT_FPATH)]
         self.match_gain = match_gain
         self.arbitrary_proc_method = arbitrary_proc_method
         if self.arbitrary_proc_method:
@@ -883,7 +895,7 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsValidationDataset(
 
     def __init__(
         self,
-        content_fpaths: list[str],
+        content_fpaths: Optional[list[str]] = None,
         crop_size: int,
         # test_reserve: list[str],
         test_reserve,  # python38 incompat
@@ -895,6 +907,8 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsValidationDataset(
         arbitrary_proc_method: bool = False,
         data_pairing: Literal["x_y", "x_x", "y_y"] = "x_y",
     ):
+        if content_fpaths is None:
+            content_fpaths = [str(rawproc.RAWNIND_CONTENT_FPATH)]
         super().__init__(
             content_fpaths=content_fpaths,
             num_crops=1,
@@ -1001,11 +1015,11 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsValidationDataset(
 class CleanProfiledRGBNoisyBayerImageCropsValidationDataset(
     CleanProfiledRGBNoisyBayerImageCropsDataset
 ):
-    """Dataset of clean (profiled RGB) - noisy (Bayer) images from rawNIND."""
+    """Dataset of clean (profiled RGB) - noisy (bayer) images from rawNIND."""
 
     def __init__(
         self,
-        content_fpaths: list[str],
+        content_fpaths: Optional[list[str]] = None,
         crop_size: int,
         # test_reserve: list[str],
         test_reserve,  # python 38 incompat
@@ -1016,6 +1030,8 @@ class CleanProfiledRGBNoisyBayerImageCropsValidationDataset(
         match_gain: bool = False,
         data_pairing: Literal["x_y", "x_x", "y_y"] = "x_y",
     ):
+        if content_fpaths is None:
+            content_fpaths = [str(rawproc.RAWNIND_CONTENT_FPATH)]
         super().__init__(
             content_fpaths=content_fpaths,
             num_crops=1,
@@ -1097,11 +1113,11 @@ class CleanProfiledRGBNoisyBayerImageCropsValidationDataset(
 class CleanProfiledRGBNoisyBayerImageCropsTestDataloader(
     CleanProfiledRGBNoisyBayerImageCropsDataset, TestDataLoader
 ):
-    """Dataloader of clean (profiled RGB) - noisy (Bayer) images crops from rawNIND."""
+    """Dataloader of clean (profiled RGB) - noisy (bayer) images crops from rawNIND."""
 
     def __init__(
         self,
-        content_fpaths: list[str],
+        content_fpaths: Optional[list[str]] = None,
         crop_size: int,
         # test_reserve: list[str],
         test_reserve,  # python38 incompat
@@ -1113,6 +1129,8 @@ class CleanProfiledRGBNoisyBayerImageCropsTestDataloader(
         min_msssim_score: Optional[float] = 0.0,
         max_msssim_score: Optional[float] = 1.0,
     ):
+        if content_fpaths is None:
+            content_fpaths = [str(rawproc.RAWNIND_CONTENT_FPATH)]
         super().__init__(
             content_fpaths=content_fpaths,
             num_crops=1,
@@ -1224,7 +1242,7 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsTestDataloader(
 
     def __init__(
         self,
-        content_fpaths: list[str],
+        content_fpaths: Optional[list[str]] = None,
         crop_size: int,
         # test_reserve: list[str],
         test_reserve,  # python38 incompat
@@ -1237,6 +1255,8 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsTestDataloader(
         min_msssim_score: Optional[float] = 0.0,
         max_msssim_score: Optional[float] = 1.0,
     ):
+        if content_fpaths is None:
+            content_fpaths = [str(rawproc.RAWNIND_CONTENT_FPATH)]
         super().__init__(
             content_fpaths=content_fpaths,
             num_crops=1,

@@ -44,7 +44,7 @@ def mock_image_info(temp_dir):
         is_clean=True,
         scene_name="test_scene",
         scene_images=["abc123"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="12345"
     )
     img_info.local_path = temp_dir / "test_image.cr2"
@@ -192,7 +192,7 @@ async def test_concurrent_downloads(temp_dir):
             is_clean=True,
             scene_name="test",
             scene_images=[f"sha{i}"],
-            cfa_type="Bayer",
+            cfa_type="bayer",
             file_id=str(i)
         )
         img.local_path = temp_dir / f"image_{i}.cr2"

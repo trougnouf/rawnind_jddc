@@ -8,7 +8,10 @@ from typing import Tuple, Union
 
 # import multiprocessing
 # multiprocessing.set_start_method('spawn')
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None  # Optional dependency
 import numpy as np
 
 try:

@@ -16,7 +16,7 @@ VALID_IMAGE_EXTENSIONS = frozenset({
 })
 
 
-class MetadataEnricher:
+class AsyncAligner:
     def __init__(
         self,
         cache_path: Optional[Path] = None,
@@ -123,7 +123,7 @@ class MetadataEnricher:
             SceneInfo: The SceneInfo object after enrichment of GT image and noisy images with respective metadata.
         """
         gt_img = scene_info.get_gt_image()
-        if not gt_img or not gt_img.local_path or not gt_img.validated:
+        if not gt_img or not gt_img.local_path:
             logger.warning(
                 f"Scene {scene_info.scene_name} has no valid GT image, skipping enrichment"
             )
@@ -145,7 +145,7 @@ class MetadataEnricher:
                         logger.debug(f"Skipping non-image file: {noisy_img.filename}")
                         return
 
-                    if noisy_img.local_path and noisy_img.validated:
+                    if noisy_img.local_path:
                         # Check cache first
                         if noisy_img.sha1 in self._cache:
                             cached_metadata = await self._cache.get(noisy_img.sha1)
@@ -241,7 +241,7 @@ class MetadataEnricher:
                 str(noisy_img.local_path)
             )
 
-            # Determine if Bayer
+            # Determine if bayer
             is_bayer = gt_np.shape[0] == 4
 
             # Find alignment
@@ -335,7 +335,7 @@ class MetadataEnricher:
             gt_basename = os.path.basename(gt_img.filename)
             f_basename = os.path.basename(noisy_img.filename)
 
-            # Determine if Bayer based on file extension or metadata
+            # Determine if bayer based on file extension or metadata
             is_bayer = gt_img.metadata.get(
                 "is_bayer", not gt_img.filename.endswith((".exr", ".tif"))
             )
@@ -375,7 +375,7 @@ class MetadataEnricher:
                 bayer_image_set_dpath = (
                     crops_base
                     / "src"
-                    / "Bayer"
+                    / "bayer"
                     / scene_info.cfa_type
                     / scene_info.scene_name
                 )
@@ -417,13 +417,13 @@ class MetadataEnricher:
                                 crop["f_bayer_fpath"] = str(f_bayer_path)
                                 crop["gt_bayer_fpath"] = str(gt_bayer_path)
 
-                                # Check if Bayer crops exist
+                                # Check if bayer crops exist
                                 if (
                                     not f_bayer_path.exists()
                                     or not gt_bayer_path.exists()
                                 ):
                                     logger.debug(
-                                        f"Missing Bayer crop: {f_bayer_path} and/or {gt_bayer_path}"
+                                        f"Missing bayer crop: {f_bayer_path} and/or {gt_bayer_path}"
                                     )
                                     continue
 
@@ -460,7 +460,7 @@ class MetadataEnricher:
 
         # Compute various statistics
         metadata = {
-            "example_metadata": "example_value"
+            # "example_metadata": "example_value"
             # "mean_intensity": float(np.mean(raw_image)),
             # "std_intensity": float(np.std(raw_image)),
             # "min_value": int(np.min(raw_image)),

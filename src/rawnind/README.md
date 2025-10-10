@@ -53,14 +53,14 @@ RawNIND is available on https://dataverse.uclouvain.be/dataset.xhtml?persistentI
 
 It can be downloaded with the following commands: `curl -s "https://dataverse.uclouvain.be/api/datasets/:persistentId/?persistentId=doi:10.14428/DVN/DEQCIM" | jq -r '.data.latestVersion.files[] | "https://dataverse.uclouvain.be/api/access/datafile/\(.dataFile.id)"' | wget -c -i -`
 
-This will download a flat structure. The data loaders and pre-processors in this work expect the structure described in the following subsection (datasets/src/<Bayer or X-Trans>/<SET_NAME>/<"gt/" if applicable><IMAGE.EXT>).
+This will download a flat structure. The data loaders and pre-processors in this work expect the structure described in the following subsection (datasets/src/<bayer or X-Trans>/<SET_NAME>/<"gt/" if applicable><IMAGE.EXT>).
 
 ### Prepare the RawNIND dataset (Clean-noisy / paired images)
 
 RawNIND files are organized as follow in `../../datasets/RawNIND`:
 
-- `src/<Bayer or X-Trans>/<SET_NAME>/<IMAGEY>.<EXT>`
-- `src/<Bayer or X-Trans>/<SET_NAME>/gt/<IMAGEX>.<EXT>`
+- `src/<bayer or X-Trans>/<SET_NAME>/<IMAGEY>.<EXT>`
+- `src/<bayer or X-Trans>/<SET_NAME>/gt/<IMAGEX>.<EXT>`
 - `proc/lin_rec2020/<SET_NAME>/<IMAGEY.EXT>`
 - `proc/lin_rec2020/<SET_NAME>/gt/<IMAGEX>.<EXT>`
 - `proc/lin_rec2020/<SET_NAME>/gt/<IMAGEX>.<EXT>.xmp` (processing pipeline for testing; each test-set ground-truth image has one)
@@ -72,7 +72,7 @@ RawNIND files are organized as follow in `../../datasets/RawNIND`:
 
 ```bash
 # python tools/make_hdr_rawnind_files.py  # optional: full-size images are not needed by the model
-# Demosaic X-Trans files and convert them to pRGB OpenEXR files with darktable-cli 
+# Demosaic x-trans files and convert them to pRGB OpenEXR files with darktable-cli 
 python tools/xtrans_to_openexr_dataset.py
 # Pre-crop dataset images (raw and pRGB, RawNIND) for faster loading during training
 python tools/crop_datasets.py --dataset rawnind
@@ -107,7 +107,7 @@ Compute MS-SSIM scores on manproc descriptor (for filtered testing): `python too
 
 #### Optional: prepare the external paired dataset (deprecated)
 
-Ensure that the dataset is in the `../../datasets/ext_raw_denoise_<train/test>/src/Bayer/<SET_NAME>/[gt]` directory, with noisy images in SET_NAME and ground-truths in gt.
+Ensure that the dataset is in the `../../datasets/ext_raw_denoise_<train/test>/src/bayer/<SET_NAME>/[gt]` directory, with noisy images in SET_NAME and ground-truths in gt.
 ```bash
 python tools/crop_datasets.py --dataset ext_raw_denoise_test
 python tools/crop_datasets.py --dataset ext_raw_denoise_train
@@ -162,7 +162,7 @@ python tools/prep_image_dataset_extraraw.py  # Generate list of crops
 
 
 `extraraw` files are organized as follow in ``../../datasets/extraraw`:
-- `<SET_NAME>/src/<Bayer or X-Trans>/<IMAGE.EXT>`
+- `<SET_NAME>/src/<bayer or X-Trans>/<IMAGE.EXT>`
 - `<SET_NAME>/src/proc/lin_rec2020/<IMAGE.EXT>.exr`
 
 and crop the extraraw dataset with `python tools/crop_datasets.py --dataset extraraw` (or without argument to crop both extraraw and RawNIND)

@@ -51,7 +51,7 @@ Pipeline Flow Diagram
          │ complete_scene_send (SceneInfo)
          ▼
 ┌─────────────────┐
-│MetadataEnricher │  [OPTIONAL] Computes alignment, gain, masks
+│AsyncAligner │  [OPTIONAL] Computes alignment, gain, masks
 │    (async, 4x)  │  Enriches with crops metadata
 └────────┬────────┘
          │ enriched_send (SceneInfo w/ metadata)
@@ -68,7 +68,7 @@ Key Components:
 • Downloader:        Async HTTP downloads (max 5 concurrent)
 • Verifier:          SHA-1 validation with retry loop for corrupted files
 • SceneIndexer:      Tracks image arrival, emits complete scenes
-• MetadataEnricher:  CPU-intensive computations (alignment, gain, masks)
+• AsyncAligner:  CPU-intensive computations (alignment, gain, masks)
 
 
 Data Types:
@@ -79,5 +79,5 @@ Data Types:
 
 Pipeline Modes:
 ───────────────
-1. With Enrichment:    Full pipeline including MetadataEnricher
+1. With Enrichment:    Full pipeline including AsyncAligner
 2. Without Enrichment: Skips enrichment, goes straight to final consumer

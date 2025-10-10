@@ -13,15 +13,8 @@ logger = logging.getLogger(__name__)
 T = TypeVar('T')
 
 
-def stage(
-    *,
-    progress: Optional[tuple[str, str]] = None,
-    retries: int = 0,
-    timeout: Optional[float] = None,
-    log_timing: bool = False,
-    concurrency_limit: Optional[int] = None,
-    skip_on_error: bool = False
-):
+def stage(*, progress: Optional[tuple[str, str]] = None, retries: int = 0, timeout: Optional[float] = None,
+          log_timing: bool = False, concurrency_limit: Optional[int] = None, debug_on_: bool):
     """
     Universal decorator for pipeline stage methods.
     Handles progress, errors, timing, retries, concurrency - everything.
@@ -37,7 +30,7 @@ def stage(
         timeout: Timeout in seconds for the operation
         log_timing: Whether to log execution time
         concurrency_limit: Max concurrent executions (uses semaphore)
-        skip_on_error: If True, return input unchanged on error instead of raising
+        debug_on_: If True, return input unchanged on error instead of raising
     """
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
@@ -88,7 +81,9 @@ def stage(
                     except Exception as e:
                         last_exception = e
                         if attempt < retries:
-                            wait_time = 2 ** attempt  # Exponential backoff
+                            # Reasonable exponential backoff: 1s, 2s, 4s, 8s (max 30s)
+                            # Avoids blocking event loop for 30s+ on first retry
+                            wait_time = min(2 ** attempt, 30)
                             logger.warning(
                                 f"{func.__name__} failed (attempt {attempt + 1}/{retries + 1}): {e}. "
                                 f"Retrying in {wait_time}s..."
@@ -102,7 +97,7 @@ def stage(
                                 elapsed = trio.current_time() - start_time
                                 logger.error(f"{func.__name__} failed after {elapsed:.2f}s: {e}")
 
-                            if skip_on_error:
+                            if debug_on_:
                                 # Return input unchanged
                                 return args[1] if len(args) > 1 else None
                             raise
@@ -187,6 +182,7 @@ def validate_input(validator: Callable[[Any], bool], error_msg: str = "Validatio
 def cache_result(key_func: Callable, ttl: Optional[float] = None):
     """
     Decorator to cache async function results with optional TTL.
+    Uses promise pattern - multiple concurrent requests for same key share computation.
 
     Usage:
         @cache_result(key_func=lambda self, scene: scene.scene_name, ttl=3600)
@@ -200,6 +196,7 @@ def cache_result(key_func: Callable, ttl: Optional[float] = None):
     def decorator(func: Callable) -> Callable:
         cache = {}
         cache_times = {}
+        in_progress = {}  # key -> Event for pending computations
         lock = trio.Lock()
 
         @functools.wraps(func)
@@ -207,6 +204,7 @@ def cache_result(key_func: Callable, ttl: Optional[float] = None):
             # Generate cache key
             key = key_func(*args, **kwargs)
 
+            # Check cache first (fast path, no lock needed for read)
             async with lock:
                 # Check cache validity
                 if key in cache:
@@ -214,15 +212,45 @@ def cache_result(key_func: Callable, ttl: Optional[float] = None):
                         logger.debug(f"{func.__name__}: cache hit for {key}")
                         return cache[key]
 
-            # Compute result
-            result = await func(*args, **kwargs)
+                # Check if computation already in progress
+                if key in in_progress:
+                    event = in_progress[key]
+                    is_waiting = True
+                    logger.debug(f"{func.__name__}: waiting for in-progress computation for {key}")
+                else:
+                    # We're the first - create event and mark in progress
+                    event = trio.Event()
+                    in_progress[key] = event
+                    is_waiting = False
 
-            # Store in cache
-            async with lock:
-                cache[key] = result
-                cache_times[key] = trio.current_time()
+            # If we're waiting for another task's computation
+            if is_waiting:
+                await event.wait()
+                # After waking, check cache again
+                async with lock:
+                    if key in cache:
+                        return cache[key]
+                    # Computation failed, let this task retry
+                    return await wrapper(*args, **kwargs)
 
-            return result
+            # We're the task that will compute
+            try:
+                result = await func(*args, **kwargs)
+
+                # Store in cache
+                async with lock:
+                    cache[key] = result
+                    cache_times[key] = trio.current_time()
+                    in_progress.pop(key, None)
+
+                event.set()  # Wake waiters
+                return result
+            except Exception:
+                # Remove from in_progress on error so retries can happen
+                async with lock:
+                    in_progress.pop(key, None)
+                event.set()  # Wake waiters (they'll retry)
+                raise
 
         return wrapper
     return decorator
@@ -259,36 +287,50 @@ def rate_limit(calls_per_second: float):
     return decorator
 
 
-def batch_process(batch_size: int):
+def batch_process(batch_size: int, timeout: Optional[float] = 5.0):
     """
     Decorator to batch items from a channel before processing.
+    Flushes partial batches on timeout to prevent stalling.
 
     Usage:
-        @batch_process(batch_size=10)
+        @batch_process(batch_size=10, timeout=5.0)
         async def process_batch(self, recv, send):
             # Automatically batches items before calling
             pass
+
+    Args:
+        batch_size: Number of items to accumulate before processing
+        timeout: Max seconds to wait for full batch (None = wait forever)
     """
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(self, recv_channel, send_channel):
             async with recv_channel, send_channel:
                 batch = []
+                last_process_time = trio.current_time()
 
-                async for item in recv_channel:
-                    batch.append(item)
-
-                    if len(batch) >= batch_size:
+                async def process_and_send():
+                    nonlocal batch, last_process_time
+                    if batch:
                         await func(self, batch)
                         for item in batch:
                             await send_channel.send(item)
                         batch = []
+                        last_process_time = trio.current_time()
+
+                async for item in recv_channel:
+                    batch.append(item)
+
+                    # Flush on size threshold
+                    if len(batch) >= batch_size:
+                        await process_and_send()
+
+                    # Flush on timeout (if enabled)
+                    elif timeout and (trio.current_time() - last_process_time) >= timeout:
+                        await process_and_send()
 
                 # Process remaining items
-                if batch:
-                    await func(self, batch)
-                    for item in batch:
-                        await send_channel.send(item)
+                await process_and_send()
 
         return wrapper
     return decorator

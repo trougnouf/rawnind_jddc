@@ -6,7 +6,7 @@ This module implements the foundational infrastructure for working with raw came
 
 ### The Raw Sensor Data Problem
 
-Digital cameras capture light through a single sensor plane covered by a color filter array—most commonly the Bayer pattern, which arranges red, green, and blue filters in a specific mosaic (RGGB in a 2×2 repeating unit). This means each pixel location records only one color channel; the camera's internal processor must infer the missing color information through demosaicing algorithms. Consumer cameras perform this demosaicing, apply color correction, tone mapping, noise reduction, and compression automatically, producing JPEG or similar outputs.
+Digital cameras capture light through a single sensor plane covered by a color filter array—most commonly the bayer pattern, which arranges red, green, and blue filters in a specific mosaic (RGGB in a 2×2 repeating unit). This means each pixel location records only one color channel; the camera's internal processor must infer the missing color information through demosaicing algorithms. Consumer cameras perform this demosaicing, apply color correction, tone mapping, noise reduction, and compression automatically, producing JPEG or similar outputs.
 
 For research purposes, this pipeline is problematic. Each processing step introduces artifacts and discards information. More critically, the noise characteristics of the final image bear little resemblance to the actual sensor noise, making it unsuitable for training denoising networks that must operate on real-world data. This motivates working with raw sensor data directly.
 
@@ -32,7 +32,7 @@ However, linear representations present visualization challenges. Human vision i
 
 Training neural networks on full-resolution raw images (typically 24+ megapixels) is computationally infeasible. The standard approach extracts random crops during training, effectively augmenting the dataset while fitting within GPU memory constraints. But random cropping of aligned image pairs with validity masks introduces subtle complexities.
 
-Each crop must maintain Bayer pattern alignment—if the top-left corner lands on an odd-numbered row or column, the color filter pattern shifts, and the network sees corrupted data. Crops must sample regions with sufficient valid (unmasked) pixels; a crop that is 80% masked provides little training signal. The cropping strategy must balance between seeing all regions of the dataset and sampling preferentially from high-quality regions.
+Each crop must maintain bayer pattern alignment—if the top-left corner lands on an odd-numbered row or column, the color filter pattern shifts, and the network sees corrupted data. Crops must sample regions with sufficient valid (unmasked) pixels; a crop that is 80% masked provides little training signal. The cropping strategy must balance between seeing all regions of the dataset and sampling preferentially from high-quality regions.
 
 For validation and testing, the cropping strategy changes fundamentally. Random crops would make metrics non-reproducible. Instead, validation typically uses deterministic crops from specific locations, or processes full images when memory permits. This dichotomy means dataset classes must support multiple modes of operation.
 
@@ -40,7 +40,7 @@ For validation and testing, the cropping strategy changes fundamentally. Random 
 
 Training image-to-image networks follows a consistent pattern regardless of the specific task: load batches, compute loss, backpropagate, validate periodically, checkpoint when validation improves. The abstract trainer classes factor out this common machinery while allowing specialization for different input/output formats.
 
-The key insight is that "Bayer → profiled RGB" training differs from "profiled RGB → profiled RGB" training primarily in data loading and preprocessing, not in the core optimization loop. By abstracting the model instantiation and data pipeline while providing a complete training implementation, these base classes let researchers focus on architecture design rather than boilerplate.
+The key insight is that "bayer → profiled RGB" training differs from "profiled RGB → profiled RGB" training primarily in data loading and preprocessing, not in the core optimization loop. By abstracting the model instantiation and data pipeline while providing a complete training implementation, these base classes let researchers focus on architecture design rather than boilerplate.
 
 The separation between configuration (YAML files), model architecture (subclass-specific), and training loop (base class) reflects a pragmatic division of concerns. Hyperparameters that affect multiple training runs (learning rate schedules, validation frequency) live in configuration files. Architecture choices (number of layers, attention mechanisms) live in model constructors. The interaction between them—when to decay learning rate based on validation plateaus, how to handle gradient accumulation—lives in the base trainer.
 
@@ -78,11 +78,11 @@ This design assumes researchers will run many training experiments on the same d
 
 ### The X-Trans Exception
 
-Fujifilm cameras use a 6×6 non-Bayer color filter pattern called X-Trans, claimed to reduce moiré artifacts without an optical low-pass filter. For this codebase, X-Trans creates special-case handling throughout. Standard Bayer demosaicing algorithms fail. The mosaiced representation has 9 channels instead of 4, requiring architectural changes if processing pre-demosaiced data.
+Fujifilm cameras use a 6×6 non-bayer color filter pattern called X-Trans, claimed to reduce moiré artifacts without an optical low-pass filter. For this codebase, X-Trans creates special-case handling throughout. Standard bayer demosaicing algorithms fail. The mosaiced representation has 9 channels instead of 4, requiring architectural changes if processing pre-demosaiced data.
 
-Alignment and crop extraction for X-Trans require respecting 3×3 block boundaries, not the naive expectation of 6×6 tile boundaries suggested by the pattern periodicity. This insight comes from vkdt (a line-based RAW processing pipeline) and the JCGT 2021 paper "Fast Temporal Reprojection without Motion Vectors": X-Trans demosaicing processes three lines at a time, and alignment shifts that don't preserve 3-line chunks introduce artifacts. Concretely, alignment offsets must be multiples of 3, and crop positions must land on coordinates divisible by 3. Since 3 divides 6, this automatically respects tile boundaries while allowing finer-grained alignment than 6-pixel quantization would permit. For Bayer sensors, the analogous constraint is 2×2 block alignment—all coordinates must be even. These constraints are enforced in `raw.py` (for alignment) and `crop_producer_stage.py` (for crop extraction).
+Alignment and crop extraction for X-Trans require respecting 3×3 block boundaries, not the naive expectation of 6×6 tile boundaries suggested by the pattern periodicity. This insight comes from vkdt (a line-based RAW processing pipeline) and the JCGT 2021 paper "Fast Temporal Reprojection without Motion Vectors": X-Trans demosaicing processes three lines at a time, and alignment shifts that don't preserve 3-line chunks introduce artifacts. Concretely, alignment offsets must be multiples of 3, and crop positions must land on coordinates divisible by 3. Since 3 divides 6, this automatically respects tile boundaries while allowing finer-grained alignment than 6-pixel quantization would permit. For bayer sensors, the analogous constraint is 2×2 block alignment—all coordinates must be even. These constraints are enforced in `raw.py` (for alignment) and `crop_producer_stage.py` (for crop extraction).
 
-The pragmatic solution for training: convert X-Trans files to profiled RGB via external demosaicing (using camera manufacturer algorithms or high-quality open-source alternatives) during preprocessing. This sidesteps the X-Trans complexity at the cost of preventing research on X-Trans-specific processing. Given that Bayer sensors dominate the market, this compromise seems reasonable for a research codebase focused on general principles rather than vendor-specific optimization.
+The pragmatic solution for training: convert X-Trans files to profiled RGB via external demosaicing (using camera manufacturer algorithms or high-quality open-source alternatives) during preprocessing. This sidesteps the X-Trans complexity at the cost of preventing research on X-Trans-specific processing. Given that bayer sensors dominate the market, this compromise seems reasonable for a research codebase focused on general principles rather than vendor-specific optimization.
 
 ## Module Organization
 
@@ -93,7 +93,7 @@ Handles the lowest-level transformations: reading proprietary RAW formats, extra
 Implements the alignment algorithms, gain matching, and mask generation that make paired training data usable. This is where computer vision techniques address the data quality problems inherent in real-world captures.
 
 ### rawds.py — Dataset Loaders for Neural Network Training
-Bridges the gap between preprocessed image files and PyTorch training loops. Handles the combinatorics of different input/output format combinations (Bayer/RGB × clean/noisy) and the mechanics of crop extraction with mask awareness.
+Bridges the gap between preprocessed image files and PyTorch training loops. Handles the combinatorics of different input/output format combinations (bayer/RGB × clean/noisy) and the mechanics of crop extraction with mask awareness.
 
 ### abstract_trainer.py — Training Loop Abstraction
 Factors out the common machinery of training, validation, checkpointing, and logging. Subclasses implement model-specific logic; the base class ensures consistent experiment tracking and reproducibility.
@@ -109,7 +109,7 @@ Separates alignment strategy (FFT vs. spatial search) from the alignment interfa
 Working effectively with these libraries assumes familiarity with:
 
 - **Color science fundamentals**: CIE XYZ, RGB color spaces, chromatic adaptation, gamma encoding
-- **Camera sensor technology**: Bayer patterns, RAW file formats, demosaicing algorithms
+- **Camera sensor technology**: bayer patterns, RAW file formats, demosaicing algorithms
 - **Image quality metrics**: PSNR, SSIM, MS-SSIM, perceptual losses
 - **PyTorch dataset conventions**: `__getitem__`, batching, data loaders, preprocessing pipelines
 - **High dynamic range imaging**: Linear vs. logarithmic encoding, tone mapping, exposure fusion

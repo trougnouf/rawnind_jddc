@@ -52,7 +52,7 @@ Accumulates individual ImageInfo objects until all images for a scene have arriv
 
 This buffering stage transforms the per-image stream into a per-scene stream. Downstream processing often requires entire scenes (e.g., aligning multiple noisy captures to the clean reference), so this consolidation simplifies later stages.
 
-**Stage 6: MetadataEnricher**
+**Stage 6: AsyncAligner**
 Computes CPU-intensive metadata for each scene: alignment shifts between clean/noisy pairs, gain normalization factors, validity masks, and pre-extracted crops at standard sizes. This preprocessing is optional—skipping it produces a lightweight pipeline that just downloads and validates files.
 
 The enricher runs with bounded parallelism (default: 4 workers), reflecting CPU rather than I/O limitations. Alignment computation involves FFT operations or exhaustive spatial searches, both compute-bound. Running too many in parallel degrades performance (cache thrashing, CPU contention).
@@ -72,7 +72,7 @@ Different stages have different concurrency limits reflecting their bottlenecks:
 - **Downloader**: 5 concurrent tasks (I/O bound, limited by network bandwidth and server politeness)
 - **Verifier**: Single task (hashing is fast, parallelism complicates state tracking)
 - **SceneIndexer**: Single task (bookkeeping, not a bottleneck)
-- **MetadataEnricher**: 4 concurrent tasks (CPU bound, limited by core count)
+- **AsyncAligner**: 4 concurrent tasks (CPU bound, limited by core count)
 
 These limits keep memory usage and file descriptor counts bounded. The worst-case simultaneous operations: 5 downloads (each holding an open HTTP connection and file handle) + 4 metadata computations (each loading multiple images into memory). This is tractable on commodity hardware.
 
@@ -128,7 +128,7 @@ Eventually, the dataset loaders may be refactored to use the async pipeline's ou
 The pipeline is designed to stream data without holding the entire dataset in memory. At any moment, memory usage is bounded by:
 - SceneInfo objects in channel buffers (~10-20 scenes × ~5 images × metadata size ≈ few MB)
 - Active download buffers (5 concurrent × configurable chunk size ≈ few MB)
-- MetadataEnricher working set (4 workers × 2-3 images × ~50 MB per image ≈ 400-600 MB)
+- AsyncAligner working set (4 workers × 2-3 images × ~50 MB per image ≈ 400-600 MB)
 
 Total memory usage stays under 1 GB even for large datasets, making the pipeline runnable on modest hardware.
 
@@ -171,7 +171,7 @@ The current design prioritizes simplicity and robustness over maximum performanc
 - **`Downloader.py`** — Async HTTP downloads with concurrency limits
 - **`Verifier.py`** — SHA-1 validation and retry logic
 - **`SceneIndexer.py`** — Accumulates images into complete scenes
-- **`MetadataEnricher.py`** — Computes alignment, gains, masks (optional stage)
+- **`AsyncAligner.py`** — Computes alignment, gains, masks (optional stage)
 - **`PipelineBuilder.py`** — Constructs and configures the full pipeline
 - **`SceneInfo.py`** — Data structures for scenes and images
 - **`smoke_test.py`** — Validation script with configurable limits
@@ -180,4 +180,4 @@ The current design prioritizes simplicity and robustness over maximum performanc
 ## Related Documentation
 
 - `src/rawnind/libs/rawds.py` — Legacy dataset loaders that consume this pipeline's output
-- `src/rawnind/libs/rawproc.py` — Alignment and preprocessing algorithms used by MetadataEnricher
+- `src/rawnind/libs/rawproc.py` — Alignment and preprocessing algorithms used by AsyncAligner

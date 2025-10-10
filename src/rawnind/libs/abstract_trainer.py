@@ -17,7 +17,7 @@ Key Features:
 - Automatic experiment naming and directory management
 - Model checkpointing with best-iteration tracking
 - Multi-metric validation (MS-SSIM, PSNR, perceptual losses)
-- Dataset loading for both Bayer and profiled-RGB inputs
+- Dataset loading for both bayer and profiled-RGB inputs
 - Support for clean-clean and clean-noisy training paradigms
 - Transfer function handling (linear, gamma2.2, PQ)
 
@@ -227,7 +227,7 @@ class ImageToImageNN:
         
         Args:
             img: Input image tensor with shape [C, H, W] or [B, C, H, W]
-                 where C must match self.in_channels (3 for RGB, 4 for Bayer)
+                 where C must match self.in_channels (3 for RGB, 4 for bayer)
             return_dict: If True, returns full output dictionary from model
                         If False, extracts and returns only the 'reconstructed_image' key
         
@@ -440,7 +440,7 @@ class ImageToImageNN:
         parser.add_argument(
             "--in_channels",
             type=int,
-            help="Number of input channels (3 for profiled RGB, 4 for Bayer)",
+            help="Number of input channels (3 for profiled RGB, 4 for bayer)",
             choices=[3, 4],
         )
         parser.add_argument(
@@ -734,18 +734,14 @@ class ImageToImageNNTraining(ImageToImageNN):
 
     def adjust_lr(self, validation_losses: dict[str, float], step: int):
         """Adjust learning rate based on validation performance with patience.
-        
+
         Implements learning rate scheduling with a patience mechanism: the learning rate
         is reduced by lr_multiplier if validation losses don't improve for 'patience' steps.
         Tracks best validation losses across all metrics to determine improvement.
-        
+
         Args:
             validation_losses: Dictionary mapping metric names to current validation loss values
             step: Current training step number
-            
-        Note:
-            Currently contains a bug where lr_multiplier is applied twice, effectively
-            squaring the multiplier. This is preserved for checkpoint compatibility.
         """
         model_improved = False
         for lossn, lossv in validation_losses.items():
@@ -756,14 +752,10 @@ class ImageToImageNNTraining(ImageToImageNN):
                 self.best_validation_losses[lossn] = lossv
                 self.lr_adjustment_allowed_step = step + self.patience
                 model_improved = True
-        if not model_improved and self.lr_adjustment_allowed_step < step:  # adjust lr
+        if not model_improved and self.lr_adjustment_allowed_step < step:
             old_lr = self.optimizer.param_groups[0]["lr"]
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] *= self.lr_multiplier
-            self.optimizer.param_groups[0]["lr"] *= (
-                self.lr_multiplier
-            )  # FIXME/BUG rm this duplicate multiplication. Currently lr_multiplier is squared as a result
-            # there is an assertion that len=1 in init
             logging.info(
                 f"adjust_lr: {old_lr} -> {self.optimizer.param_groups[0]['lr']}"
             )
@@ -831,7 +823,7 @@ class ImageToImageNNTraining(ImageToImageNN):
         )
         parser.add_argument(
             "--bayer_only",
-            help="Only use images which are available in Bayer format.",
+            help="Only use images which are available in bayer format.",
             action="store_true",
         )
         parser.add_argument(
@@ -1137,7 +1129,7 @@ class ImageToImageNNTraining(ImageToImageNN):
                     processed_output = rawproc.match_gain(x_crops, reconstructed_image)
                 else:
                     processed_output = reconstructed_image
-                if hasattr(self, "process_net_output"):  # Bayer color transform
+                if hasattr(self, "process_net_output"):  # bayer color transform
                     processed_output = self.process_net_output(
                         processed_output, batch["rgb_xyz_matrix"], x_crops
                     )
@@ -2456,7 +2448,7 @@ def get_and_load_test_object(
     parser.add_argument(
         "--in_channels",
         type=int,
-        help="Number of input channels (3 for profiled RGB, 4 for Bayer)",
+        help="Number of input channels (3 for profiled RGB, 4 for bayer)",
         choices=[3, 4],
         required=True,
     )

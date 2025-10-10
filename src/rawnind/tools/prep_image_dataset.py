@@ -1,18 +1,18 @@
 """
-Prepare image dataset: generate alignment and loss masks. Output a yaml list of files,alignment,mask_fpath for Bayer->RGB and RGB->RGB
+Prepare image dataset: generate alignment and loss masks. Output a yaml list of files,alignment,mask_fpath for bayer->RGB and RGB->RGB
 
-Compute overexposure in Bayer (if available)
+Compute overexposure in bayer (if available)
 
 Compute alignment and loss in RGB
 
 Problem:
 cannot shift 1px in bayer
 Solution:
-Calculate shift in RGB image; crop a line/column as needed in Bayer->RGB, no worries for RGB->RGB
+Calculate shift in RGB image; crop a line/column as needed in bayer->RGB, no worries for RGB->RGB
 
 Loss mask is based on shifted image;
 data loader is straightforward with RGB-RGB (pre-shift images, get loss mask)
-with Bayer-to-RGB, loss_mask should be adapted ... TODO (by data loader)
+with bayer-to-RGB, loss_mask should be adapted ... TODO (by data loader)
 
 metadata needed: f_bayer_fpath, f_linrec2020_fpath, gt_linrec2020_fpath, overexposure_lb, rgb_xyz_matrix
 compute shift between every full-size image
@@ -177,7 +177,7 @@ def fetch_crops_list(image_set, gt_fpath, f_fpath, is_bayer, ds_base_dpath):
 
     if is_bayer:
         bayer_image_set_dpath = os.path.join(
-            ds_base_dpath, "crops", "src", "Bayer", image_set
+            ds_base_dpath, "crops", "src", "bayer", image_set
         )
 
     # Process both GT and noisy files
@@ -357,7 +357,7 @@ if __name__ == "__main__":
         content_fpath = os.path.join(
             DATASETS_ROOT, args.dataset, f"{args.dataset}_masks_and_alignments.yaml"
         )
-        bayer_ds_dpath = os.path.join(DATASETS_ROOT, args.dataset, "src", "Bayer")
+        bayer_ds_dpath = os.path.join(DATASETS_ROOT, args.dataset, "src", "bayer")
         linrec_ds_dpath = os.path.join(
             DATASETS_ROOT, args.dataset, "proc", "lin_rec2020"
         )

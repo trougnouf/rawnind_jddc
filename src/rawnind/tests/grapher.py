@@ -54,64 +54,64 @@ TESTS = [
 ]
 
 MARKERS = {
-    "Bayer": "s",
-    "JDDC (Bayer input) + dev.": "s",
+    "bayer": "s",
+    "JDDC (bayer input) + dev.": "s",
     "Linear RGB": "^",
     "JDC (Linear RGB input) + dev.": "^",
     "passthrough": "_",
     "BM3D (sRGB)": "$3$",
     "LinRGB (extra pairs)": "+",
     "JDC LinRGB (extra pairs)": "+",
-    "Bayer (extra pairs)": "+",
-    "JDC Bayer (extra pairs)": "+",
-    "Bayer (no unpaired data)": "$D$",
-    "JDDC (no clean data, Bayer input) + dev.": "$D$",
+    "bayer (extra pairs)": "+",
+    "JDC bayer (extra pairs)": "+",
+    "bayer (no unpaired data)": "$D$",
+    "JDDC (no clean data, bayer input) + dev.": "$D$",
     "LinRGB (no unpaired data)": "$D$",
     "JDC (no clean data, LinRGB input) + dev.": "$D$",
-    "Bayer (pre-upsampled)": "D",
-    "JDDC (upsampled Bayer input) + dev.": "D",
-    "Bayer (more channels)": "h",
-    "JDDC (more channels, Bayer input) + dev.": "h",
+    "bayer (pre-upsampled)": "D",
+    "JDDC (upsampled bayer input) + dev.": "D",
+    "bayer (more channels)": "h",
+    "JDDC (more channels, bayer input) + dev.": "h",
     "sRGB": "$s$",
     "JDC (developed input) [COMPDENOISE]": "$s$",
-    "Compression AE (Bayer input) + dev.": "$c$",
+    "Compression AE (bayer input) + dev.": "$c$",
     "Compression AE (Linear RGB input) + dev.": "$c$",
     "Denoise then compress (LinRGB input) + dev.": "$2$",
     "LinRGB (w/gamma)": "*",
     "JDC LinRGB (w/gamma)": "*",
-    "Bayer (w/gamma)": "*",
-    "JDC Bayer (w/gamma)": "*",
+    "bayer (w/gamma)": "*",
+    "JDC bayer (w/gamma)": "*",
     "JPEG XL (developed input) [JPEGXL]": ".",
     "JPEG XL (Linear RGB input) [JPEGXL] + dev.": ".",
 }
 COLORS = {
-    "Bayer": "green",
-    "JDDC (Bayer input) + dev.": "green",
+    "bayer": "green",
+    "JDDC (bayer input) + dev.": "green",
     "Linear RGB": "red",
     "JDC (Linear RGB input) + dev.": "red",
     "passthrough": "tab:gray",
     "BM3D (sRGB)": "black",
     "LinRGB (extra pairs)": "maroon",
     "JDC LinRGB (extra pairs)": "maroon",
-    "Bayer (extra pairs)": "darkgreen",
-    "JDC Bayer (extra pairs)": "darkgreen",
-    "Bayer (no unpaired data)": "springgreen",
-    "JDDC (no clean data, Bayer input) + dev.": "springgreen",
+    "bayer (extra pairs)": "darkgreen",
+    "JDC bayer (extra pairs)": "darkgreen",
+    "bayer (no unpaired data)": "springgreen",
+    "JDDC (no clean data, bayer input) + dev.": "springgreen",
     "LinRGB (no unpaired data)": "lightcoral",
     "JDC (no clean data, LinRGB input) + dev.": "lightcoral",
-    "Bayer (pre-upsampled)": "greenyellow",
-    "JDDC (upsampled Bayer input) + dev.": "greenyellow",
-    "Bayer (more channels)": "mediumturquoise",
-    "JDDC (more channels, Bayer input) + dev.": "mediumturquoise",
+    "bayer (pre-upsampled)": "greenyellow",
+    "JDDC (upsampled bayer input) + dev.": "greenyellow",
+    "bayer (more channels)": "mediumturquoise",
+    "JDDC (more channels, bayer input) + dev.": "mediumturquoise",
     "sRGB": "orange",
     "JDC (developed input) [COMPDENOISE]": "orange",
-    "Compression AE (Bayer input) + dev.": "palegreen",
+    "Compression AE (bayer input) + dev.": "palegreen",
     "Compression AE (Linear RGB input) + dev.": "lightpink",
     "Denoise then compress (LinRGB input) + dev.": "peru",
     "LinRGB (w/gamma)": "tab:purple",
     "JDC LinRGB (w/gamma)": "tab:purple",
-    "Bayer (w/gamma)": "darkolivegreen",
-    "JDC Bayer (w/gamma)": "darkolivegreen",
+    "bayer (w/gamma)": "darkolivegreen",
+    "JDC bayer (w/gamma)": "darkolivegreen",
     "JPEG XL (developed input) [JPEGXL]": "slateblue",
     "JPEG XL (Linear RGB input) [JPEGXL] + dev.": "purple",
 }
@@ -483,7 +483,7 @@ def plot_rd_curves(
         "JPEG XL (Linear RGB input) [JPEGXL] + dev.",
     ]
     FRONT_MODELS = [
-        "JDDC (Bayer input) + dev.",
+        "JDDC (bayer input) + dev.",
         "JDC (Linear RGB input) + dev.",
         "JDC (developed input) [COMPDENOISE]",
     ]
@@ -543,11 +543,11 @@ def plot_rd_curves(
                     )
                     or ("w/gamma" in grouped_model_name and "manproc" in test)
                     or (
-                        grouped_model_name == "Compression AE (Bayer input) + dev."
+                        grouped_model_name == "Compression AE (bayer input) + dev."
                         and "manproc" in test
                     )
                     or (
-                        grouped_model_name == "JDDC (upsampled Bayer input) + dev."
+                        grouped_model_name == "JDDC (upsampled bayer input) + dev."
                         and "manproc_" in test
                     )
                 ):
@@ -804,8 +804,8 @@ def plot_1d_denoising(
     visualize=False,
 ):
     MODELS_TO_IGNORE = {
-        "manproc": ["Bayer (extra pairs)", "LinRGB (extra pairs)", "BM3D (LinRGB)"],
-        "manproc_bostitch": ["BM3D (LinRGB)", "Bayer (more channels)"],
+        "manproc": ["bayer (extra pairs)", "LinRGB (extra pairs)", "BM3D (LinRGB)"],
+        "manproc_bostitch": ["BM3D (LinRGB)", "bayer (more channels)"],
     }
     """Plot the noise level for denoising models (1D; no bitrate or input noise, just different tests and one bar shown per model)
     Not used in the paper
@@ -1017,9 +1017,9 @@ def plot_progressive_denoising_curve(
     UNWANTED_MODELS = ["BM3D (LinRGB)"]  # ["bayer_extrapairs", "prgb_extrapairs"]
     if generic_test_name == "test_manproc_rawnind":
         UNWANTED_MODELS.append("LinRGB (extra pairs)")
-        UNWANTED_MODELS.append("Bayer (extra pairs)")
+        UNWANTED_MODELS.append("bayer (extra pairs)")
     elif generic_test_name == "test_manproc_bostitch_rawnind":
-        UNWANTED_MODELS.append("Bayer (more channels)")
+        UNWANTED_MODELS.append("bayer (more channels)")
     # X_LIMITS: tuple[float, float] = (0.4, 1.01)
     # Y_RANGE: tuple[float, float] = (0.993, 1)
 

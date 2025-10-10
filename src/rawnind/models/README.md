@@ -16,7 +16,7 @@ The RawNIND dataset provides such pairs: long-exposure "clean" captures paired w
 
 ### The Demosaicing Problem
 
-Bayer demosaicing is fundamentally an ill-posed problem. Each pixel location measures only one color channel; the other two must be inferred from neighbors. Near edges, this inference fails—interpolating across a sharp boundary produces color fringing and zipper artifacts. In textured regions with high-frequency detail, naïve interpolation causes moiré patterns.
+bayer demosaicing is fundamentally an ill-posed problem. Each pixel location measures only one color channel; the other two must be inferred from neighbors. Near edges, this inference fails—interpolating across a sharp boundary produces color fringing and zipper artifacts. In textured regions with high-frequency detail, naïve interpolation causes moiré patterns.
 
 Classical algorithms use hand-crafted heuristics: detect edges, interpolate along edges rather than across them, apply different kernels to different frequency bands. They work remarkably well for natural images but fail on adversarial cases. More importantly, they make no use of the semantic content of the image—a classical algorithm treats skin tones identically to foliage, despite the different statistical regularities.
 
@@ -46,9 +46,9 @@ The tradeoff is complexity. Joint models are harder to train (multiple conflicti
 
 These models take noisy images and produce denoised outputs, ignoring compression. They serve as baselines for evaluating whether joint models sacrifice denoising quality for compression efficiency.
 
-**UtNet2 and UtNet3** are U-Net variants with architectural modifications for raw sensor data. The U-Net architecture—encoder-decoder with skip connections at matching resolutions—has proven effective for image-to-image tasks. The "Ut" variants adapt this for raw data processing, handling Bayer patterns and high dynamic range appropriately.
+**UtNet2 and UtNet3** are U-Net variants with architectural modifications for raw sensor data. The U-Net architecture—encoder-decoder with skip connections at matching resolutions—has proven effective for image-to-image tasks. The "Ut" variants adapt this for raw data processing, handling bayer patterns and high dynamic range appropriately.
 
-The key design choice is whether to operate on mosaiced Bayer data directly or demosaic first then denoise in RGB space. Operating on Bayer data potentially preserves more information but requires specialized convolution layers that respect the color filter pattern. Demosaicing first is simpler but commits early to interpolation decisions. Both approaches appear in the architectures, allowing empirical comparison.
+The key design choice is whether to operate on mosaiced bayer data directly or demosaic first then denoise in RGB space. Operating on bayer data potentially preserves more information but requires specialized convolution layers that respect the color filter pattern. Demosaicing first is simpler but commits early to interpolation decisions. Both approaches appear in the architectures, allowing empirical comparison.
 
 **Passthrough** is a trivial baseline that outputs its input unchanged. It establishes the "do nothing" performance level.
 
@@ -60,7 +60,7 @@ These implement learned image compression: encoder maps images to latent codes, 
 
 The latent representation is quantized during training using additive uniform noise (straight-through estimator), simulating quantization while maintaining differentiability. At test time, actual rounding replaces the noise. An entropy model (typically a Gaussian mixture or autoregressive model) estimates latent statistics for the arithmetic coder.
 
-**BayerPSDecoder and BayerTCDecoder** are decoder variants that output Bayer-pattern data rather than RGB. "PS" (pixel shuffle) and "TC" (transposed convolution) refer to different upsampling strategies. These enable end-to-end compression of raw sensor data without demosaicing, potentially preserving information lost in traditional pipelines.
+**BayerPSDecoder and BayerTCDecoder** are decoder variants that output bayer-pattern data rather than RGB. "PS" (pixel shuffle) and "TC" (transposed convolution) refer to different upsampling strategies. These enable end-to-end compression of raw sensor data without demosaicing, potentially preserving information lost in traditional pipelines.
 
 ### Joint Denoise-Compress Models (denoise_then_compress.py)
 
@@ -108,15 +108,15 @@ Many architectures assume input values in [0,1] or [-1,1]. Naïvely scaling 14-b
 
 The current approach preprocesses data to linear Rec.2020 with values typically in [0,1] for normal scenes, occasionally exceeding 1.0 for bright specular highlights. Networks must handle this gracefully, either through clipping, saturation-handling activation functions, or expanding the representational range.
 
-### Bayer Pattern Alignment
+### bayer Pattern Alignment
 
-When processing Bayer data directly, convolution kernels must not mix color channels inappropriately. A naïve 3×3 convolution on mosaiced data would combine red, green, and blue pixels that measure different scene locations, creating false correlations.
+When processing bayer data directly, convolution kernels must not mix color channels inappropriately. A naïve 3×3 convolution on mosaiced data would combine red, green, and blue pixels that measure different scene locations, creating false correlations.
 
-Two solutions exist: use 1×1 convolutions (no spatial mixing, limiting receptive field) or reshape Bayer data into 4-channel images where each channel contains only one color (separating R, G1, G2, B). The latter enables standard convolutions but requires care with downsampling/upsampling to maintain alignment.
+Two solutions exist: use 1×1 convolutions (no spatial mixing, limiting receptive field) or reshape bayer data into 4-channel images where each channel contains only one color (separating R, G1, G2, B). The latter enables standard convolutions but requires care with downsampling/upsampling to maintain alignment.
 
 ### Data Augmentation
 
-Image-to-image models benefit from augmentation: random flips, rotations (by 90° to preserve Bayer alignment), crops. For supervised tasks with paired inputs (clean/noisy), augmentations must be applied consistently to both images.
+Image-to-image models benefit from augmentation: random flips, rotations (by 90° to preserve bayer alignment), crops. For supervised tasks with paired inputs (clean/noisy), augmentations must be applied consistently to both images.
 
 Augmentation is particularly important for small datasets. RawNIND provides ~1000 image pairs—sufficient to prevent gross overfitting, but more diversity helps. Random crops effectively multiply the dataset size, though crops from the same image are not truly independent.
 

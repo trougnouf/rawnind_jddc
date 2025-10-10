@@ -9,10 +9,10 @@ from .SceneIndexer import SceneIndexer
 from .FileScanner import FileScanner
 from .Downloader import Downloader
 from .Verifier import Verifier
-from .MetadataEnricher import MetadataEnricher
+from .MetadataEnricher import AsyncAligner
 from .PostDownloadWorker import PostDownloadWorker
 from .crop_producer_stage import CropProducerStage
-from .Aligner import Aligner
+from .Aligner import MetadataArtificer
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class PipelineBuilder:
         self.downloader = Downloader(max_concurrent=max_concurrent_downloads)
         self.verifier = Verifier(max_retries=3)
         self.indexer = SceneIndexer(dataset_root)
-        self.enricher = MetadataEnricher(
+        self.enricher = AsyncAligner(
             dataset_root=dataset_root,
             max_concurrent=max_concurrent_enrichment,
             enable_crops_enrichment=enable_crops_enrichment,
@@ -80,7 +80,7 @@ class PipelineBuilder:
 
         if self.postprocessor_config.get("enable_alignment_artifacts", True):
             self.postprocessors.append(
-                Aligner(
+                MetadataArtificer(
                     output_dir=artifacts_dir / "alignment",
                     write_masks=True,
                     write_metadata=True,

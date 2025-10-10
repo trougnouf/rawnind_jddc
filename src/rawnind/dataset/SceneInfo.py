@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, List, ClassVar, Any
+from typing import Optional, List, ClassVar, Any, Dict
 import trio
 
 
@@ -15,12 +15,12 @@ class ImageInfo:
     is_clean: bool
     scene_name: str
     scene_images: list[str]
-    cfa_type: str  # 'Bayer' or 'X-Trans'
+    cfa_type: str  # 'bayer' or 'X-Trans'
     local_path: Optional[Path] = None
     validated: bool = False
     file_id: str = ""  # Dataverse file ID for downloads
     retry_count: int = 0  # Track verification retry attempts
-    metadata: dict = field(default_factory=dict)  # Computed metadata
+    metadata: Dict[str, Any] = field(default_factory=dict)  # Computed metadata
     xmp_path: Optional[Path] = None  # Path to associated .xmp sidecar file
     _image_tensor: Optional[Any] = field(default=None, repr=False)  # Cached tensor (torch or numpy)
 
@@ -75,7 +75,6 @@ class ImageInfo:
                 return self._image_tensor[:, y_start:y_end, x_start:x_end]
         else:
             # numpy array
-            import numpy as np
             if len(self._image_tensor.shape) == 2:
                 h, w = self._image_tensor.shape
             else:
@@ -107,17 +106,19 @@ class ImageInfo:
                 self._image_tensor = torch.from_numpy(self._image_tensor)
             return self._image_tensor
 
+        if not self.local_path:
+            raise ValueError(f"Cannot load image: local_path not set for {self.filename}")
         local_path_trio = trio.Path(self.local_path)
-        if not self.local_path or not await local_path_trio.exists():
+        if not await local_path_trio.exists():
             raise ValueError(f"Cannot load image: local_path not set or doesn't exist for {self.filename}")
 
-        def load_sync():
+        def load_sync() -> Any:
             from rawnind.libs.rawproc import img_fpath_to_np_mono_flt_and_metadata
             data, img_metadata = img_fpath_to_np_mono_flt_and_metadata(str(self.local_path))
             self.metadata.update(img_metadata)
             return data
 
-        np_data = await trio.to_thread.run_sync(load_sync)
+        np_data: Any = await trio.to_thread.run_sync(load_sync)
 
         if as_torch:
             import torch
@@ -151,6 +152,8 @@ class SceneInfo:
     test_reserve: bool
     clean_images: List[ImageInfo] = field(default_factory=list)
     noisy_images: List[ImageInfo] = field(default_factory=list)
+    # Arbitrary scene-level metadata (e.g., alignment_summary paths, stats)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def all_images(self) -> List[ImageInfo]:
         """Get all images (clean + noisy) for this scene."""
@@ -159,3 +162,16 @@ class SceneInfo:
     def get_gt_image(self) -> Optional[ImageInfo]:
         """Get the first clean (GT) image, or None if none exist."""
         return self.clean_images[0] if self.clean_images else None
+
+    @property
+    def compiled_alignment_artifacts(self) -> List[Dict[str, Any]]:
+        """
+        Legacy-compatible view collecting per-noisy-image alignment artifacts.
+        Each element is the dict stored under noisy_img.metadata['alignment_artifacts'].
+        """
+        artifacts: List[Dict[str, Any]] = []
+        for nz in self.noisy_images:
+            art = nz.metadata.get("alignment_artifacts")
+            if isinstance(art, dict):
+                artifacts.append(art)
+        return artifacts

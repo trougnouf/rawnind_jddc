@@ -44,7 +44,7 @@ async def test_download_with_retry_mock(temp_dir):
         is_clean=True,
         scene_name="test",
         scene_images=["abc"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="123"
     )
     img_info.local_path = temp_dir / "test.cr2"
@@ -67,7 +67,7 @@ async def test_download_retry_logic(temp_dir):
         is_clean=True,
         scene_name="test",
         scene_images=["abc"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="123"
     )
     img_info.local_path = temp_dir / "test.cr2"
@@ -98,7 +98,7 @@ async def test_download_max_retries_fail(temp_dir):
         is_clean=True,
         scene_name="test",
         scene_images=["abc"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="123"
     )
     img_info.local_path = temp_dir / "test.cr2"
@@ -123,7 +123,7 @@ async def test_download_calls_load_image(temp_dir):
         is_clean=True,
         scene_name="test",
         scene_images=["abc"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="123"
     )
     img_info.local_path = temp_dir / "test.cr2"
@@ -179,7 +179,7 @@ async def test_consume_missing_basic(temp_dir):
             is_clean=True,
             scene_name="test",
             scene_images=[f"sha{i}"],
-            cfa_type="Bayer",
+            cfa_type="bayer",
             file_id=str(i)
         )
         img.local_path = temp_dir / f"image_{i}.cr2"
@@ -223,7 +223,7 @@ async def test_consume_missing_with_progress(temp_dir):
         is_clean=True,
         scene_name="test",
         scene_images=["abc"],
-        cfa_type="Bayer",
+        cfa_type="bayer",
         file_id="123"
     )
     img.local_path = temp_dir / "test.cr2"
@@ -272,7 +272,7 @@ async def test_consume_missing_concurrent_limiting(temp_dir):
             is_clean=True,
             scene_name="test",
             scene_images=[f"sha{i}"],
-            cfa_type="Bayer",
+            cfa_type="bayer",
             file_id=str(i)
         )
         img.local_path = temp_dir / f"image_{i}.cr2"

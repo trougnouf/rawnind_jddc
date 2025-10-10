@@ -58,7 +58,8 @@ class PostDownloadWorker(ABC):
         """Async context manager exit with cleanup."""
         await self.shutdown()
         if self._executor:
-            await trio.to_thread.run_sync(self._executor.shutdown, wait=True)
+            # Shutdown the ProcessPoolExecutor with wait=True
+            await trio.to_thread.run_sync(lambda: self._executor.shutdown(wait=True))
 
     async def startup(self):
         """
@@ -111,37 +112,62 @@ class PostDownloadWorker(ABC):
         input_channel: trio.MemoryReceiveChannel,
         output_channel: Optional[trio.MemorySendChannel]
     ):
-        """Internal processing loop with concurrency control."""
-        semaphore = trio.Semaphore(self.max_workers)
+        """Internal processing loop with proper backpressure control."""
+        # Create semaphore to limit concurrent scene processing
+        # This prevents unbounded task accumulation in the nursery
+        sem = trio.Semaphore(self.max_workers)
 
         async with trio.open_nursery() as nursery:
             async for scene in input_channel:
+                # Acquire semaphore BEFORE spawning task
+                # This blocks if we already have max_workers tasks running
+                await sem.acquire()
                 nursery.start_soon(
-                    self._process_with_semaphore,
+                    self._process_one_with_semaphore,
                     scene,
                     output_channel,
-                    semaphore
+                    sem
                 )
 
-    async def _process_with_semaphore(
+    async def _process_one_with_semaphore(
         self,
         scene: SceneInfo,
         output_channel: Optional[trio.MemorySendChannel],
-        semaphore: trio.Semaphore
+        sem: trio.Semaphore
     ):
-        """Process a scene with concurrency control."""
-        async with semaphore:
-            try:
-                processed_scene = await self.process_scene(scene)
+        """Process a single scene and release semaphore when done."""
+        try:
+            processed_scene = await self.process_scene(scene)
 
-                if output_channel:
-                    await output_channel.send(processed_scene)
+            if output_channel:
+                await output_channel.send(processed_scene)
 
-            except Exception as e:
-                logger.error(
-                    f"Error processing scene {scene.scene_name}: {e}",
-                    exc_info=True
-                )
+        except Exception as e:
+            logger.error(
+                f"Error processing scene {scene.scene_name}: {e}",
+                exc_info=True
+            )
+        finally:
+            # Always release semaphore, even if processing failed
+            sem.release()
+
+    async def _process_one(
+        self,
+        scene: SceneInfo,
+        output_channel: Optional[trio.MemorySendChannel]
+    ):
+        """Process a single scene (legacy method for compatibility)."""
+        try:
+            processed_scene = await self.process_scene(scene)
+
+            if output_channel:
+                await output_channel.send(processed_scene)
+
+        except Exception as e:
+            logger.error(
+                f"Error processing scene {scene.scene_name}: {e}",
+                exc_info=True
+            )
 
     async def run_cpu_bound(self, func, *args, **kwargs):
         """

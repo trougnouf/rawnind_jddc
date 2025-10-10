@@ -14,11 +14,11 @@ from rawnind.dataset import (
     Downloader,
     Verifier,
     SceneIndexer,
-    MetadataEnricher,
+    AsyncAligner,
 )
-from rawnind.dataset.Aligner import Aligner
+from rawnind.dataset.Aligner import MetadataArtificer
 from rawnind.dataset.crop_producer_stage import CropProducerStage
-from rawnind.dataset.YAMLArtifactWriter import YAMLArtifactWriter
+from rawnind.dataset.AsyncPipelineBridge import AsyncPipelineBridge
 from rawnind.dataset.visualizer import PipelineVisualizer
 from rawnind.dataset.channel_utils import (
     create_channel_dict,
@@ -45,7 +45,9 @@ def setup_logging():
     logging.root.setLevel(logging.DEBUG)
 
     logging.getLogger('rawnind.dataset.Downloader').setLevel(logging.CRITICAL)
-    logging.getLogger('rawnind.dataset.MetadataEnricher').setLevel(logging.INFO)
+    logging.getLogger('rawnind.dataset.AsyncAligner').setLevel(logging.INFO)
+    logging.getLogger('rawnind.dataset.MetadataArtificer').setLevel(logging.DEBUG)
+    logging.getLogger('rawnind.dataset.crop_producer_stage').setLevel(logging.DEBUG)
 
     print(f"Logging to: {LOG_FILE}")
 
@@ -84,6 +86,33 @@ async def scanner_with_stats(dataset_root, recv, new_file_send, missing_send, vi
                     await missing_send.send(img_info)
 
 
+async def downloader_with_stats(downloader, recv, send, viz):
+    """Downloader stage with metrics tracking."""
+    async with recv, send:
+        async with trio.open_nursery() as nursery:
+            sem = trio.Semaphore(downloader.max_concurrent)
+
+            async def download_one(img_info):
+                await viz.update(queued=1)
+                async with sem:
+                    await viz.update(queued=-1, active=1)
+                    try:
+                        success = await downloader._download_with_retry(img_info)
+                        if success:
+                            await viz.update(active=-1, finished=1)
+                            await send.send(img_info)
+                            logging.debug(f"Downloaded {img_info.filename}")
+                        else:
+                            await viz.update(active=-1, errors=1)
+                            logging.error(f"Failed to download {img_info.filename}")
+                    except Exception as e:
+                        await viz.update(active=-1, errors=1)
+                        logging.error(f"Download error for {img_info.filename}: {e}")
+
+            async for img_info in recv:
+                nursery.start_soon(download_one, img_info)
+
+
 async def verifier_with_stats(recv, verified_send, missing_send, max_retries, viz, max_concurrent=None):
     """Verifier stage with metrics tracking, retry logic, and concurrent processing."""
     from rawnind.dataset import hash_sha1
@@ -102,19 +131,30 @@ async def verifier_with_stats(recv, verified_send, missing_send, max_retries, vi
                     img_info.validated = True
                     await viz.update(verifying=-1, verified=1)
                     await verified_send.send(img_info)
+                    logging.debug(f"✓ Verified {img_info.filename}")
                 else:
                     await viz.update(verifying=-1, failed=1)
                     if img_info.retry_count < max_retries:
                         img_info.retry_count += 1
+                        logging.warning(
+                            f"Hash mismatch for {img_info.filename}: "
+                            f"expected {img_info.sha1[:8]}, got {computed[:8]} "
+                            f"(retry {img_info.retry_count}/{max_retries})"
+                        )
                         img_info.local_path.unlink(missing_ok=True)
                         img_info.local_path = None
                         await missing_send.send(img_info)
                     else:
                         await viz.update(errors=1)
+                        logging.error(
+                            f"Hash mismatch for {img_info.filename} after {max_retries} retries, giving up"
+                        )
             else:
                 await viz.update(verifying=-1, failed=1)
+                logging.warning(f"File not found: {img_info.local_path}")
                 if img_info.retry_count >= max_retries:
                     await viz.update(errors=1)
+                    logging.error(f"File {img_info.filename} missing after {max_retries} retries")
 
     async with recv, verified_send, trio.open_nursery() as nursery:
         async for img_info in recv:
@@ -173,6 +213,114 @@ async def enricher_with_stats(enricher, recv, send, viz, debug, max_concurrent=N
 
 
 
+async def test_dataloader_integration(dataset_root, viz):
+    """Test that YAML → Dataset → DataLoader → Model works."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+    from rawnind.libs.rawds import CleanProfiledRGBNoisyBayerImageCropsDataset
+    from rawnind.models.raw_denoiser import UtNet2
+    import torch
+    import torch.nn as nn
+    import torch.utils.data
+
+    yaml_path = dataset_root / "pipeline_output.yaml"
+
+    if not yaml_path.exists():
+        print("\n⚠️  YAML file not found, skipping dataloader test")
+        await viz.update(dataloader_skip=1)
+        return
+
+    print("\n" + "=" * 60)
+    print("Testing DataLoader + Model Integration")
+    print(f"YAML: {yaml_path}")
+    print("=" * 60)
+
+    try:
+        # Create dataset from YAML
+        await viz.update(dataloader_init=1)
+        dataset = CleanProfiledRGBNoisyBayerImageCropsDataset(
+            content_fpaths=[str(yaml_path)],
+            num_crops=2,  # Small for smoke test
+            crop_size=256,
+            test_reserve=[],  # Use all scenes (smoke test already filtered)
+            bayer_only=True,
+            test=False
+        )
+
+        print(f"✓ Dataset created: {len(dataset)} scenes")
+        await viz.update(dataloader_images=len(dataset))
+
+        # Create DataLoader
+        dataloader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=2,
+            shuffle=False,
+            num_workers=0  # Single-threaded for smoke test
+        )
+
+        print(f"✓ DataLoader created")
+        await viz.update(dataloader_created=1)
+
+        # Try to load one batch
+        batch = next(iter(dataloader))
+        await viz.update(dataloader_batches=1)
+
+        print(f"✓ Loaded batch:")
+        print(f"  - x_crops shape: {batch['x_crops'].shape}")
+        print(f"  - y_crops shape: {batch['y_crops'].shape}")
+        print(f"  - mask_crops shape: {batch['mask_crops'].shape}")
+        print(f"  - rgb_xyz_matrix shape: {batch['rgb_xyz_matrix'].shape}")
+
+        # Create model and run one training step
+        print(f"\n✓ Creating model...")
+        model = UtNet2(in_channels=4, funit=16)  # Small model for smoke test
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        loss_fn = nn.MSELoss()
+
+        print(f"✓ Model created with {sum(p.numel() for p in model.parameters()):,} parameters")
+
+        # Run one training step
+        print(f"✓ Running one training step...")
+        model.train()
+
+        input_tensor = batch['y_crops']  # Noisy bayer crops
+        target_tensor = batch['x_crops']  # Clean bayer crops
+
+        # Forward pass
+        output = model(input_tensor)
+
+        # Handle size mismatch if model upsamples
+        if target_tensor.shape[-2:] != output.shape[-2:]:
+            target_tensor = nn.functional.interpolate(
+                target_tensor,
+                size=output.shape[-2:],
+                mode='bilinear',
+                align_corners=False
+            )
+
+        # Compute loss
+        loss = loss_fn(output, target_tensor)
+
+        # Backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        print(f"✓ Training step completed:")
+        print(f"  - Loss: {loss.item():.4f}")
+        print(f"  - Output shape: {output.shape}")
+
+        print("\n✅ DataLoader + Model integration successful!")
+        await viz.update(dataloader_success=1)
+
+    except Exception as e:
+        print(f"\n❌ DataLoader/Model test failed: {e}")
+        await viz.update(dataloader_errors=1)
+        import traceback
+        traceback.print_exc()
+
+
 async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, download_concurrency=None):
     """
     Run the pipeline smoke test.
@@ -194,92 +342,140 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
     ingestor = DataIngestor(dataset_root=dataset_root)
     downloader = Downloader(max_concurrent=download_concurrency, progress=False)
     indexer = SceneIndexer(dataset_root)
-    enricher = MetadataEnricher(dataset_root=dataset_root, enable_crops_enrichment=False)
+    enricher = AsyncAligner(dataset_root=dataset_root, enable_crops_enrichment=False)
 
     # Initialize PostDownloadWorker stages with decorator-based progress tracking
-    aligner = Aligner(
+    # Use unbuffered channels (0) for stages that load images to prevent OOM
+    aligner = MetadataArtificer(
         output_dir=dataset_root / "alignment_artifacts",
-        max_workers=DEFAULT_MAX_WORKERS
+        max_workers=DEFAULT_MAX_WORKERS,
+        write_masks=True,
+        write_metadata=True,
     ).attach_visualizer(viz)
 
     cropper = CropProducerStage(
         output_dir=dataset_root / "crops",
         crop_size=256,
         num_crops=5,
-        max_workers=DEFAULT_MAX_WORKERS
+        max_workers=DEFAULT_MAX_WORKERS,
+        use_process_pool=False  # Use threads to avoid venv inheritance issues
     ).attach_visualizer(viz)
 
-    yaml_writer = YAMLArtifactWriter(
-        output_dir=dataset_root,
-        output_filename="pipeline_output.yaml"
-    ).attach_visualizer(viz)
+    # AsyncPipelineBridge replaces YAMLArtifactWriter - no disk writes, in-memory only
+    bridge = AsyncPipelineBridge(
+        max_scenes=max_scenes,
+        backwards_compat_mode=True,
+    )
 
-    async with trio.open_nursery() as nursery:
-        if timeout_seconds is not None:
-            nursery.cancel_scope.deadline = trio.current_time() + timeout_seconds
+    # CRITICAL: Use context managers to ensure ProcessPoolExecutor cleanup
+    # CropProducerStage uses ProcessPoolExecutor which must be shutdown properly
+    async with aligner, cropper:
+        async with trio.open_nursery() as nursery:
+            if timeout_seconds is not None:
+                nursery.cancel_scope.deadline = trio.current_time() + timeout_seconds
 
-        # Create channels
-        channels = create_channel_dict(
-            ['scene', 'new_file', 'missing', 'downloaded', 'verified',
-             'complete_scene', 'enriched', 'aligned', 'cropped', 'yaml'],
-            buffer_size
-        )
-        merged_send, merged_recv = trio.open_memory_channel(buffer_size)
+            # Create channels
+            channels = create_channel_dict(
+                ['scene', 'new_file', 'missing', 'downloaded', 'verified',
+                 'complete_scene'],
+                buffer_size
+            )
+            # Create unbuffered channels for image-heavy stages to prevent OOM
+            enriched_send, enriched_recv = trio.open_memory_channel(0)
+            aligned_send, aligned_recv = trio.open_memory_channel(0)
+            cropped_send, cropped_recv = trio.open_memory_channel(0)
+            channels.update({
+                'enriched_send': enriched_send, 'enriched_recv': enriched_recv,
+                'aligned_send': aligned_send, 'aligned_recv': aligned_recv,
+                'cropped_send': cropped_send, 'cropped_recv': cropped_recv,
+            })
+            merged_send, merged_recv = trio.open_memory_channel(buffer_size)
 
-        # Start pipeline stages
-        nursery.start_soon(
-            limit_producer,
-            ingestor.produce_scenes, max_scenes,
-            channels['scene_send'], buffer_size
-        )
-        nursery.start_soon(
-            scanner_with_stats,
-            dataset_root, channels['scene_recv'], channels['new_file_send'],
-            channels['missing_send'], viz
-        )
-        nursery.start_soon(
-            downloader.consume_missing,
-            channels['missing_recv'], channels['downloaded_send']
-        )
-        nursery.start_soon(
-            merge_channels,
-            channels['new_file_recv'], channels['downloaded_recv'], merged_send
-        )
-        nursery.start_soon(
-            verifier_with_stats,
-            merged_recv, channels['verified_send'], channels['missing_send'], 2, viz, DEFAULT_MAX_WORKERS
-        )
-        nursery.start_soon(
-            indexer_with_stats,
-            indexer, channels['verified_recv'], channels['complete_scene_send'], viz
-        )
-        nursery.start_soon(
-            enricher_with_stats,
-            enricher, channels['complete_scene_recv'], channels['enriched_send'], viz, debug, DEFAULT_MAX_WORKERS
-        )
-        # Decorated workers handle metrics automatically
-        nursery.start_soon(
-            aligner.consume_and_produce,
-            channels['enriched_recv'], channels['aligned_send']
-        )
-        nursery.start_soon(
-            cropper.consume_and_produce,
-            channels['aligned_recv'], channels['cropped_send']
-        )
-        nursery.start_soon(
-            yaml_writer.consume_and_produce,
-            channels['cropped_recv'], channels['yaml_send']
-        )
-        nursery.start_soon(
-            consume_until,
-            channels['yaml_recv'], max_scenes, nursery,
-            lambda scene: viz.update(complete=1)
-        )
+            # Start pipeline stages
+            nursery.start_soon(
+                limit_producer,
+                ingestor.produce_scenes, max_scenes,
+                channels['scene_send'], buffer_size
+            )
+            nursery.start_soon(
+                scanner_with_stats,
+                dataset_root, channels['scene_recv'], channels['new_file_send'],
+                channels['missing_send'], viz
+            )
+            nursery.start_soon(
+                downloader_with_stats,
+                downloader, channels['missing_recv'], channels['downloaded_send'], viz
+            )
+            nursery.start_soon(
+                merge_channels,
+                channels['new_file_recv'], channels['downloaded_recv'], merged_send
+            )
+            nursery.start_soon(
+                verifier_with_stats,
+                merged_recv, channels['verified_send'], channels['missing_send'], 2, viz, DEFAULT_MAX_WORKERS
+            )
+            nursery.start_soon(
+                indexer_with_stats,
+                indexer, channels['verified_recv'], channels['complete_scene_send'], viz
+            )
+            nursery.start_soon(
+                enricher_with_stats,
+                enricher, channels['complete_scene_recv'], channels['enriched_send'], viz, debug, DEFAULT_MAX_WORKERS
+            )
+            # Decorated workers handle metrics automatically
+            nursery.start_soon(
+                aligner.consume_and_produce,
+                channels['enriched_recv'], channels['aligned_send']
+            )
+            nursery.start_soon(
+                cropper.consume_and_produce,
+                channels['aligned_recv'], channels['cropped_send']
+            )
+            # Bridge consumes cropped scenes and exposes legacy interface in-memory
+            nursery.start_soon(
+                bridge.consume,
+                channels['cropped_recv']
+            )
+            # Watch bridge progress and update visualizer
+            # Also trigger dataloader test as soon as YAML is ready
+            async def _watch_bridge():
+                last = 0
+                yaml_tested = False
+                while True:
+                    await trio.sleep(0.1)
+                    n = len(bridge)
+                    if n > last:
+                        await viz.update(complete=(n - last))
+                        last = n
+
+                    # Trigger dataloader test as soon as we have at least 2 scenes (batch_size=2)
+                    if n >= 2 and not yaml_tested:
+                        yaml_tested = True
+                        yaml_path = dataset_root / "pipeline_output.yaml"
+                        print(f"\nWriting {n} scene(s) to {yaml_path} for early dataloader test...")
+                        bridge.write_yaml_compatible_cache(yaml_path, dataset_root)
+                        print(f"✓ YAML written, testing dataloader...")
+                        nursery.start_soon(test_dataloader_integration, dataset_root, viz)
+
+                    if max_scenes and n >= max_scenes:
+                        nursery.cancel_scope.cancel()
+                        break
+            nursery.start_soon(_watch_bridge)
 
     # Display summary
     print("\n\n" + "=" * 60)
     print("Pipeline completed!")
     print("=" * 60)
+
+    # Write YAML cache for legacy dataloader compatibility
+    if len(bridge) > 0:
+        yaml_path = dataset_root / "pipeline_output.yaml"
+        print(f"\nWriting {len(bridge)} scenes to {yaml_path}...")
+        bridge.write_yaml_compatible_cache(yaml_path, dataset_root)
+        print(f"✓ YAML written successfully")
+
+    # Test dataloader integration
+    await test_dataloader_integration(dataset_root, viz)
 
     total_errors = viz.counters['errors']
     failed_verifications = viz.counters['failed']

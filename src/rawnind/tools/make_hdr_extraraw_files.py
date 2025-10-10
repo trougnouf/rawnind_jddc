@@ -3,7 +3,7 @@
 
 Make OpenEXR ground-truth images.
 
-Only works with Bayer patterns; X-Trans files need to be converted with darktable.
+Only works with bayer patterns; x-trans files need to be converted with darktable.
 """
 
 import os
@@ -47,7 +47,7 @@ def proc_dataset(dataset: str, num_threads: int = NUM_THREADS):
     else:
         ds_names = sorted(os.listdir(EXTRARAW_DATA_DPATH))
     for ds_name in ds_names:
-        src_dpath = os.path.join(EXTRARAW_DATA_DPATH, ds_name, "src", "Bayer")
+        src_dpath = os.path.join(EXTRARAW_DATA_DPATH, ds_name, "src", "bayer")
         dest_dpath = os.path.join(
             src_dpath, "..", "..", "proc", raw.OUTPUT_COLOR_PROFILE
         )

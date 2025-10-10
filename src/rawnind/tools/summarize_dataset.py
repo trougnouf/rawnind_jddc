@@ -15,21 +15,21 @@ logging.basicConfig(
 )
 
 # Define datasets, base root, and root directories
-DATASETS = ["Bayer", "X-Trans", "Bostitch"]
+DATASETS = ["bayer", "x-trans", "Bostitch"]
 BASE_ROOT = "/orb/benoit_phd/datasets/"
 # BASE_ROOT = (
 #     "/run/media/trougnouf/7c3f52ec-9162-4a30-baa0-eab17dad3080/benoit_phd_datasets"
 # )
 
 ROOT_DIRS = {
-    "Bayer": os.path.join(BASE_ROOT, "RawNIND/src/Bayer"),
-    "X-Trans": os.path.join(BASE_ROOT, "RawNIND/src/X-Trans"),
-    "Bostitch": os.path.join(BASE_ROOT, "RawNIND_Bostitch/src/Bayer"),
+    "bayer": os.path.join(BASE_ROOT, "RawNIND/src/bayer"),
+    "x-trans": os.path.join(BASE_ROOT, "RawNIND/src/x-trans"),
+    "Bostitch": os.path.join(BASE_ROOT, "RawNIND_Bostitch/src/bayer"),
 }
 
 # Define substrings that identify test sets per dataset
 TEST_RESERVES = {
-    "Bayer": [
+    "bayer": [
         "7D-2",
         "Vaxt-i-trad",
         "Pen-pile",
@@ -49,7 +49,7 @@ TEST_RESERVES = {
         "LucieB_painted_plants",
         "LucieB_groceries",
     ],
-    "X-Trans": [
+    "x-trans": [
         "ursulines-red",
         "stefantiek",
         "ursulines-building",

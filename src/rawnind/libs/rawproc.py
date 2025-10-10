@@ -39,7 +39,7 @@ GAMMA = 2.2
 DS_DN = "RawNIND"
 DATASETS_ROOT = resources.files("rawnind").joinpath("datasets")
 DS_BASE_DPATH: str = DATASETS_ROOT / DS_DN
-BAYER_DS_DPATH: str = DS_BASE_DPATH / "src" / "Bayer"
+BAYER_DS_DPATH: str = DS_BASE_DPATH / "src" / "bayer"
 LINREC2020_DS_DPATH: str = DS_BASE_DPATH / "proc" / "lin_rec2020"
 MASKS_DPATH = DS_BASE_DPATH / f"masks_{LOSS_THRESHOLD}"
 RAWNIND_CONTENT_FPATH = (
@@ -238,32 +238,32 @@ def shift_images(
 
     After find_best_alignment() determines the optimal shift, this function actually performs
     the alignment by cropping both images to their common overlapping area. It handles the
-    complexities of aligning images with different formats: RGB (3-channel) to RGB, Bayer
-    (4-channel) to RGB, or Bayer to Bayer.
+    complexities of aligning images with different formats: RGB (3-channel) to RGB, bayer
+    (4-channel) to RGB, or bayer to bayer.
 
     The core operation: if target is shifted (v, h) pixels relative to anchor, crop the first
     |v| rows and |h| columns from the appropriate edges of both images, removing non-overlapping
     regions. The sign of the shift determines which edges to crop.
 
-    Bayer-RGB alignment complication:
-    When aligning a 3-channel RGB ground truth (shape 3×H×W) to a 4-channel Bayer noisy image
-    (shape 4×H/2×W/2), spatial coordinates don't match directly. Each Bayer channel has half
+    bayer-RGB alignment complication:
+    When aligning a 3-channel RGB ground truth (shape 3×H×W) to a 4-channel bayer noisy image
+    (shape 4×H/2×W/2), spatial coordinates don't match directly. Each bayer channel has half
     the resolution of the RGB image. A shift of (v, h) in RGB space corresponds to (v/2, h/2)
-    in Bayer space. The function handles this automatically.
+    in bayer space. The function handles this automatically.
 
     Odd shift handling:
-    If the shift is odd (e.g., 3 pixels), and we're aligning RGB to Bayer, Bayer can only be
+    If the shift is odd (e.g., 3 pixels), and we're aligning RGB to bayer, bayer can only be
     cropped by integer amounts (3/2 = 1.5 rounds to 1). This creates a 1-pixel residual
     misalignment. The function resolves this by cropping an additional pixel from both images,
-    ensuring Bayer pattern alignment is maintained (crops must land on even coordinates).
+    ensuring bayer pattern alignment is maintained (crops must land on even coordinates).
 
-    This is critical: breaking Bayer alignment would shift the color filter pattern, causing
-    red pixels to be treated as green, etc. The function prioritizes preserving Bayer
+    This is critical: breaking bayer alignment would shift the color filter pattern, causing
+    red pixels to be treated as green, etc. The function prioritizes preserving bayer
     alignment over maximizing the overlapping region.
 
     Args:
         anchor_img: Reference image (typically ground truth RGB), shape (3, H, W) or (4, H/2, W/2)
-        target_img: Image to align (typically noisy, may be Bayer or RGB), compatible shape
+        target_img: Image to align (typically noisy, may be bayer or RGB), compatible shape
         shift: Tuple (v_shift, h_shift) from find_best_alignment(), positive means target is
             shifted down/right relative to anchor
 
@@ -291,7 +291,7 @@ def shift_images(
         should validate that the shift is reasonable relative to image size.
 
         The assertion at the end verifies that the output shapes are compatible (accounting
-        for Bayer resolution difference). If this fails, it indicates an implementation bug
+        for bayer resolution difference). If this fails, it indicates an implementation bug
         or invalid input.
     """
     anchor_img_out = anchor_img
@@ -299,12 +299,12 @@ def shift_images(
     anchor_is_bayer = anchor_img.shape[0] == 4
     target_is_bayer = target_img.shape[0] == 4
 
-    # Bayer-to-Bayer shift: treat like RGB-to-RGB (no resolution mismatch)
+    # bayer-to-bayer shift: treat like RGB-to-RGB (no resolution mismatch)
     if anchor_is_bayer and target_is_bayer:
         target_shift_divisor = 1
     elif anchor_is_bayer and not target_is_bayer:
         raise NotImplementedError(
-            "shift_images: Bayer anchor with RGB target not implemented."
+            "shift_images: bayer anchor with RGB target not implemented."
         )
     else:
         target_shift_divisor = target_is_bayer + 1
@@ -439,10 +439,10 @@ def make_overexposure_mask(
 
 
 def make_overexposure_mask_bayer(anchor_img: np.ndarray, gt_overexposure_lb: float):
-    """Overexposure mask for 2D Bayer data.
+    """Overexposure mask for 2D bayer data.
     
     Args:
-        anchor_img: 2D Bayer array (H, W)
+        anchor_img: 2D bayer array (H, W)
         gt_overexposure_lb: Overexposure threshold
         
     Returns:
@@ -486,14 +486,14 @@ def make_loss_mask_bayer(
         keepers_quantile: float = KEEPERS_QUANTILE,
         verbose: bool = False,
 ) -> np.ndarray:
-    """Return a loss mask between two (aligned) raw Bayer images.
+    """Return a loss mask between two (aligned) raw bayer images.
 
-    Operates directly on raw Bayer data (4 channels: R, G1, G2, B) without demosaicing.
+    Operates directly on raw bayer data (4 channels: R, G1, G2, B) without demosaicing.
     Computes L1 loss per-channel and sums to create a spatial loss map.
 
     Args:
-        anchor_img: Ground truth Bayer image (4, H, W)
-        target_img: Target Bayer image (4, H, W)
+        anchor_img: Ground truth bayer image (4, H, W)
+        target_img: Target bayer image (4, H, W)
         loss_threshold: Maximum acceptable loss
         keepers_quantile: Quantile threshold for rejecting high-loss regions
         verbose: Print debug info
@@ -538,8 +538,8 @@ def make_loss_mask_msssim_bayer(
     High L1 indicates intensity mismatch after gain correction.
     
     Args:
-        anchor_img: Ground truth Bayer image (4, H, W) RGGB
-        target_img: Target Bayer image (4, H, W) RGGB
+        anchor_img: Ground truth bayer image (4, H, W) RGGB
+        target_img: Target bayer image (4, H, W) RGGB
         ssim_threshold: Minimum MS-SSIM for valid regions (default 0.7)
         l1_threshold: Maximum L1 loss for valid regions (default LOSS_THRESHOLD)
         window_size: Size of sliding window for MS-SSIM computation (default 64)
@@ -891,7 +891,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     benchmark_mode = kwargs.get("benchmark_mode", False)
 
     # NEW WORKFLOW: Align on RAW first using FFT (avoids wasteful demosaicing)
-    # For RAW/Bayer images, use CFA-aware FFT alignment directly on mosaiced data
+    # For RAW/bayer images, use CFA-aware FFT alignment directly on mosaiced data
     if is_bayer:
         raw_gain = float(match_gain(gt_img, f_img, return_val=True))
         rgb_xyz_matrix = gt_metadata["rgb_xyz_matrix"].tolist()
@@ -943,7 +943,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
             # Track actual method used (for bayer with auto/fft, use FFT-CFA)
             actual_method = "fft_cfa"
 
-            # Skip demosaicing - will compute loss mask on raw Bayer data
+            # Skip demosaicing - will compute loss mask on raw bayer data
             gt_rgb = None
             f_rgb = None
     else:
@@ -977,9 +977,9 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
         # Track actual method used (resolve 'auto' to 'fft')
         actual_method = "fft" if alignment_method == "auto" else alignment_method
 
-    # Branch: Bayer FFT path vs RGB path
+    # Branch: bayer FFT path vs RGB path
     if is_bayer and actual_method == "fft_cfa":
-        # Bayer FFT path: operate on raw data, no demosaicing
+        # bayer FFT path: operate on raw data, no demosaicing
         rgb_gain = None  # Not applicable for raw path
 
         if verbose:
@@ -987,7 +987,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
                 f"{kwargs['gt_file_endpath']=}, {kwargs['f_endpath']=}, {best_alignment=}"
             )
 
-        # Shift raw Bayer images
+        # Shift raw bayer images
         gt_img_aligned, target_img_aligned = shift_images(gt_img, f_img, best_alignment)
         loss_mask = shift_mask(loss_mask, best_alignment)
 
@@ -995,10 +995,10 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
             f"{gt_img_aligned.shape=} is not equal to {target_img_aligned.shape} ({best_alignment=}, {loss_mask.shape=}, {kwargs=})"
         )
 
-        # Compute loss mask directly on raw Bayer data
+        # Compute loss mask directly on raw bayer data
         loss_mask = make_loss_mask_bayer(gt_img_aligned, target_img_aligned) * loss_mask
     else:
-        # RGB path (original method or non-Bayer images)
+        # RGB path (original method or non-bayer images)
         rgb_gain = float(match_gain(gt_rgb, f_rgb, return_val=True))
 
         if verbose:

@@ -88,7 +88,7 @@ class TestPostDownloadWorker(TestCase):
 
             scene = SceneInfo(
                 scene_name="test_scene",
-                cfa_type="Bayer",
+                cfa_type="bayer",
                 unknown_sensor=False,
                 test_reserve=False,
             )
@@ -109,7 +109,7 @@ class TestPostDownloadWorker(TestCase):
             scenes = [
                 SceneInfo(
                     scene_name=f"scene_{i}",
-                    cfa_type="Bayer",
+                    cfa_type="bayer",
                     unknown_sensor=False,
                     test_reserve=False,
                 )
@@ -150,7 +150,7 @@ class TestPostDownloadWorker(TestCase):
             scenes = [
                 SceneInfo(
                     scene_name=f"scene_{i}",
-                    cfa_type="Bayer",
+                    cfa_type="bayer",
                     unknown_sensor=False,
                     test_reserve=False,
                 )
@@ -200,7 +200,7 @@ class TestPostDownloadWorker(TestCase):
             scenes = [
                 SceneInfo(
                     scene_name=f"scene_{i}",
-                    cfa_type="Bayer",
+                    cfa_type="bayer",
                     unknown_sensor=False,
                     test_reserve=False,
                 )
@@ -225,7 +225,7 @@ class TestPostDownloadWorker(TestCase):
         worker = MockPostDownloadWorker(self.output_dir)
         scene = SceneInfo(
             scene_name="test_scene",
-            cfa_type="Bayer",
+            cfa_type="bayer",
             unknown_sensor=False,
             test_reserve=False,
         )
@@ -262,7 +262,7 @@ class TestPostDownloadWorker(TestCase):
             scenes = [
                 SceneInfo(
                     scene_name=f"scene_{i}",
-                    cfa_type="Bayer",
+                    cfa_type="bayer",
                     unknown_sensor=False,
                     test_reserve=False,
                 )

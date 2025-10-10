@@ -1,9 +1,9 @@
-JDDC (Bayer input) + dev.:
+JDDC (bayer input) + dev.:
   in_channels: 4
-Compression AE (Bayer input) + dev.:
+Compression AE (bayer input) + dev.:
   data_pairing: x_x
   in_channels: 4
-JDDC (upsampled Bayer input) + dev.:
+JDDC (upsampled bayer input) + dev.:
   in_channels: 4
   preupsample: true
 JDC (Linear RGB input) + dev.:
@@ -14,19 +14,19 @@ Compression AE (Linear RGB input) + dev.:
 JDC (no clean data, LinRGB input) + dev.:
   in_channels: 3
   incl_cc: false
-JDDC (no clean data, Bayer input) + dev.:
+JDDC (no clean data, bayer input) + dev.:
   in_channels: 4
   incl_cc: false
 JDC (developed input) [COMPDENOISE]:
   in_channels: 3
   processed_input: true
-JDDC (more channels, Bayer input) + dev.:
+JDDC (more channels, bayer input) + dev.:
   in_channels: 4
   morechans: true
 Denoise then compress (LinRGB input) + dev.:
   denoise_then_compress: true
   data_pairing: x_x
-JDC Bayer (w/gamma):
+JDC bayer (w/gamma):
   in_channels: 4
   transfer_fun: gamma22
 JDC LinRGB (w/gamma):

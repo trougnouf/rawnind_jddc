@@ -1,12 +1,12 @@
-Bayer:
+bayer:
   in_channels: 4
-Bayer (extra pairs):
+bayer (extra pairs):
   extrapairs_B: true
   in_channels: 4
-Bayer (more channels):
+bayer (more channels):
   in_channels: 4
   morechans: true
-Bayer (no unpaired data):
+bayer (no unpaired data):
   in_channels: 4
   incl_cc: false
 # bayer (naive reconstruction):
@@ -23,7 +23,7 @@ Bayer (no unpaired data):
 #   extrapairs: true
 #   in_channels: 4
 #   transfer_fun: None
-Bayer (pre-upsampled):
+bayer (pre-upsampled):
   in_channels: 4
   preupsample: true
 Linear RGB:
@@ -70,10 +70,10 @@ BM3D (sRGB):
 LinRGB (w/gamma):
   in_channels: 3
   transfer_fun: gamma22
-Bayer (w/gamma):
+bayer (w/gamma):
   in_channels: 4
   transfer_fun: gamma22
-Bayer (noownpics):
+bayer (noownpics):
   in_channels: 4
   noownpics: true
 LinRGB (noownpics):

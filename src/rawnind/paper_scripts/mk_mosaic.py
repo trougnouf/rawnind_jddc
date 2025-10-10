@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 
 """
-prereq: extract_dataset_thumbnails.py (adjust hardcoded MOSAICFORMAT for X-Trans and Bayer)
+prereq: extract_dataset_thumbnails.py (adjust hardcoded MOSAICFORMAT for x-trans and bayer)
 
 for jddc IEEEtran paper:
 
-Bayer:
-python onetimescripts/mk_mosaic.py --source_dir /orb/benoit_phd/datasets/RawNIND/Thumbnails/Bayer --height 640 --columns 27 --rows 7 --output /orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_Bayer.png
-X-Trans:
-python onetimescripts/mk_mosaic.py --source_dir /orb/benoit_phd/datasets/RawNIND/Thumbnails/X-Trans --height 274 --columns 30 --rows 3 --output /orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_X-Trans.png
+bayer:
+python onetimescripts/mk_mosaic.py --source_dir /orb/benoit_phd/datasets/RawNIND/Thumbnails/bayer --height 640 --columns 27 --rows 7 --output /orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_Bayer.png
+x-trans:
+python onetimescripts/mk_mosaic.py --source_dir /orb/benoit_phd/datasets/RawNIND/Thumbnails/x-trans --height 274 --columns 30 --rows 3 --output /orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_X-Trans.png
 
 then run mk_combined_mosaic.py
 
@@ -19,9 +19,9 @@ for thesis (16x20):
 # 30 rows x 20 columns
 20 + 10 rows
 9-10 columns + 11 columns
-Bayer:
-python onetimescripts/mk_mosaic.py --source_dir /orb/benoit_phd/datasets/RawNIND/Thumbnails/Bayer --height 1600 --width 1500 --columns 11 --rows 17 --output /orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_Bayer_thesis.pngX-Trans:
-python onetimescripts/mk_mosaic.py --source_dir /orb/benoit_phd/datasets/RawNIND/Thumbnails/X-Trans --width 1500 --columns 22 --rows 5 --height 225 --output /orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_X-Trans_thesis.png
+bayer:
+python onetimescripts/mk_mosaic.py --source_dir /orb/benoit_phd/datasets/RawNIND/Thumbnails/bayer --height 1600 --width 1500 --columns 11 --rows 17 --output /orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_Bayer_thesis.pngX-Trans:
+python onetimescripts/mk_mosaic.py --source_dir /orb/benoit_phd/datasets/RawNIND/Thumbnails/x-trans --width 1500 --columns 22 --rows 5 --height 225 --output /orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_X-Trans_thesis.png
 python onetimescripts/mk_combined_mosaic.py --mosaic_bayer /orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_Bayer_thesis.png --mosaic_xtrans /orb/benoit_phd/datasets/RawNIND/Thumbnails/mosaic_X-Trans_thesis.png --output /orb/benoit_phd/wiki/Thesis/thesis_from_scratch/figures/jddc/mosaic.png
 """
 
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--source_dir",
         type=str,
-        default="/orb/benoit_phd/datasets/RawNIND/Thumbnails/Bayer",
+        default="/orb/benoit_phd/datasets/RawNIND/Thumbnails/bayer",
         help="Directory containing thumbnail images.",
     )
     parser.add_argument(

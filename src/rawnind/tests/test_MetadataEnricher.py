@@ -1,9 +1,16 @@
+"""
+Tests for AsyncAligner async enrichment functionality.
+
+Enhanced with trio.testing utilities for deterministic async testing.
+"""
+
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+import trio.testing
 
-from rawnind.dataset.MetadataEnricher import MetadataEnricher
+from rawnind.dataset.MetadataEnricher import AsyncAligner
 from rawnind.dataset.SceneInfo import SceneInfo, ImageInfo
 
 pytestmark = pytest.mark.dataset
@@ -11,7 +18,7 @@ pytestmark = pytest.mark.dataset
 
 @pytest.fixture
 def metadata_enricher():
-    return MetadataEnricher()
+    return AsyncAligner()
 
 
 @pytest.fixture
@@ -23,7 +30,7 @@ def scene_info():
         is_clean=True,
         scene_name="test_scene",
         scene_images=[],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
     noisy_image = ImageInfo(
         filename="noisy_image.orf",
@@ -31,12 +38,12 @@ def scene_info():
         is_clean=False,
         scene_name="test_scene",
         scene_images=[],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
 
     return SceneInfo(
         scene_name="test_scene",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[gt_image],
@@ -45,7 +52,7 @@ def scene_info():
 
 
 def test_metadata_enricher_initialization(metadata_enricher):
-    assert isinstance(metadata_enricher, MetadataEnricher)
+    assert isinstance(metadata_enricher, AsyncAligner)
     assert metadata_enricher.cache_path == Path("src/rawnind/datasets/RawNIND/metadata_cache.json")
     assert metadata_enricher.dataset_root == Path("src/rawnind/datasets/RawNIND/src")
     assert metadata_enricher.max_concurrent == 4
@@ -59,17 +66,18 @@ def test_metadata_enricher_cache_loading(metadata_enricher):
     with open(cache_path, "w") as f:
         f.write('{"test": {"key": "value"}}')
 
-    enricher_with_custom_cache = MetadataEnricher(cache_path=cache_path)
+    enricher_with_custom_cache = AsyncAligner(cache_path=cache_path)
     assert "test" in enricher_with_custom_cache._metadata_cache
 
 
+@pytest.mark.trio
 async def test_consume_scenes_produce_enriched(mocker):
-    metadata_enricher = MetadataEnricher()
+    metadata_enricher = AsyncAligner()
     scene_recv_channel, enriched_send_channel = mocker.MagicMock(), mocker.MagicMock()
 
     scene_info = SceneInfo(
         scene_name="test_scene",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False
     )
@@ -89,6 +97,7 @@ async def test_consume_scenes_produce_enriched(mocker):
     metadata_enricher._save_cache.assert_called_once()
 
 
+@pytest.mark.trio
 async def test_enrich_clean_image(metadata_enricher, mocker):
     img_info = ImageInfo(
         filename="gt_image.tif",
@@ -96,7 +105,7 @@ async def test_enrich_clean_image(metadata_enricher, mocker):
         is_clean=True,
         scene_name="test_scene",
         scene_images=[],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
 
     metadata = {"example_metadata": "example_value"}
@@ -108,6 +117,7 @@ async def test_enrich_clean_image(metadata_enricher, mocker):
     assert metadata_enricher._metadata_cache["test_sha1"] == metadata
 
 
+@pytest.mark.trio
 async def test_compute_alignment_metadata(metadata_enricher, mocker):
     gt_img = ImageInfo(
         filename="gt_image.raf",
@@ -115,7 +125,7 @@ async def test_compute_alignment_metadata(metadata_enricher, mocker):
         is_clean=True,
         scene_name="test_scene",
         scene_images=[],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
     noisy_img = ImageInfo(
         filename="noisy_image.raf",
@@ -123,7 +133,7 @@ async def test_compute_alignment_metadata(metadata_enricher, mocker):
         is_clean=False,
         scene_name="test_scene",
         scene_images=[],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
 
     metadata = {
@@ -139,10 +149,11 @@ async def test_compute_alignment_metadata(metadata_enricher, mocker):
     assert result == metadata
 
 
+@pytest.mark.trio
 async def test_compute_crops_list(metadata_enricher, mocker):
     scene_info = SceneInfo(
         scene_name="test_scene",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False
     )
@@ -152,7 +163,7 @@ async def test_compute_crops_list(metadata_enricher, mocker):
         is_clean=True,
         scene_name="test_scene",
         scene_images=[],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
     noisy_img = ImageInfo(
         filename="noisy_image.cr2",
@@ -160,7 +171,7 @@ async def test_compute_crops_list(metadata_enricher, mocker):
         is_clean=False,
         scene_name="test_scene",
         scene_images=[],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
 
     crops_metadata = [
@@ -182,7 +193,7 @@ async def test_enrich_clean_image_skips_non_image_files(metadata_enricher, mocke
         is_clean=True,
         scene_name="test_scene",
         scene_images=[],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
     
     # Mock _compute_image_stats - it should NOT be called for .xmp files
@@ -213,7 +224,7 @@ async def test_enrich_clean_image_processes_valid_image_files(metadata_enricher,
             is_clean=True,
             scene_name="test_scene",
             scene_images=[],
-            cfa_type="Bayer"
+            cfa_type="bayer"
         )
         img.local_path = None  # Will skip cache check
         
@@ -246,7 +257,7 @@ async def test_enrich_scene_skips_xmp_files_in_noisy_images(metadata_enricher, m
         validated=True,
         scene_name="test_scene",
         scene_images=[],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
     
     xmp_image = ImageInfo(
@@ -257,7 +268,7 @@ async def test_enrich_scene_skips_xmp_files_in_noisy_images(metadata_enricher, m
         validated=True,
         scene_name="test_scene",
         scene_images=[],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
     
     valid_image = ImageInfo(
@@ -268,12 +279,12 @@ async def test_enrich_scene_skips_xmp_files_in_noisy_images(metadata_enricher, m
         validated=True,
         scene_name="test_scene",
         scene_images=[],
-        cfa_type="Bayer"
+        cfa_type="bayer"
     )
     
     scene_info = SceneInfo(
         scene_name="test_scene",
-        cfa_type="Bayer",
+        cfa_type="bayer",
         unknown_sensor=False,
         test_reserve=False,
         clean_images=[gt_image],

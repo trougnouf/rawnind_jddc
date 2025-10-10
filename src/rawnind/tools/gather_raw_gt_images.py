@@ -60,7 +60,7 @@ if __name__ == "__main__":
     for ds_name, orig_dpath in orig_datasets.items():
         [
             os.makedirs(os.path.join(DEST_DPATH, ds_name, "src", adir), exist_ok=True)
-            for adir in ["Bayer", "X-Trans"]
+            for adir in ["bayer", "x-trans"]
         ]
         for file in utilities.walk(root=orig_dpath):
             orig_fpath = os.path.join(*file)
@@ -80,7 +80,7 @@ if __name__ == "__main__":
                     continue
                 if isoval <= MAX_ISO:
                     dest_dir = (
-                        "X-Trans" if orig_fpath.lower().endswith("raf") else "Bayer"
+                        "x-trans" if orig_fpath.lower().endswith("raf") else "bayer"
                     )
                     dest_fpath = os.path.join(
                         DEST_DPATH, ds_name, "src", dest_dir, file[-1]

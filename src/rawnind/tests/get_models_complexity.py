@@ -12,13 +12,13 @@ if __name__ == "__main__":
     all_megapix_dims = ((4, 512, 512), (3, 1024, 1024))
     models_to_test = {
         4: {
-            "JDDC (Bayer input)": manynets_compression.ManyPriors_RawImageCompressor(
+            "JDDC (bayer input)": manynets_compression.ManyPriors_RawImageCompressor(
                 in_channels=4,
                 encoder_cls=compression_autoencoders.BalleEncoder,
                 decoder_cls=compression_autoencoders.BayerPSDecoder,
                 device=torch.device("cpu"),
             ),
-            "DenoiseThenCompress (Bayer input)": denoise_then_compress.DenoiseThenCompress(
+            "DenoiseThenCompress (bayer input)": denoise_then_compress.DenoiseThenCompress(
                 in_channels=4,
                 device=torch.device("cpu"),
                 encoder_cls=compression_autoencoders.BalleEncoder,
@@ -31,7 +31,7 @@ if __name__ == "__main__":
                 decoder_cls=compression_autoencoders.BalleDecoder,
                 preupsample=True,
             ),
-            "U-Net (Bayer input)": raw_denoiser.UtNet2(in_channels=4, funit=32),
+            "U-Net (bayer input)": raw_denoiser.UtNet2(in_channels=4, funit=32),
         },
         3: {
             "Compression or JDC (RGB input)": manynets_compression.ManyPriors_RawImageCompressor(
@@ -62,7 +62,7 @@ if __name__ == "__main__":
             )
             print(f"{model_name} macs: {macs}, params: {params}")
 
-    # print("Bayer complexity")
+    # print("bayer complexity")
     # megapixel_dims = 4, 512, 512
     # models = {
     #     "f32model": raw_denoiser.UtNet2(in_channels=4, funit=32).eval(),

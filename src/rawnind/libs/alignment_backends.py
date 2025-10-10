@@ -57,13 +57,13 @@ def shift_images(
     """
     Shift images in y,x directions and crop both accordingly.
 
-    Handles both RGB and Bayer patterns correctly.
+    Handles both RGB and bayer patterns correctly.
     """
     anchor_img_out = anchor_img
     target_img_out = target_img
     target_is_bayer = target_img.shape[0] == 4
     if anchor_img.shape[0] == 4:
-        raise NotImplementedError("shift_images: Bayer anchor_img is not implemented.")
+        raise NotImplementedError("shift_images: bayer anchor_img is not implemented.")
     target_shift_divisor = target_is_bayer + 1
 
     if shift[0] > 0:  # y
@@ -117,6 +117,8 @@ def find_best_alignment_cpu(
 
     See docs/BENCHMARK_FINDINGS.md: "Hierarchical method fundamentally broken on RAW/CFA data"
     """
+
+    # RAW<->RGB ALIGNMENT SWITCH
     return find_best_alignment_fft_cfa(
         anchor_raw, target_raw, anchor_metadata, method, return_loss_too, verbose
     )

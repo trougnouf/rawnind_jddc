@@ -19,7 +19,7 @@ async def test_produce_scenes(tmp_path):
 
     # Create mock cache data
     dataset_data = {
-        "Bayer": {
+        "bayer": {
             "scene1": {
                 "clean_images": [{"filename": "img1.png", "sha1": "abc123"}],
                 "noisy_images": [{"filename": "img2.png", "sha1": "def456"}],
@@ -49,7 +49,7 @@ async def test_produce_scenes(tmp_path):
             scene_info = await receive_channel.receive()
 
             assert scene_info.scene_name == "scene1"
-            assert scene_info.cfa_type == "Bayer"
+            assert scene_info.cfa_type == "bayer"
             assert len(scene_info.clean_images) == 1
             assert len(scene_info.noisy_images) == 1
             assert scene_info.clean_images[0].filename == "img1.png"
@@ -65,7 +65,7 @@ async def test_load_index_from_cache(tmp_path):
     yaml_cache = tmp_path / "test_yaml_cache.yaml"
     metadata_cache = tmp_path / "test_metadata_cache.json"
 
-    dataset_data = {"Bayer": {"scene1": {"clean_images": [], "noisy_images": []}}}
+    dataset_data = {"bayer": {"scene1": {"clean_images": [], "noisy_images": []}}}
 
     with open(yaml_cache, "w") as f:
         yaml.dump(dataset_data, f)
@@ -92,7 +92,7 @@ async def test_fetch_remote_index(tmp_path, mocker):
     yaml_cache = tmp_path / "test_yaml_cache.yaml"
     metadata_cache = tmp_path / "test_metadata_cache.json"
 
-    mock_yaml_data = {"Bayer": {"scene1": {"clean_images": [], "noisy_images": []}}}
+    mock_yaml_data = {"bayer": {"scene1": {"clean_images": [], "noisy_images": []}}}
     mock_metadata = '{"data": {"latestVersion": {"files": []}}}'
 
     def mock_fetch_yaml():
@@ -126,7 +126,7 @@ async def test_xmp_files_excluded_from_image_lists(tmp_path):
     metadata_cache = tmp_path / "test_metadata_cache.json"
 
     dataset_data = {
-        "Bayer": {
+        "bayer": {
             "scene1": {
                 "clean_images": [
                     {"filename": "gt_image.cr2", "sha1": "abc123"},
@@ -182,7 +182,7 @@ async def test_xmp_files_matched_to_parent_images(tmp_path):
     metadata_cache = tmp_path / "test_metadata_cache.json"
 
     dataset_data = {
-        "Bayer": {
+        "bayer": {
             "scene1": {
                 "clean_images": [
                     {"filename": "image1.arw", "sha1": "sha1_1"},

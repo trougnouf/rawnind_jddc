@@ -1,6 +1,6 @@
 
 Input:
-  - method: "Bayer input"
+  - method: "bayer input"
     images:
       - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/LucieB_bw_drawing1/gt/darktable_exported/IMG_7692.png"
         parameters: "s.s.: 1 s, ISO100"
@@ -70,7 +70,7 @@ Denoising:
         parameters: ""
         msssim: 0.638
 
-  - method: "U-Net + development [OURS]\n(from Bayer input)"
+  - method: "U-Net + development [OURS]\n(from bayer input)"
     images:
       - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-02-21-bayer_ms-ssim_mgout_notrans_valeither_-4/manproc_bostitch/iter_4350000/LucieB_bw_drawing1_IMG_7692.CR2_aligned_to_IMG_7692.CR2.tif"
         parameters: ""
@@ -121,7 +121,7 @@ Denoising:
 #       parameters: "λ="
 #       msssim: 0.
 
-# - method: "Joint Denoising,\nDemosaicing and Compression\n+ development [OURS]\n(from Bayer input)"
+# - method: "Joint Denoising,\nDemosaicing and Compression\n+ development [OURS]\n(from bayer input)"
 #   images:
 #     - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingBayerToProfiledRGB_4ch_L32.0_Balle_BayerPS_2024-06-07-dc_msssim_mgout_bayer_notrans_valeither_32from64_-4/manproc_bostitch/iter_5325000/LucieB_bw_drawing1_LucieB_bw_drawing1_ISO50_capt0015.arw_aligned_to_ISO50_capt0015.arw.tif/"
 #       parameters: "λ="

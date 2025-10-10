@@ -4,7 +4,7 @@
 set -e
 
 # Default mosaic format
-MOSAICFORMAT="X-Trans"  # X-Trans, Bayer
+MOSAICFORMAT="x-trans"  # X-Trans, bayer
 
 # Parse command-line arguments
 while getopts "m:" opt; do

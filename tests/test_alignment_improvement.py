@@ -36,7 +36,7 @@ def compute_mae_mse(img1: np.ndarray, img2: np.ndarray) -> tuple[float, float]:
 def test_fft_cfa_improves_alignment(random_scenes_with_synthetic_shifts):
     """Test that FFT-CFA detected shift reduces alignment error.
 
-    Tests until at least one scene of each CFA type (Bayer, X-Trans) passes.
+    Tests until at least one scene of each CFA type (bayer, x-trans) passes.
     """
     scenes = random_scenes_with_synthetic_shifts
 
@@ -52,8 +52,8 @@ def test_fft_cfa_improves_alignment(random_scenes_with_synthetic_shifts):
         cfa_type = scene["cfa_type"]
 
         # Skip if we've already validated this CFA type
-        if (cfa_type == "Bayer" and bayer_passed) or (
-            cfa_type == "X-Trans" and xtrans_passed
+        if (cfa_type == "bayer" and bayer_passed) or (
+            cfa_type == "x-trans" and xtrans_passed
         ):
             print(
                 f"[{i:2d}] {scene['subject']:<25} ({cfa_type:<7}) | Skipped (already validated {cfa_type})"
@@ -98,7 +98,7 @@ def test_fft_cfa_improves_alignment(random_scenes_with_synthetic_shifts):
         print(f"     └─ {status} Improvement: {improvement_pct:+.1f}%\n")
 
         if mae_improved:
-            if cfa_type == "Bayer":
+            if cfa_type == "bayer":
                 bayer_passed = True
             else:
                 xtrans_passed = True
@@ -116,11 +116,11 @@ def test_fft_cfa_improves_alignment(random_scenes_with_synthetic_shifts):
 
     print(f"{'=' * 80}")
     if bayer_passed and xtrans_passed:
-        print("PASSED: Successfully validated both Bayer and X-Trans scenes")
+        print("PASSED: Successfully validated both bayer and x-trans scenes")
     elif bayer_passed:
-        print("PARTIAL: Validated Bayer but not X-Trans")
+        print("PARTIAL: Validated bayer but not x-trans")
     elif xtrans_passed:
-        print("PARTIAL: Validated X-Trans but not Bayer")
+        print("PARTIAL: Validated x-trans but not bayer")
     else:
         print("FAILED: No scenes passed alignment improvement test")
 
@@ -136,28 +136,28 @@ def test_fft_cfa_improves_alignment(random_scenes_with_synthetic_shifts):
     print(f"{'=' * 80}\n")
 
     assert bayer_passed and xtrans_passed, (
-        f"Failed to validate both CFA types (Bayer: {bayer_passed}, X-Trans: {xtrans_passed})"
+        f"Failed to validate both CFA types (bayer: {bayer_passed}, x-trans: {xtrans_passed})"
     )
 
 
 def test_bruteforce_rgb_improves_alignment(random_scenes_with_synthetic_shifts):
     """Test that Bruteforce-RGB detected shift reduces alignment error.
 
-    Note: Bruteforce-RGB only works on Bayer images (requires RGB demosaic).
-    X-Trans images are skipped as there's no X-Trans RGB demosaic in the codebase.
-    Tests until at least one Bayer scene passes, then skips remaining scenes.
+    Note: Bruteforce-RGB only works on bayer images (requires RGB demosaic).
+    x-trans images are skipped as there's no x-trans RGB demosaic in the codebase.
+    Tests until at least one bayer scene passes, then skips remaining scenes.
     """
     scenes = random_scenes_with_synthetic_shifts
 
     # Filter to Bayer only - bruteforce RGB requires RGB demosaic which only exists for Bayer
-    bayer_scenes = [s for s in scenes if s["cfa_type"] == "Bayer"]
+    bayer_scenes = [s for s in scenes if s["cfa_type"] == "bayer"]
 
     if len(bayer_scenes) == 0:
-        pytest.skip("No Bayer scenes available for bruteforce RGB test")
+        pytest.skip("No bayer scenes available for bruteforce RGB test")
 
     print(f"\n{'=' * 80}")
     print(f"Testing Bruteforce-RGB Alignment Improvement")
-    print(f"(Testing until one Bayer scene passes)")
+    print(f"(Testing until one bayer scene passes)")
     print(f"{'=' * 80}\n")
 
     failures = []
@@ -166,7 +166,7 @@ def test_bruteforce_rgb_improves_alignment(random_scenes_with_synthetic_shifts):
     for i, scene in enumerate(bayer_scenes, 1):
         if bayer_passed:
             print(
-                f"[{i:2d}] {scene['subject']:<25} (Bayer  ) | Skipped (already validated Bayer)"
+                f"[{i:2d}] {scene['subject']:<25} (bayer  ) | Skipped (already validated bayer)"
             )
             continue
         original = scene["original_img"]
@@ -226,9 +226,9 @@ def test_bruteforce_rgb_improves_alignment(random_scenes_with_synthetic_shifts):
 
     print(f"{'=' * 80}")
     if bayer_passed:
-        print(f"PASSED: Successfully validated at least one Bayer scene")
+        print(f"PASSED: Successfully validated at least one bayer scene")
     else:
-        print(f"FAILED: No Bayer scenes passed alignment improvement test")
+        print(f"FAILED: No bayer scenes passed alignment improvement test")
 
     if failures:
         print("\nFailures (alignment did not improve error):")
@@ -241,4 +241,4 @@ def test_bruteforce_rgb_improves_alignment(random_scenes_with_synthetic_shifts):
 
     print(f"{'=' * 80}\n")
 
-    assert bayer_passed, "Failed to validate alignment improvement on any Bayer scene"
+    assert bayer_passed, "Failed to validate alignment improvement on any bayer scene"

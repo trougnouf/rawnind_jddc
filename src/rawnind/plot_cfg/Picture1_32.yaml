@@ -1,5 +1,5 @@
 Input:
-  - method: "Bayer input"
+  - method: "bayer input"
     images:
       - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/MuseeL-bluebirds-A7C/gt/darktable_exported/ISO50_capt0015.png"
         caption: "MS-SSIM: 1.00, s.s.: 8 s, ISO50"
@@ -105,7 +105,7 @@ Denoising:
         msssim: 0.842
         parameters: ""
 
-  - method: "U-Net + development [OURS]\n(from Bayer input)"
+  - method: "U-Net + development [OURS]\n(from bayer input)"
     images:
       - src_fpath: "/orb/benoit_phd/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-02-21-bayer_ms-ssim_mgout_notrans_valeither_-4/manproc/iter_4350000/MuseeL-bluebirds-A7C_ISO50_capt0015.arw_aligned_to_ISO50_capt0015.arw.tif.jpg"
         caption: "MS-SSIM: 0.989"
@@ -216,7 +216,7 @@ Compression:
         msssim: 0.939
         bpp: 0.092
         parameters: "λ=32"
-  - method: "Joint Denoising,\nDemosaicing and Compression\n+ development [OURS]\n(from Bayer input)"
+  - method: "Joint Denoising,\nDemosaicing and Compression\n+ development [OURS]\n(from bayer input)"
     images:
       - src_fpath: "/orb/benoit_phd/models/rawnind_dc/DCTrainingBayerToProfiledRGB_4ch_L32.0_Balle_BayerPS_2024-06-07-dc_msssim_mgout_bayer_notrans_valeither_32from64_-4/manproc/iter_5325000/MuseeL-bluebirds-A7C_ISO50_capt0015.arw_aligned_to_ISO50_capt0015.arw.tif.jpg"
         caption: "MS-SSIM: 0.980, 0.044 bpp, λ=32"
