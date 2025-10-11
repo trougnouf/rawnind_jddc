@@ -10,6 +10,7 @@ import operator
 import os
 import shutil
 import subprocess
+import logging
 from enum import Enum
 from typing import Literal, NamedTuple, Optional, Union
 
@@ -1485,20 +1486,38 @@ def fft_phase_correlate_cfa(
 ) -> tuple[tuple[int, int], list[tuple[int, int]]]:
     """CFA-aware FFT phase correlation for RAW image alignment.
 
-    Extracts color channels from mosaiced CFA data and performs FFT phase
-    correlation on each channel independently. Combines results via median
-    or mean to produce robust shift estimate.
+    Performs phase correlation per CFA color channel and aggregates results to
+    estimate integer-pixel shifts between mosaiced RAW frames. The CFA-aware
+    separation improves robustness to color-specific noise and aliasing.
+
+    Background:
+    Phase correlation is a frequency-domain registration technique based on the
+    Fourier shift theorem. The displacement between two images manifests as a
+    phase ramp in the frequency domain; locating the peak in the inverse FFT of
+    the normalized cross power spectrum yields the shift. Applying it per CFA
+    channel better respects RAW data statistics.
 
     Args:
-        anchor: Reference RAW image [1, H, W]
-        target: Target RAW image to align [1, H, W]
-        anchor_metadata: Metadata dict containing 'RGBG_pattern'
-        method: 'median' or 'mean' for combining channel shifts
-        verbose: Print per-channel shift detections
+        anchor: Reference RAW image [1, H, W].
+        target: Target RAW image to align [1, H, W].
+        anchor_metadata: Metadata dict containing 'RGBG_pattern' (2x2 bayer or 6x6 X-Trans).
+        method: 'median' or 'mean' for combining channel shifts.
+        verbose: If True, print per-channel shift detections.
 
     Returns:
-        shift: (dy, dx) tuple - final combined shift estimate
-        channel_shifts: List of per-channel (dy, dx) detections
+        - shift: (dy, dx) tuple — final combined shift estimate snapped to CFA blocks.
+        - channel_shifts: List of per-channel (dy, dx) detections at sensor resolution.
+
+    Notes:
+        - Output is snapped to CFA block boundaries (2 pixels for bayer; 3 for X-Trans).
+        - This implementation estimates integer-pixel shifts; subpixel refinement is
+          possible but not implemented here.
+
+    References:
+        - Kuglin, C. D., & Hines, D. C. (1975). The phase correlation image alignment method.
+        - Bayer, B. E. (1976). Color imaging array. US Patent 3,971,065.
+        - Suggested reading for X-Trans demosaicing/registration nuances: RawTherapee and
+          LibRaw documentation, and OIIO demosaic literature.
     """
     pattern = anchor_metadata["RGBG_pattern"]
     pattern_shape = pattern.shape
@@ -1593,9 +1612,28 @@ def hdr_nparray_to_file(
     bit_depth: Optional[int] = None,
     src_fpath: Optional[str] = None,
 ) -> None:
-    """Save (c,h,w) numpy array to HDR image file. (OpenEXR or TIFF)
+    """Write a high dynamic range image to disk (OpenEXR or TIFF).
 
-    src_fpath can be used to copy metadata over using exiftool.
+    Expects channel-first arrays (C, H, W) in linear color. For EXR, floating
+    point encodings are used (16-bit HALF or 32-bit FLOAT). For TIFF, OpenCV or
+    OpenImageIO is used depending on availability.
+
+    Args:
+        img: Image as np.ndarray or torch.Tensor (C, H, W), float16/float32.
+        fpath: Destination path; file extension determines container ('.exr' or '.tif/.tiff').
+        color_profile: One of {'lin_rec2020', 'lin_sRGB', 'gamma_sRGB'}. For EXR, encodes
+            chromaticities metadata when possible. For TIFF, may be ignored depending on backend.
+        bit_depth: Desired float bit depth for EXR (16 or 32). If None, inferred from dtype.
+        src_fpath: Optional path to source RAW; reserved for future EXIF/XMP metadata copy.
+
+    Raises:
+        NotImplementedError: For unsupported dtype/bit_depth combinations or unsupported profile.
+        RuntimeError: If the image writer fails to open or write the file.
+
+    Notes:
+        - OpenImageIO backend provides robust EXR/TIFF I/O with explicit color space metadata.
+        - When writing EXR via OpenEXR, chromaticities for Rec.2020 and linear sRGB are embedded.
+        - Images should be in linear light; apply gamma only if exporting 'gamma_sRGB' TIFFs.
     """
     if isinstance(img, torch.Tensor):
         img: np.ndarray = img.numpy()
@@ -1822,12 +1860,34 @@ def raw_fpath_to_hdr_img_file(
     check_exposure: bool = True,
     crop_all: bool = True,
 ) -> tuple[ConversionOutcome, str, str]:
-    """
-    Converts a raw file to OpenEXR or TIFF HDR.
+    """Convert a RAW file into an HDR image with color management.
 
-    if check_exposure: will not perform conversion if image is under/over-exposed
+    Pipeline:
+    1) Read RAW file to mosaiced mono image and metadata.
+    2) Optionally verify exposure quality (reject under/over-exposed frames).
+    3) Demosaic to camera RGB.
+    4) Convert camera RGB to the requested linear output color space.
+    5) Write HDR image (EXR/TIFF) with appropriate metadata.
 
-    Returns (ConversionOutcome, src_fpath, dest_fpath)
+    Args:
+        src_fpath: Input RAW file path.
+        dest_fpath: Output HDR file path ('.exr' or '.tif/.tiff').
+        output_color_profile: Target color space, typically 'lin_rec2020' or 'lin_sRGB'.
+        bit_depth: For EXR, floating point bit depth (16 or 32). If None, inferred from dtype.
+        check_exposure: If True, reject files whose exposure quality is poor.
+        crop_all: If True, crop to valid sensor area per metadata.
+
+    Returns:
+        ConversionResult tuple: (outcome, src_fpath, dest_fpath).
+
+    Raises:
+        Various exceptions from underlying readers/writers are caught and mapped to
+        ConversionOutcome codes; unexpected errors return UNKNOWN_ERROR.
+
+    References:
+        - Malvar, H. S., He, L.-W., & Cutler, R. (2004). High-Quality Linear Interpolation
+          for Demosaicing of Bayer-Patterned Color Images. IEEE ICASSP 2004.
+        - Bruce Lindbloom, Color Science: XYZ⇄RGB conversions (for color matrix context).
     """
 
     def log(msg):

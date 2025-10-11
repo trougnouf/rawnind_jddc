@@ -1,5 +1,30 @@
 """
-Generates bayer/PRGB crops from enriched scenes.
+Crop producer stage for training data generation.
+
+This module extracts aligned crops from paired ground-truth (GT) and noisy RAW-like
+images produced by earlier pipeline stages. It supports CFA-aware sampling for
+both Bayer (2x2) and X-Trans (3x3) mosaics and can export crops in multiple
+representations:
+
+- bayer: 2D mosaic image tiles, aligned to the sensor's color filter array (CFA).
+- prgb: Profiled RGB tiles (aka PRGB), a 3-channel, color-managed representation
+  produced using the scene/image metadata (bayer/x-trans pattern, RGB↔XYZ matrix,
+  etc.).
+
+Design goals and invariants:
+- Crops must preserve GT↔noisy alignment to within a CFA period for meaningful
+  supervised learning on RAW domains.
+- Systematic overlapping tiling (with a configurable stride) is preferred to
+  random sampling for exhaustive coverage and reproducibility.
+- Memory locality is favored: image tensors are loaded upstream and converted to
+  NumPy here; tensors are promptly unloaded to avoid OOM in multiprocess flows.
+
+Suggested reading:
+- Bayer filter mosaics (Bayer, 1976) for 2x2 CFAs.
+- Phase correlation for sub-pixel alignment (Kuglin & Hines, 1975) — relevant to
+  upstream alignment stage producing the offsets consumed here.
+- Raw image pipelines and color management concepts (Bruce Lindbloom’s color
+  science notes; RawTherapee/LibRaw documentation) for PRGB context.
 """
 
 import logging
@@ -17,7 +42,20 @@ logger = logging.getLogger(__name__)
 
 
 class CropProducerStage(PostDownloadWorker):
-    """Generates image crops for training from enriched scenes."""
+    """CFA-aware crop generator for paired GT/noisy images.
+
+    This stage runs after alignment/enrichment and is responsible for creating
+    small tiles used for training and evaluation. It enforces CFA-period
+    constraints on crop sizes and offsets so that Bayer (2) or X-Trans (3) color
+    sampling grids remain consistent between GT and noisy images.
+
+    Key behaviors:
+    - Supports overlapping systematic tiling via a stride parameter or random
+      sampling for stochastic training regimes.
+    - Saves per-scene crop metadata to facilitate downstream dataset loaders.
+    - Optionally emits PRGB crops when sufficient color/ICC-related metadata is
+      provided (bayer/x-trans pattern, RGB↔XYZ transform, etc.).
+    """
 
     def __init__(
         self,
@@ -32,20 +70,34 @@ class CropProducerStage(PostDownloadWorker):
         stride: Optional[int] = None,
         use_systematic_tiling: bool = True
     ):
-        """
-        Initialize the crop producer.
+        """Initialize the crop producer.
+
+        Configures CFA-aware tiling behavior, output formats, and concurrency.
+        The stage enforces CFA-aligned crop sizes when cfa_type is specified,
+        ensuring that red/green/blue sampling grids line up across GT/noisy.
 
         Args:
-            output_dir: Directory for saving crops
-            crop_size: Size of square crops to extract
-            num_crops: Number of crops to extract per image pair (ignored if use_systematic_tiling=True)
-            max_workers: Maximum concurrent workers (defaults to 0.75 * cpu_count)
-            save_format: Format for saving crops ("npy" or "tif")
-            crop_types: List of crop types to produce (e.g., ["bayer", "prgb"])
-            config: Additional configuration
-            cfa_type: CFA type ('Bayer' or 'X-Trans') for validation. If None, validation is skipped.
-            stride: Stride for systematic tiling. If None, defaults to crop_size // 4
-            use_systematic_tiling: If True, use overlapping tiling with stride. If False, random sampling
+            output_dir: Directory where crops and masks will be written.
+            crop_size: Size of square crops to extract (pixels). Must be
+                divisible by 2 for Bayer or 3 for X-Trans when cfa_type is set.
+            num_crops: Number of crops to extract per image pair in random mode;
+                ignored if use_systematic_tiling=True.
+            max_workers: Maximum concurrent workers for CPU-bound operations
+                (default: ~0.75 × CPU cores).
+            save_format: On-disk format for crops ('npy' supported; 'tif' not
+                fully implemented in this stage).
+            crop_types: Which crop representations to produce, e.g., ['bayer',
+                'prgb'].
+            config: Arbitrary configuration passed to the base worker.
+            cfa_type: CFA type ('Bayer' or 'X-Trans') for validation. If None,
+                CFA constraints are not enforced.
+            stride: Step for systematic tiling; defaults to crop_size // 4.
+            use_systematic_tiling: If True, generate overlapping grid tiles;
+                if False, sample positions randomly.
+
+        Raises:
+            AssertionError: If crop_size violates CFA divisibility constraints
+                when cfa_type is provided.
         """
         if max_workers is None:
             max_workers = max(1, int(os.cpu_count() * 0.75))
@@ -73,20 +125,41 @@ class CropProducerStage(PostDownloadWorker):
         self._viz = None
 
     def attach_visualizer(self, viz):
-        """Attach visualizer for automatic progress tracking."""
+        """Attach a progress visualizer.
+
+        The visualizer, if provided, is called by the pipeline decorators to
+        report progress and diagnostics. This attachment is optional and does
+        not affect core functionality.
+
+        Args:
+            viz: Arbitrary object expected to implement the visualizer protocol
+                used by the pipeline decorators.
+
+        Returns:
+            self, to allow fluent chaining.
+        """
         self._viz = viz
         return self
 
     @stage(progress=("cropping", "cropped"), debug_on_=True)
     async def process_scene(self, scene: SceneInfo) -> SceneInfo:
-        """
-        Generate crops for all image pairs in the scene.
+        """Generate crops for all image pairs in a scene.
+
+        Reads alignment offsets and exposure metadata computed upstream and
+        produces bayer/PRGB crops for each valid noisy image paired with the
+        ground-truth (GT) reference.
 
         Args:
-            scene: Enriched SceneInfo with alignment metadata
+            scene: Enriched SceneInfo with alignment metadata and cached image
+                tensors.
 
         Returns:
-            SceneInfo with added crop metadata
+            The same SceneInfo with per-image 'crops' metadata appended.
+
+        Notes:
+            - Scenes lacking a valid GT are skipped.
+            - Noisy images without 'alignment' metadata are skipped.
+            - Long-running CPU-bound extraction is offloaded via run_cpu_bound.
         """
         logger.info(f"→ CropProducer.process_scene: {scene.scene_name}")
         gt_img = scene.get_gt_image()
@@ -125,16 +198,23 @@ class CropProducerStage(PostDownloadWorker):
         gt_img: ImageInfo,
         noisy_img: ImageInfo
     ) -> List[Dict[str, Any]]:
-        """
-        Generate crops for a clean-noisy image pair.
+        """Generate crops for one GT/noisy image pair.
+
+        Loads image tensors from the SceneInfo cache, converts to NumPy for
+        process-safe execution, and delegates extraction to the static worker.
 
         Args:
-            scene: Scene information
-            gt_img: Ground truth image
-            noisy_img: Noisy image
+            scene: Scene information (provides scene_name for IDs/paths).
+            gt_img: Ground-truth ImageInfo.
+            noisy_img: Noisy ImageInfo aligned to GT by upstream stage.
 
         Returns:
-            List of crop metadata dictionaries
+            List of dicts describing produced crops (IDs, coordinates, paths).
+
+        Notes:
+            - This method immediately unloads the image tensors after converting
+              to NumPy to reduce peak memory usage during multiprocessing.
+            - Gain and overexposure thresholds are read from noisy_img.metadata.
         """
         alignment = noisy_img.metadata.get("alignment", [0, 0])
         gain = noisy_img.metadata.get("gain", 1.0)
@@ -218,7 +298,7 @@ class CropProducerStage(PostDownloadWorker):
             gain: Gain factor for the noisy image
             gt_sha1: SHA1 of ground truth image
             noisy_sha1: SHA1 of noisy image
-            cfa_type: CFA type ('bayer' or 'x-trans')
+            cfa_type: CFA type ('bay    er' or 'x-trans')
             overexposure_lb: Overexposure threshold
             is_bayer: Whether this is bayer CFA data
             metadata: Full metadata dict for PRGB pipeline (bayer_pattern, rgb_xyz_matrix, etc.)

@@ -1,7 +1,6 @@
 """
 Async-native crop producer - refactored for fine-grained parallelism.
 
-Key improvements over original:
 1. No ProcessPoolExecutor - uses trio.to_thread.run_sync for blocking ops
 2. Parallelizes at operation level (MS-SSIM per-channel) instead of scene level
 3. Better CPU utilization through trio's scheduler

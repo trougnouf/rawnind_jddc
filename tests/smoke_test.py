@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 
 import trio
+import tracemalloc
+import psutil
 
 from rawnind.dataset import (
     DataIngestor,
@@ -32,6 +34,48 @@ CHANNEL_BUFFER_MULTIPLIER = 2.5
 DEFAULT_DOWNLOAD_CONCURRENCY = max(1, int(os.cpu_count() * 0.75))
 DEFAULT_MAX_WORKERS = max(1, int(os.cpu_count() * 0.75))
 LOG_FILE = Path('/tmp/smoke_test.log')
+MEMORY_LOG_FILE = Path('/tmp/smoke_test_memory.log')
+
+
+class MemoryProfiler:
+    """Lightweight memory profiler for smoke test."""
+
+    def __init__(self):
+        self.process = psutil.Process(os.getpid())
+        self.snapshots = []
+        self.log_file = MEMORY_LOG_FILE.open('w')
+
+    def snapshot(self, label: str):
+        snap = tracemalloc.take_snapshot()
+        rss_mb = self.process.memory_info().rss / (1024 * 1024)
+        self.snapshots.append({'label': label, 'snapshot': snap, 'rss_mb': rss_mb})
+        msg = f"[{label}] RSS: {rss_mb:.1f} MB"
+        self.log_file.write(msg + '\n')
+        self.log_file.flush()
+
+    def compare_last(self, top_n=10):
+        if len(self.snapshots) < 2:
+            return
+        s1, s2 = self.snapshots[-2], self.snapshots[-1]
+        delta = s2['rss_mb'] - s1['rss_mb']
+        msg = f"\n{s1['label']} → {s2['label']}: Δ{delta:+.1f} MB"
+        self.log_file.write(msg + '\n')
+
+        top = s2['snapshot'].compare_to(s1['snapshot'], 'lineno')
+        self.log_file.write(f"Top {top_n} increases:\n")
+        for stat in top[:top_n]:
+            self.log_file.write(f"  {stat}\n")
+        self.log_file.flush()
+
+    def report(self):
+        if not self.snapshots:
+            return
+        peak = max(s['rss_mb'] for s in self.snapshots)
+        growth = self.snapshots[-1]['rss_mb'] - self.snapshots[0]['rss_mb']
+        msg = f"\n{'='*60}\nMemory Summary: Peak={peak:.1f} MB, Growth={growth:+.1f} MB\n{'='*60}\n"
+        self.log_file.write(msg)
+        self.log_file.close()
+        print(f"Memory profiling logged to: {MEMORY_LOG_FILE}")
 
 
 def setup_logging():
@@ -330,6 +374,10 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
     buffer_size = int(download_concurrency * CHANNEL_BUFFER_MULTIPLIER)
     dataset_root = Path("tmp/rawnind_dataset")
 
+    # Memory profiler
+    profiler = MemoryProfiler()
+    profiler.snapshot("0_startup")
+
     viz = PipelineVisualizer(total_items=max_scenes)
     viz.clear()
 
@@ -421,10 +469,25 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
                 aligner.consume_and_produce,
                 channels['enriched_recv'], channels['aligned_send']
             )
-            nursery.start_soon(
-                cropper.consume_and_produce,
-                channels['aligned_recv'], channels['cropped_send']
-            )
+
+            # Wrap cropper with memory profiling
+            async def cropper_with_memory_tracking():
+                count = 0
+                async with channels['aligned_recv'], channels['cropped_send']:
+                    async for scene in channels['aligned_recv']:
+                        profiler.snapshot(f"crop_before_{count}_{scene.scene_name[:15]}")
+                        processed = await cropper.process_scene(scene)
+                        profiler.snapshot(f"crop_after_{count}_{scene.scene_name[:15]}")
+                        profiler.compare_last(top_n=5)
+
+                        # CRITICAL: Unload all images after cropping to free float32 arrays
+                        for img in scene.all_images():
+                            img.unload_image()
+
+                        await channels['cropped_send'].send(processed)
+                        count += 1
+
+            nursery.start_soon(cropper_with_memory_tracking)
             # Bridge consumes cropped scenes and exposes legacy interface in-memory
             nursery.start_soon(
                 bridge.consume,
@@ -470,6 +533,10 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
 
     # Test dataloader integration
     await test_dataloader_integration(dataset_root, viz)
+
+    # Memory profiling report
+    profiler.snapshot("9_complete")
+    profiler.report()
 
     total_errors = viz.counters['errors']
     failed_verifications = viz.counters['failed']
