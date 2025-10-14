@@ -32,7 +32,9 @@ BREAKPOINT_ON_ERROR = True
 COLOR_PROFILE = "lin_rec2020"
 LOG_FPATH = os.path.join("logs", os.path.basename(__file__) + ".log")
 
-MAX_MASKED: float = 0.5  # Must ensure that we don't send a crop with this more than this many masked pixels
+MAX_MASKED: float = (
+    0.5  # Must ensure that we don't send a crop with this more than this many masked pixels
+)
 MAX_RANDOM_CROP_ATTEMPS = 10
 
 MASK_MEAN_MIN = 0.8  # 14+11+1 = 26 images out of 1145 = 2.3 %
@@ -77,9 +79,9 @@ class RawImageDataset:
         x_crops = torch.empty(x_crops_dims)
         mask_crops = torch.BoolTensor(x_crops.shape)
         if yimg is not None:
-            assert rawproc.shape_is_compatible(ximg.shape, yimg.shape), (
-                f"ximg and yimg should already be aligned. {ximg.shape=}, {yimg.shape=}"
-            )
+            assert rawproc.shape_is_compatible(
+                ximg.shape, yimg.shape
+            ), f"ximg and yimg should already be aligned. {ximg.shape=}, {yimg.shape=}"
             y_crops_dims = (
                 self.num_crops,
                 yimg.shape[-3],
@@ -341,10 +343,11 @@ class CleanProfiledRGBCleanBayerImageCropsDataset(
         num_crops: int,
         crop_size: int,
         toy_dataset: bool = False,
+        disable_retry_wait: bool = False,
     ):
         super().__init__(num_crops=num_crops, crop_size=crop_size)
         self.num_crops = num_crops
-        # self._dataset_xy_fpaths: list[tuple[str, str]] = []  # (gt_fpath, src_fpath)  # python 3.8 incompat
+        self.disable_retry_wait = disable_retry_wait
         self._dataset: list[_ds_item] = []  # (gt_fpath, src_fpath)
         for content_fpath in content_fpaths:
             logging.info(
@@ -376,8 +379,14 @@ class CleanProfiledRGBCleanBayerImageCropsDataset(
         metadata = self._dataset[i]
         crop: dict[str, str] = random.choice(metadata["crops"])
         try:
-            gt = pt_helpers.fpath_to_tensor(crop["gt_linrec2020_fpath"]).float()
-            rgbg_img = pt_helpers.fpath_to_tensor(crop["gt_bayer_fpath"]).float()
+            gt = pt_helpers.fpath_to_tensor(
+                crop["gt_linrec2020_fpath"],
+                disable_retry_wait=getattr(self, "disable_retry_wait", False),
+            ).float()
+            rgbg_img = pt_helpers.fpath_to_tensor(
+                crop["gt_bayer_fpath"],
+                disable_retry_wait=getattr(self, "disable_retry_wait", False),
+            ).float()
         except ValueError as e:
             logging.error(e)
             return self.__getitem__(random.randrange(len(self)))
@@ -426,11 +435,12 @@ class CleanProfiledRGBCleanProfiledRGBImageCropsDataset(
         crop_size: int,
         toy_dataset: bool = False,
         arbitrary_proc_method: bool = False,
+        disable_retry_wait: bool = False,
     ):
         super().__init__(num_crops=num_crops, crop_size=crop_size)
         self.arbitrary_proc_method = arbitrary_proc_method
         self.num_crops = num_crops
-        # self._dataset_xy_fpaths: list[tuple[str, str]] = []  # (gt_fpath, src_fpath)  # python 3.8 incompat
+        self.disable_retry_wait = disable_retry_wait
         self._dataset: list[_ds_item] = []  # (gt_fpath, src_fpath)
         for content_fpath in content_fpaths:
             logging.info(
@@ -461,9 +471,13 @@ class CleanProfiledRGBCleanProfiledRGBImageCropsDataset(
         metadata = self._dataset[i]
         crop: dict[str, str] = random.choice(metadata["crops"])
         try:
-            gt = pt_helpers.fpath_to_tensor(crop["gt_linrec2020_fpath"]).float()
+            gt = pt_helpers.fpath_to_tensor(
+                crop["gt_linrec2020_fpath"],
+                disable_retry_wait=getattr(self, "disable_retry_wait", False),
+            ).float()
             rgbg_img = pt_helpers.fpath_to_tensor(
-                crop["gt_bayer_fpath"]
+                crop["gt_bayer_fpath"],
+                disable_retry_wait=getattr(self, "disable_retry_wait", False),
             ).float()  # used to compute the overexposure mask
         except ValueError as e:
             logging.error(e)
@@ -601,9 +615,9 @@ class CleanProfiledRGBNoisyBayerImageCropsDataset(
                         f"{type(self).__name__}.__init__: {image['f_fpath']} has no crops."
                     )
         logging.info(f"initialized {type(self).__name__} with {len(self)} images.")
-        assert len(self) > 0, (
-            f"{type(self).__name__} has no images. {content_fpaths=}, {test_reserve=}"
-        )
+        assert (
+            len(self) > 0
+        ), f"{type(self).__name__} has no images. {content_fpaths=}, {test_reserve=}"
         self.data_pairing = data_pairing
 
     def __getitem__(self, i: int) -> RawDatasetOutput:
@@ -718,9 +732,9 @@ class CleanProfiledRGBNoisyProfiledRGBImageCropsDataset(
         self.match_gain = match_gain
         self.arbitrary_proc_method = arbitrary_proc_method
         if self.arbitrary_proc_method:
-            assert self.match_gain, (
-                f"{type(self).__name__}: arbitrary_proc_method requires match_gain"
-            )
+            assert (
+                self.match_gain
+            ), f"{type(self).__name__}: arbitrary_proc_method requires match_gain"
         self.data_pairing = data_pairing
         # contents: list[dict] = utilities.load_yaml(content_fpath)
         for content_fpath in content_fpaths:

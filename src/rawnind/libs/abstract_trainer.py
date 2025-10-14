@@ -545,6 +545,12 @@ class ImageToImageNNTraining(ImageToImageNN):
         super().add_arguments(parser)
 
         parser.add_argument(
+            "--disable_retry_wait",
+            action="store_true",
+            help="Disable 5-second wait after repeated file load failures (for faster debugging)",
+        )
+
+        parser.add_argument(
             "--init_lr", type=float, help="Initial learning rate.", required=True
         )
         parser.add_argument(

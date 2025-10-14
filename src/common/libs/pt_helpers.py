@@ -34,6 +34,7 @@ def fpath_to_tensor(
     batch=False,
     incl_metadata=False,
     crop_to_multiple: Union[Literal[False], int] = False,
+    disable_retry_wait: bool = False,
 ) -> Union[torch.Tensor, tuple[torch.Tensor, dict]]:
     # totensor = torchvision.transforms.ToTensor()
     # pilimg = Image.open(imgpath).convert('RGB')
@@ -50,7 +51,8 @@ def fpath_to_tensor(
             logging.error(
                 f"fpath_to_tensor failed again ({e}). Trying one last time after 5 seconds."
             )
-            time.sleep(5)
+            if not disable_retry_wait:
+                time.sleep(5)
             tensor = np_imgops.img_fpath_to_np_flt(
                 img_fpath, incl_metadata=incl_metadata
             )
@@ -169,9 +171,9 @@ def get_device(device_n=None):
 def sdr_pttensor_to_file(tensor: torch.Tensor, fpath: str):
     """Save PyTorch tensor to SDR image file. (JPEG: 8-bit, PNG/TIFF: 16-bit)"""
     if tensor.dim() == 4:
-        assert tensor.size(0) == 1, (
-            "sdr_pttensor_to_file: batch size > 1 is not supported"
-        )
+        assert (
+            tensor.size(0) == 1
+        ), "sdr_pttensor_to_file: batch size > 1 is not supported"
         tensor = tensor.squeeze(0)
     if tensor.dtype == torch.float32 or tensor.dtype == torch.float16:
         if fpath[-4:].lower() in [".jpg", "jpeg"]:  # 8-bit
