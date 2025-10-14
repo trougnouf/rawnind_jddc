@@ -35,6 +35,7 @@ from rawnind.libs import raw
 from rawnind.libs import rawds
 from rawnind.libs import rawproc
 from rawnind.models import bm3d_denoiser
+
 # from rawnind.extmodels import runet
 # from rawnind.extmodels import edsr
 from rawnind.models import (
@@ -149,9 +150,9 @@ class ImageToImageNN:
             if len(img.shape) == 3:
                 img = img.unsqueeze(0)
             in_channels = img.shape[1]
-            assert in_channels == self.in_channels, (
-                f"{in_channels=}, {self.in_channels=}; model configuration does not match input image."
-            )
+            assert (
+                in_channels == self.in_channels
+            ), f"{in_channels=}, {self.in_channels=}; model configuration does not match input image."
             img = img.to(self.device)
             # img = pt_ops.crop_to_multiple(img, 16)
             # if rgb_xyz_matrix is not None:
@@ -522,7 +523,9 @@ class ImageToImageNNTraining(ImageToImageNN):
             old_lr = self.optimizer.param_groups[0]["lr"]
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] *= self.lr_multiplier
-            self.optimizer.param_groups[0]["lr"] *= (
+            self.optimizer.param_groups[0][
+                "lr"
+            ] *= (
                 self.lr_multiplier
             )  # FIXME/BUG rm this duplicate multiplication. Currently lr_multiplier is squared as a result
             # there is an assertion that len=1 in init
@@ -837,9 +840,7 @@ class ImageToImageNNTraining(ImageToImageNN):
                     continue
                 individual_results[image_key] = {}
                 x_crops = batch["x_crops"].to(self.device)
-                y_crops = batch[
-                    "y_crops"
-                ].to(
+                y_crops = batch["y_crops"].to(
                     self.device, x_crops.dtype
                 )  # 2023-08-30: fixed bug w/ match_gain == output: y_crops was always * batch["gain"]
                 mask_crops = batch["mask_crops"].to(self.device)
@@ -1083,36 +1084,65 @@ class ImageToImageNNTraining(ImageToImageNN):
             raise ValueError(f"{self.in_channels=}")
 
         if not self.test_only:
-            cleanclean_dataset = cleanclean_dataset_class(
-                content_fpaths=self.clean_dataset_yamlfpaths,
-                num_crops=self.num_crops_per_image,
-                crop_size=self.crop_size,
-                toy_dataset="toy_dataset" in self.debug_options,
-                **class_specific_arguments,
-                # test_reserve=self.test_reserve,
-            )
-            cleannoisy_dataset = cleannoisy_dataset_class(
-                content_fpaths=self.noise_dataset_yamlfpaths,
-                num_crops=self.num_crops_per_image,
-                crop_size=self.crop_size,
-                test_reserve=self.test_reserve,
-                test="learn_validation" in self.debug_options,
-                bayer_only=self.bayer_only,
-                toy_dataset="toy_dataset" in self.debug_options,
-                data_pairing=self.data_pairing,
-                match_gain=self.match_gain == "input",
-                **class_specific_arguments,
-            )
-            # ugly hack to avoid loading a dataset with 0-batch-size and ensuring two datasets for compat
+            # ensure at least one non-zero batch size
             assert self.batch_size_clean > 0 or self.batch_size_noisy > 0
+
+            # If clean batch size is zero, avoid instantiating the clean dataset class
+            # (so a valid --clean_dataset_yamlfpaths is not required). Instantiate
+            # the noisy dataset first and reuse it for the clean dataloader.
             if self.batch_size_clean == 0:
+                cleannoisy_dataset = cleannoisy_dataset_class(
+                    content_fpaths=self.noise_dataset_yamlfpaths,
+                    num_crops=self.num_crops_per_image,
+                    crop_size=self.crop_size,
+                    test_reserve=self.test_reserve,
+                    test="learn_validation" in self.debug_options,
+                    bayer_only=self.bayer_only,
+                    toy_dataset="toy_dataset" in self.debug_options,
+                    data_pairing=self.data_pairing,
+                    match_gain=self.match_gain == "input",
+                    **class_specific_arguments,
+                )
                 cleanclean_dataset = cleannoisy_dataset
+                # adjust batch sizes to keep totals the same and avoid zero-size loader
                 self.batch_size_clean = 1
                 self.batch_size_noisy = self.batch_size_noisy - 1
+
+            # Symmetric case: noisy batch size is zero -> instantiate only clean dataset
             elif self.batch_size_noisy == 0:
+                cleanclean_dataset = cleanclean_dataset_class(
+                    content_fpaths=self.clean_dataset_yamlfpaths,
+                    num_crops=self.num_crops_per_image,
+                    crop_size=self.crop_size,
+                    toy_dataset="toy_dataset" in self.debug_options,
+                    **class_specific_arguments,
+                )
                 cleannoisy_dataset = cleanclean_dataset
                 self.batch_size_noisy = 1
                 self.batch_size_clean = self.batch_size_clean - 1
+
+            else:
+                # both batch sizes > 0: instantiate both normally
+                cleanclean_dataset = cleanclean_dataset_class(
+                    content_fpaths=self.clean_dataset_yamlfpaths,
+                    num_crops=self.num_crops_per_image,
+                    crop_size=self.crop_size,
+                    toy_dataset="toy_dataset" in self.debug_options,
+                    **class_specific_arguments,
+                    # test_reserve=self.test_reserve,
+                )
+                cleannoisy_dataset = cleannoisy_dataset_class(
+                    content_fpaths=self.noise_dataset_yamlfpaths,
+                    num_crops=self.num_crops_per_image,
+                    crop_size=self.crop_size,
+                    test_reserve=self.test_reserve,
+                    test="learn_validation" in self.debug_options,
+                    bayer_only=self.bayer_only,
+                    toy_dataset="toy_dataset" in self.debug_options,
+                    data_pairing=self.data_pairing,
+                    match_gain=self.match_gain == "input",
+                    **class_specific_arguments,
+                )
 
             if "1thread" in self.debug_options:
                 num_threads_cc = 0
@@ -1241,9 +1271,9 @@ class ImageToImageNNTraining(ImageToImageNN):
             self.step_n = self.init_step
         logging.info(f"test_and_validate_model: {self.step_n=}")
         if self.step_n not in self.json_saver.results:
-            self.json_saver.results[
-                self.step_n
-            ] = {}  # this shouldn't happen but sometimes the results file is not properly synchronized and we are stuck with an old version I guess
+            self.json_saver.results[self.step_n] = (
+                {}
+            )  # this shouldn't happen but sometimes the results file is not properly synchronized and we are stuck with an old version I guess
         if (
             "val_" + self.loss + self._get_lossn_extension()
             not in self.json_saver.results[self.step_n]
@@ -1440,7 +1470,9 @@ class PRGBImageToImageNNTraining(ImageToImageNNTraining):
         else:
             reconstructed_image = reconstructed_image
 
-        if output_train_images:  # FIXME (current copy of bayer version. ideally should be a function but oh well)
+        if (
+            output_train_images
+        ):  # FIXME (current copy of bayer version. ideally should be a function but oh well)
             # should output reconstructed_image, batch["y_crops"], batch["x_crops"]
             # print(
             #    f"training {batch['y_crops'].mean((0,2,3))=}, {model_output.mean((0,2,3))=}"
