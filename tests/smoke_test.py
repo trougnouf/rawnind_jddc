@@ -93,8 +93,6 @@ def setup_logging():
     print(f"Logging to: {LOG_FILE}")
 
 
-
-
 async def scanner_with_stats(dataset_root, recv, new_file_send, missing_send, viz):
     """Scanner stage with metrics tracking."""
     async with recv, new_file_send:
@@ -261,7 +259,6 @@ async def test_dataloader_integration(dataset_root, viz):
 
     from rawnind.libs.rawds import CleanProfiledRGBNoisyBayerImageCropsDataset
     from rawnind.models.raw_denoiser import UtNet2
-    import torch
     import torch.nn as nn
     import torch.utils.data
 
@@ -362,7 +359,7 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
     Run the pipeline smoke test.
 
     Args:
-        max_scenes: Maximum number of complete scenes to process
+        max_scenes:Maximum scenes allowed 'in flight' through the pipeline during processing.
         timeout_seconds: Maximum time to run in seconds
         debug: If True, print debug information
         download_concurrency: Maximum number of concurrent downloads
@@ -400,14 +397,13 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
         max_workers=DEFAULT_MAX_WORKERS
     ).attach_visualizer(viz)
 
-    # AsyncPipelineBridge replaces YAMLArtifactWriter - no disk writes, in-memory only
     bridge = AsyncPipelineBridge(
         max_scenes=max_scenes,
         backwards_compat_mode=True,
     )
 
-    # CRITICAL: Use context managers to ensure ProcessPoolExecutor cleanup
-    # CropProducerStage uses ProcessPoolExecutor which must be shutdown properly
+
+    #TODO Seperation of concerns: the following needs to be encapsulated and moved into PipelineBuilder
     async with aligner, cropper:
         async with trio.open_nursery() as nursery:
             if timeout_seconds is not None:
@@ -499,8 +495,17 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
                     await trio.sleep(0.1)
                     n = len(bridge)
                     if n > last:
+                        logging.info(f"Bridge progress: {n} scenes collected (was {last})")
                         await viz.update(complete=(n - last))
                         last = n
+                    elif n == 0 and viz.counters.get('cropped', 0) > 0:
+                        # Debug: cropping happened but bridge is empty
+                        logging.warning(f"Bridge empty despite {viz.counters['cropped']} scenes cropped. Bridge state: {bridge.state.value}")
+
+                    #TODO: This is not how this should work/ be triggered. I think the key issue is that we need to
+                    # have  a `BatchAccumulator the the next stage should _pull_ from - no push/trigger but natural
+                    # demand pressure. The training loop needs to be able to trigger for a single batch but I think
+                    # we are basically there.
 
                     # Trigger dataloader test as soon as we have at least 2 scenes (batch_size=2)
                     if n >= 2 and not yaml_tested:
@@ -560,7 +565,11 @@ if __name__ == "__main__":
         description="Pipeline smoke test with live visualization"
     )
     parser.add_argument(
-        "--timeout", type=float, default=None,
+        "--max-scenes", type=int, default=None,
+        help="Maximum scenes allowed 'in flight' through the pipeline during processing."
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=None,
         help="Maximum time to run in seconds"
     )
     parser.add_argument(
