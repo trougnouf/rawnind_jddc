@@ -36,6 +36,7 @@ from enum import Enum
 
 import trio
 import yaml
+import numpy as np
 
 from .SceneInfo import SceneInfo
 
@@ -56,7 +57,24 @@ class BridgeState(Enum):
 
 @dataclass
 class BridgeStats:
-    """Statistics tracking for production monitoring."""
+    """Represents statistical metrics collected during a bridge operation.
+
+    The BridgeStats dataclass aggregates data related to the collection of scene
+    information, cache performance, timing, and any issues that arose. It provides
+    helper methods to compute derived values such as the duration of the
+    collection period and the average scenes collected per second.
+
+    Attributes:
+        scenes_collected (int): Total number of scenes successfully collected.
+        scenes_filtered (int): Number of scenes discarded during filtering.
+        cache_hits (int): Number of times a requested scene was found in cache.
+        cache_misses (int): Number of times a requested scene was not found in
+            cache.
+        collection_start_time (Optional[float]): Epoch time when collection started.
+        collection_end_time (Optional[float]): Epoch time when collection finished.
+        errors_encountered (List[str]): Descriptions of errors that occurred.
+        warnings (List[str]): Descriptions of warnings that were logged.
+    """
     scenes_collected: int = 0
     scenes_filtered: int = 0
     cache_hits: int = 0
@@ -81,27 +99,49 @@ class BridgeStats:
 
 
 class AsyncPipelineBridge:
-    """
-    Bridge between async pipeline and synchronous dataloaders.
+    """AsyncPipelineBridge facilitates asynchronous collection of scene data from an external
+    pipeline while providing a rich set of configuration options for caching, monitoring,
+    retries, and mock‑mode testing.
 
-    Features:
-        - Thread-safe scene access with read-write locking
-        - Error handling and recovery
-        - Performance monitoring and metrics collection
-        - Cache integration with fallback mechanisms
-        - Input validation and safety checks
-        - Graceful degradation on failures
-        - Health check capabilities
+    The bridge can operate in two distinct modes: a production mode that consumes
+    scenes from a Trio channel with comprehensive safeguards, and a mock mode that
+    synthesises scene data for testing without a real external source.  The class
+    exposes several knobs that allow callers to tune behaviour for thread safety,
+    retry logic, timeout handling, and data validation.  When monitoring is enabled,
+    the bridge records statistics about collection start and end times as well as
+    any errors encountered.
 
     Attributes:
-        cache: Optional cache manager for persistence
-        max_scenes: Maximum number of scenes to collect
-        enable_caching: Whether to use caching
-        backwards_compat_mode: Enable legacy API compatibility
-        filter_test_reserve: Filter out test reserve scenes
-        cfa_filter: Filter by CFA type (e.g., "bayer", x-trans)
-        stats: Runtime statistics and monitoring data
-        state: Current bridge state
+        cache (Optional[Any]): Cache manager instance used for persisting scenes.
+        max_scenes (Optional[int]): Maximum number of scenes to collect.  ``None``
+            indicates unlimited collection.
+        enable_caching (bool): If ``True``, the bridge will interact with the
+            cache manager.  When ``False`` caching is disabled.
+        backwards_compat_mode (bool): Enables support for legacy API methods.
+        filter_test_reserve (bool): When ``True``, test reserve scenes are filtered
+            out of the collection.
+        cfa_filter (Optional[str]): Optional filter by CFA type, e.g. ``"bayer"``,
+            ``"x-trans"``, or ``"quad_bayer"``.
+        enable_monitoring (bool): If ``True``, the bridge gathers statistics on
+            collection progress and errors.
+        thread_safe (bool): If ``True``, the bridge acquires a re‑entrant lock
+            for all public operations, ensuring safe use from multiple threads.
+        validate_scenes (bool): When ``True``, scene data integrity is validated
+            during collection.
+        retry_on_error (bool): Enables automatic retry logic on transient errors.
+        health_check_interval (Optional[float]): Interval in seconds for
+            periodic health checks of the bridge.
+        stats (Optional[BridgeStats]): Statistics collector instance, present
+            when monitoring is enabled.
+        state (BridgeState): Current operational state of the bridge.
+        index_url (Optional[str]): URL of the scene index, used primarily for
+            mock mode.
+        cache_dir (Optional[Any]): Directory path for local cache storage.
+        enable_metadata_enrichment (bool): Enables enrichment of scene metadata
+            during collection.
+        timeout (float): Default timeout for scene collection in seconds.
+        mock_mode (bool): When ``True`` the bridge operates in mock mode,
+            generating synthetic scene data instead of consuming from a channel.
     """
 
     # Class-level configuration
@@ -354,16 +394,21 @@ class AsyncPipelineBridge:
 
         async with recv_channel:
             async for item in recv_channel:
+                logger.debug(f"Bridge received item: {item.scene_name if hasattr(item, 'scene_name') else type(item)}")
+
                 # Skip collection after limit (but drain channel)
                 if not should_collect:
+                    logger.debug(f"Skipping scene (limit reached), draining channel")
                     continue
 
                 # Validate and process item
                 try:
                     if not await self._process_scene(item, collected):
+                        logger.warning(f"Scene processing returned False for {item.scene_name if hasattr(item, 'scene_name') else type(item)}")
                         continue
 
                     collected += 1
+                    logger.info(f"Bridge collected scene {collected}: {item.scene_name if hasattr(item, 'scene_name') else '?'} (total: {len(self._scenes)})")
 
                     # Progress notification
                     if progress_callback:
@@ -746,6 +791,25 @@ class AsyncPipelineBridge:
             logger.error(f"Failed to write YAML cache: {e}")
             raise IOError(f"Failed to write YAML file {cache_file}: {e}") from e
 
+    def _numpy_to_list(self, obj: Any) -> Any:
+        """
+        Recursively convert numpy arrays to lists for YAML serialization.
+
+        Args:
+            obj: Object that may contain numpy arrays
+
+        Returns:
+            Object with all numpy arrays converted to lists
+        """
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {k: self._numpy_to_list(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [self._numpy_to_list(item) for item in obj]
+        else:
+            return obj
+
     def _scene_to_legacy_descriptor(self, scene: SceneInfo, dataset_root: Path) -> Dict[str, Any]:
         """
         Convert SceneInfo to legacy YAML descriptor format.
@@ -789,8 +853,8 @@ class AsyncPipelineBridge:
             "gt_bayer_fpath": str(gt_img.local_path) if gt_img.local_path else "",
             "f_linrec2020_fpath": str(noisy_img.local_path) if noisy_img.local_path else "",
 
-            # Alignment metadata
-            "best_alignment": metadata.get("alignment", [0, 0]),
+            # Alignment metadata - convert numpy arrays to lists
+            "best_alignment": self._numpy_to_list(metadata.get("alignment", [0, 0])),
             "best_alignment_loss": metadata.get("alignment_loss", 0.0),
 
             # Gain correction
@@ -801,18 +865,18 @@ class AsyncPipelineBridge:
             "mask_mean": metadata.get("mask_mean", 1.0),
             "mask_fpath": metadata.get("mask_fpath", ""),
 
-            # Color space
-            "rgb_xyz_matrix": metadata.get("rgb_xyz_matrix", [
+            # Color space - convert numpy arrays to lists
+            "rgb_xyz_matrix": self._numpy_to_list(metadata.get("rgb_xyz_matrix", [
                 [1, 0, 0],
                 [0, 1, 0],
                 [0, 0, 1],
-            ]),
+            ])),
 
             # Overexposure threshold
             "overexposure_lb": metadata.get("overexposure_lb", 1.0),
 
-            # Crops list
-            "crops": metadata.get("crops", []),
+            # Crops list - recursively convert any numpy arrays in crop dicts
+            "crops": self._numpy_to_list(metadata.get("crops", [])),
 
             # Quality metrics
             "rgb_msssim_score": metadata.get("msssim_score", 1.0),
