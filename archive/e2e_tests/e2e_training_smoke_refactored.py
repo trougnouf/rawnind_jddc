@@ -15,7 +15,6 @@ from typing import Dict, List, Optional, Tuple, Any
 import yaml
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import trio
 import numpy as np

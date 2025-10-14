@@ -1,7 +1,16 @@
 """
-Adapters for integrating AsyncPipelineBridge with PyTorch DataLoaders.
+Dataset adapter framework for raw image processing pipelines.
 
-Refactored with proper abstractions and SOLID principles.
+Provides abstractions for connecting an AsyncPipelineBridge to PyTorch datasets,
+backward‑compatible legacy adapters, and a factory to instantiate the
+appropriate adapter type.
+
+Exported classes:
+    DatasetAdapter
+    PipelineDataLoaderAdapter
+    LegacyAdapter
+    BackwardsCompatAdapter
+    AdapterFactory
 """
 
 from abc import ABC, abstractmethod
@@ -10,7 +19,7 @@ from typing import Optional, Any, Dict, List, Tuple
 import torch.utils.data as data
 
 from rawnind.dataset.SceneInfo import SceneInfo
-from rawnind.dataset.async_to_sync_bridge import AsyncPipelineBridge
+from rawnind.dataset import AsyncPipelineBridge
 from rawnind.dataset.constants import (
     AdapterConfig,
     MOCK_CLEAN_IMAGE_ID,
@@ -21,9 +30,13 @@ from rawnind.dataset.constants import (
 
 class DatasetAdapter(ABC, data.Dataset):
     """
-    Abstract base class for dataset adapters.
+    A base adapter class for dataset objects.
 
-    Provides common interface for different adapter implementations.
+    This abstract base class extends the standard Dataset interface and
+    provides a template for adapters that convert raw data into a form
+    suitable for model consumption. Concrete implementations must
+    implement the dataset protocol methods as well as a configuration
+    retrieval method.
     """
 
     @abstractmethod
@@ -199,6 +212,7 @@ class BackwardsCompatAdapter(LegacyAdapter, DatasetAdapter):
 
     def random_crops(self, *args, **kwargs) -> None:
         """Legacy random crops method (placeholder for compatibility)."""
+        #todo
         pass
 
     def __len__(self) -> int:
@@ -235,7 +249,27 @@ class BackwardsCompatAdapter(LegacyAdapter, DatasetAdapter):
 
 
 class AdapterFactory:
-    """Factory for creating appropriate dataset adapters."""
+    """Adapter factory for creating dataset adapters.
+
+    The factory encapsulates the logic required to instantiate the appropriate
+    adapter class based on a string identifier.  It accepts an optional
+    `AsyncPipelineBridge` and additional keyword arguments that are passed
+    directly to the adapter constructor.
+
+    Adapters supported:
+
+    * ``pipeline`` – returns a ``PipelineDataLoaderAdapter`` configured
+      with an ``AdapterConfig`` instance.
+    * ``legacy`` and ``compat`` – both map to
+      ``BackwardsCompatAdapter`` and accept the same keyword arguments.
+
+    If an unknown type is supplied, the factory raises a ``ValueError`` with
+    a clear message indicating the valid options.
+
+    Attributes
+    ----------
+    None
+    """
 
     @staticmethod
     def create(

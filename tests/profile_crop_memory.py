@@ -14,10 +14,9 @@ import os
 
 import trio
 
-from rawnind.dataset import DataIngestor, SceneIndexer, AsyncAligner
+from rawnind.dataset import DataIngestor, AsyncAligner
 from rawnind.dataset.Aligner import MetadataArtificer
 from rawnind.dataset.crop_producer_stage import CropProducerStage
-from rawnind.dataset.AsyncPipelineBridge import AsyncPipelineBridge
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

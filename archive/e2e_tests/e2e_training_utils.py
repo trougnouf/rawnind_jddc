@@ -6,7 +6,7 @@ including configuration, dataset wrapper, and validation utilities.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, Optional, Any, Tuple
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset

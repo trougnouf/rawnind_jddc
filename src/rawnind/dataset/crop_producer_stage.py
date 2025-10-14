@@ -31,8 +31,7 @@ import logging
 import os
 import numpy as np
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple
-import trio
+from typing import Optional, Dict, Any, List
 
 from .PostDownloadWorker import PostDownloadWorker
 from .SceneInfo import SceneInfo, ImageInfo
@@ -326,6 +325,11 @@ class CropProducerStage(PostDownloadWorker):
             # Images are already loaded from ImageInfo cache (tensor-native architecture)
             # No disk I/O needed here - data comes from memory
 
+            # DEBUG: Log input shapes
+            logger.info(f"SHAPE DEBUG _extract_and_save_crops ENTRY: scene={scene_name}, crop_size={crop_size}")
+            logger.info(f"SHAPE DEBUG: gt_data.shape={gt_data.shape}, gt_data.dtype={gt_data.dtype}")
+            logger.info(f"SHAPE DEBUG: noisy_data.shape={noisy_data.shape}, noisy_data.dtype={noisy_data.dtype}")
+
             # Snap alignment offsets to CFA block boundaries
             y_offset, x_offset = alignment
             if cfa_type == "bayer":
@@ -338,14 +342,15 @@ class CropProducerStage(PostDownloadWorker):
             # Apply alignment
             if y_offset != 0 or x_offset != 0:
                 # Crop to aligned region
-                h, w = gt_data.shape[:2]
+                h, w = gt_data.shape[-2:]  # Handle both 2D (H,W) and 3D (C,H,W)
                 y_start = max(0, y_offset)
                 y_end = min(h, h + y_offset)
                 x_start = max(0, x_offset)
                 x_end = min(w, w + x_offset)
 
-                gt_data = gt_data[y_start:y_end, x_start:x_end]
+                gt_data = gt_data[..., y_start:y_end, x_start:x_end]
                 noisy_data = noisy_data[
+                    ...,
                     y_start - y_offset:y_end - y_offset,
                     x_start - x_offset:x_end - x_offset
                 ]
@@ -508,8 +513,8 @@ class CropProducerStage(PostDownloadWorker):
                 y = candidates_y[idx]
                 x = candidates_x[idx]
 
-                gt_crop = gt_data[y:y + crop_size, x:x + crop_size]
-                noisy_crop = noisy_data[y:y + crop_size, x:x + crop_size]
+                gt_crop = gt_data[..., y:y + crop_size, x:x + crop_size]
+                noisy_crop = noisy_data[..., y:y + crop_size, x:x + crop_size]
 
                 # Save crops
                 crop_id = f"{scene_name}_{i:03d}_{gt_sha1[:8]}_{noisy_sha1[:8]}"
@@ -526,17 +531,23 @@ class CropProducerStage(PostDownloadWorker):
                         from rawnind.libs import raw
                         import torch
 
+                        # DEBUG: Trace shapes
+                        logger.info(f"SHAPE DEBUG: gt_data.shape={gt_data.shape}, gt_crop.shape={gt_crop.shape}, crop_size={crop_size}")
+
                         # Demosaic to camera RGB using OIIO (supports both bayer and X-Trans)
                         # demosaic() infers pattern type from metadata (is_bayer flag)
-                        gt_camrgb = raw.demosaic(gt_crop[np.newaxis, :, :], metadata)
-                        noisy_camrgb = raw.demosaic(noisy_crop[np.newaxis, :, :], metadata)
+                        # gt_crop already has shape (1, H, W) from ellipsis indexing above
+                        gt_camrgb = raw.demosaic(gt_crop, metadata)
+                        noisy_camrgb = raw.demosaic(noisy_crop, metadata)
 
                         # Convert to lin_rec2020
                         rgb_xyz_matrix = metadata.get("rgb_xyz_matrix")
                         if rgb_xyz_matrix is None:
                             raise ValueError("rgb_xyz_matrix required for PRGB crops")
 
-                        rgb_xyz_tensor = torch.tensor([rgb_xyz_matrix], dtype=torch.float32)
+                        # Convert to numpy first, then to tensor (avoids nested list warning)
+                        rgb_xyz_array = np.asarray(rgb_xyz_matrix, dtype=np.float32)
+                        rgb_xyz_tensor = torch.from_numpy(rgb_xyz_array).unsqueeze(0)  # Add batch dim
                         gt_camrgb_tensor = torch.from_numpy(gt_camrgb).unsqueeze(0).float()
                         noisy_camrgb_tensor = torch.from_numpy(noisy_camrgb).unsqueeze(0).float()
 

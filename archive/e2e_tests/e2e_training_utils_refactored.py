@@ -7,7 +7,7 @@ with improved code quality following SOLID principles.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple, Protocol
+from typing import Dict, Optional, Any, Tuple, Protocol
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

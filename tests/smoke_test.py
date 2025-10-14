@@ -12,9 +12,7 @@ import psutil
 
 from rawnind.dataset import (
     DataIngestor,
-    FileScanner,
     Downloader,
-    Verifier,
     SceneIndexer,
     AsyncAligner,
 )
@@ -26,7 +24,6 @@ from rawnind.dataset.channel_utils import (
     create_channel_dict,
     merge_channels,
     limit_producer,
-    consume_until,
 )
 
 # Constants
@@ -298,21 +295,21 @@ async def test_dataloader_integration(dataset_root, viz):
             num_workers=0  # Single-threaded for smoke test
         )
 
-        print(f"✓ DataLoader created")
+        print("✓ DataLoader created")
         await viz.update(dataloader_created=1)
 
         # Try to load one batch
         batch = next(iter(dataloader))
         await viz.update(dataloader_batches=1)
 
-        print(f"✓ Loaded batch:")
+        print("✓ Loaded batch:")
         print(f"  - x_crops shape: {batch['x_crops'].shape}")
         print(f"  - y_crops shape: {batch['y_crops'].shape}")
         print(f"  - mask_crops shape: {batch['mask_crops'].shape}")
         print(f"  - rgb_xyz_matrix shape: {batch['rgb_xyz_matrix'].shape}")
 
         # Create model and run one training step
-        print(f"\n✓ Creating model...")
+        print("\n✓ Creating model...")
         model = UtNet2(in_channels=4, funit=16)  # Small model for smoke test
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
         loss_fn = nn.MSELoss()
@@ -320,7 +317,7 @@ async def test_dataloader_integration(dataset_root, viz):
         print(f"✓ Model created with {sum(p.numel() for p in model.parameters()):,} parameters")
 
         # Run one training step
-        print(f"✓ Running one training step...")
+        print("✓ Running one training step...")
         model.train()
 
         input_tensor = batch['y_crops']  # Noisy bayer crops
@@ -346,7 +343,7 @@ async def test_dataloader_integration(dataset_root, viz):
         loss.backward()
         optimizer.step()
 
-        print(f"✓ Training step completed:")
+        print("✓ Training step completed:")
         print(f"  - Loss: {loss.item():.4f}")
         print(f"  - Output shape: {output.shape}")
 
@@ -511,7 +508,7 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
                         yaml_path = dataset_root / "pipeline_output.yaml"
                         print(f"\nWriting {n} scene(s) to {yaml_path} for early dataloader test...")
                         bridge.write_yaml_compatible_cache(yaml_path, dataset_root)
-                        print(f"✓ YAML written, testing dataloader...")
+                        print("✓ YAML written, testing dataloader...")
                         nursery.start_soon(test_dataloader_integration, dataset_root, viz)
 
                     if max_scenes and n >= max_scenes:
@@ -529,7 +526,7 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
         yaml_path = dataset_root / "pipeline_output.yaml"
         print(f"\nWriting {len(bridge)} scenes to {yaml_path}...")
         bridge.write_yaml_compatible_cache(yaml_path, dataset_root)
-        print(f"✓ YAML written successfully")
+        print("✓ YAML written successfully")
 
     # Test dataloader integration
     await test_dataloader_integration(dataset_root, viz)

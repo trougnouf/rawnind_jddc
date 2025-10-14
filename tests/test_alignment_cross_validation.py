@@ -8,7 +8,6 @@ to ensure consistency across multiple image pairs.
 import pytest
 import numpy as np
 from pathlib import Path
-import glob
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -79,7 +78,6 @@ def demosaic_simple(raw_data, pattern):
     Simple demosaicing for RGB alignment comparison.
     Uses bilinear interpolation on each channel.
     """
-    from scipy.ndimage import zoom
     
     # Remove batch dimension
     if raw_data.ndim == 3 and raw_data.shape[0] == 1:
@@ -154,7 +152,7 @@ def test_cfa_alignment_produces_valid_shifts(pair_idx):
         assert shift_cfa[1] % 2 == 0, (
             f"bayer X shift {shift_cfa[1]} is not even (violates 2x2 blocks)"
         )
-        logger.info(f"  ✓ bayer shifts are even (block-aligned)")
+        logger.info("  ✓ bayer shifts are even (block-aligned)")
     elif pattern_shape == (6, 6):
         # X-Trans - shifts must be multiples of 3
         assert shift_cfa[0] % 3 == 0, (
@@ -163,14 +161,14 @@ def test_cfa_alignment_produces_valid_shifts(pair_idx):
         assert shift_cfa[1] % 3 == 0, (
             f"x-trans X shift {shift_cfa[1]} is not multiple of 3 (violates 3x3 blocks)"
         )
-        logger.info(f"  ✓ x-trans shifts are multiples of 3 (block-aligned)")
+        logger.info("  ✓ x-trans shifts are multiples of 3 (block-aligned)")
     
     # Verify loss is reasonable (not catastrophically bad)
     # Note: RAW values are in sensor units (0-16k range), so loss will be much higher than 0-1 normalized
     # A loss < 100 is generally good, > 200 indicates possible alignment failure
     assert loss_cfa < 200, f"Loss too high: {loss_cfa} (possible alignment failure)"
     
-    logger.info(f"  ✓ CFA alignment successful")
+    logger.info("  ✓ CFA alignment successful")
 
 
 if __name__ == "__main__":
@@ -194,4 +192,4 @@ if __name__ == "__main__":
             raise
     
     print(f"\n✓ All {min(5, len(pairs))} pairs passed CFA alignment validation")
-    print(f"Run full test with: pytest test_alignment_cross_validation.py -v")
+    print("Run full test with: pytest test_alignment_cross_validation.py -v")

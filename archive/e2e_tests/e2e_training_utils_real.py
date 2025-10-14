@@ -7,14 +7,13 @@ the async pipeline.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, Optional, Any, Tuple
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 import numpy as np
 import logging
 import sys
-import os
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parents[2]))

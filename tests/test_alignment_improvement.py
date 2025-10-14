@@ -156,8 +156,8 @@ def test_bruteforce_rgb_improves_alignment(random_scenes_with_synthetic_shifts):
         pytest.skip("No bayer scenes available for bruteforce RGB test")
 
     print(f"\n{'=' * 80}")
-    print(f"Testing Bruteforce-RGB Alignment Improvement")
-    print(f"(Testing until one bayer scene passes)")
+    print("Testing Bruteforce-RGB Alignment Improvement")
+    print("(Testing until one bayer scene passes)")
     print(f"{'=' * 80}\n")
 
     failures = []
@@ -226,9 +226,9 @@ def test_bruteforce_rgb_improves_alignment(random_scenes_with_synthetic_shifts):
 
     print(f"{'=' * 80}")
     if bayer_passed:
-        print(f"PASSED: Successfully validated at least one bayer scene")
+        print("PASSED: Successfully validated at least one bayer scene")
     else:
-        print(f"FAILED: No bayer scenes passed alignment improvement test")
+        print("FAILED: No bayer scenes passed alignment improvement test")
 
     if failures:
         print("\nFailures (alignment did not improve error):")
