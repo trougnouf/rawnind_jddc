@@ -206,9 +206,9 @@ def shift_images(
             anchor_img_out = anchor_img_out[..., 1:]
             target_img_out = target_img_out[..., 1:]
     # try:
-    assert shape_is_compatible(anchor_img_out.shape, target_img_out.shape), (
-        f"{anchor_img_out.shape=}, {target_img_out.shape=}"
-    )
+    assert shape_is_compatible(
+        anchor_img_out.shape, target_img_out.shape
+    ), f"{anchor_img_out.shape=}, {target_img_out.shape=}"
     # except AssertionError as e:
     #    print(e)
     #    breakpoint()
@@ -382,9 +382,9 @@ def find_best_alignment(
 ) -> Union[tuple, tuple]:  # python bw compat 2022-11-10
     """Find best alignment (minimal loss) between anchor_img and target_img."""
     target_img = match_gain(anchor_img, target_img)
-    assert np.isclose(anchor_img.mean(), target_img.mean(), atol=1e-07), (
-        f"{anchor_img.mean()=}, {target_img.mean()=}"
-    )
+    assert np.isclose(
+        anchor_img.mean(), target_img.mean(), atol=1e-07
+    ), f"{anchor_img.mean()=}, {target_img.mean()=}"
     # current_best_shift: tuple[int, int] = (0, 0)  # python bw compat 2022-11-10
     # shifts_losses: dict[tuple[int, int], float] = {# python bw compat 2022-11-10
     current_best_shift: tuple = (0, 0)  # python bw compat 2022-11-10
@@ -444,9 +444,12 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     """
 
     def make_mask_name(image_set: str, gt_file_endpath: str, f_endpath: str) -> str:
-        return f"{kwargs['image_set']}-{kwargs['gt_file_endpath']}-{kwargs['f_endpath']}.png".replace(
-            os.sep, "_"
-        )
+        ext = ".png"
+        base = f"{image_set}-{gt_file_endpath}-{f_endpath}".replace(os.sep, "_")
+        max_base_len = 255 - len(ext)
+        if len(base) > max_base_len:
+            base = base[:max_base_len]
+        return base + ext
 
     assert set(("image_set", "gt_file_endpath", "f_endpath")).issubset(kwargs.keys())
     gt_fpath = os.path.join(
@@ -486,9 +489,9 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
     loss_mask = shift_mask(loss_mask, best_alignment)
     # add content anomalies between two images to the loss mask
     # try:
-    assert gt_img_aligned.shape == target_img_aligned.shape, (
-        f"{gt_img_aligned.shape=} is not equal to {target_img_aligned.shape} ({best_alignemnt=}, {loss_mask.shape=}, {kwargs=})"
-    )
+    assert (
+        gt_img_aligned.shape == target_img_aligned.shape
+    ), f"{gt_img_aligned.shape=} is not equal to {target_img_aligned.shape} ({best_alignment=}, {loss_mask.shape=}, {kwargs=})"
 
     loss_mask = make_loss_mask(gt_img_aligned, target_img_aligned) * loss_mask
     # except ValueError as e:

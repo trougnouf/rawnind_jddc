@@ -43,13 +43,13 @@ def fpath_to_tensor(
         tensor = np_imgops.img_fpath_to_np_flt(img_fpath, incl_metadata=incl_metadata)
     except ValueError as e:
         try:
-            logging.error(f"fpath_to_tensor error {e} with {img_fpath=}. Trying again.")
+            logging.error(f"fpath_to_tensor error {e} with {img_fpath=}.")
             tensor = np_imgops.img_fpath_to_np_flt(
                 img_fpath, incl_metadata=incl_metadata
             )
         except ValueError as e:
             logging.error(
-                f"fpath_to_tensor failed again ({e}). Trying one last time after 5 seconds."
+                f"fpath_to_tensor failed again ({e}). Trying one last time after 5 seconds. (Disable this behavior with disable_retry_wait=True)"
             )
             if not disable_retry_wait:
                 time.sleep(5)
