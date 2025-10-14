@@ -178,8 +178,6 @@ class CropProducerStageAsync:
         metadata: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Extract and save crops (async-native with fine-grained parallelism)."""
-        from rawnind.libs import rawproc
-        from PIL import Image
 
         MAX_MASKED = 0.5
 
@@ -198,14 +196,15 @@ class CropProducerStageAsync:
 
         # Apply alignment
         if y_offset != 0 or x_offset != 0:
-            h, w = gt_data.shape[:2]
+            h, w = gt_data.shape[-2:]  # Handle both 2D (H,W) and 3D (C,H,W)
             y_start = max(0, y_offset)
             y_end = min(h, h + y_offset)
             x_start = max(0, x_offset)
             x_end = min(w, w + x_offset)
 
-            gt_data = gt_data[y_start:y_end, x_start:x_end]
+            gt_data = gt_data[..., y_start:y_end, x_start:x_end]
             noisy_data = noisy_data[
+                ...,
                 y_start - y_offset:y_end - y_offset,
                 x_start - x_offset:x_end - x_offset
             ]
@@ -291,17 +290,22 @@ class CropProducerStageAsync:
                     noisy_data[1::2, 1::2],
                 ])
 
-                # Compute MS-SSIM mask in thread (this is the CPU bottleneck)
-                loss_mask_rggb = await trio.to_thread.run_sync(
-                    rawproc.make_loss_mask_msssim_bayer,
+                # Compute MS-SSIM mask with async window-level concurrency
+                # This uses Trio's scheduler to parallelize ~9600 window tasks
+                # Memory efficient (~400MB overhead vs 1.8GB for sequential PyTorch)
+                from rawnind.libs.msssim_async import make_loss_mask_msssim_bayer_async
+                loss_mask_rggb = await make_loss_mask_msssim_bayer_async(
                     gt_rggb,
-                    noisy_rggb
+                    noisy_rggb,
+                    window_size=192,  # MS-SSIM requires >=176 for 5 scales
+                    stride=96          # 50% overlap for robustness
                 )
 
                 # Upsample to full resolution
                 loss_mask = np.repeat(np.repeat(loss_mask_rggb, 2, axis=0), 2, axis=1)
 
                 # Overexposure mask
+                #TODO needs proper async review
                 overexposure_mask = await trio.to_thread.run_sync(
                     rawproc.make_overexposure_mask_bayer,
                     gt_data,
@@ -455,8 +459,8 @@ class CropProducerStageAsync:
         crop_metadata: List[Dict[str, Any]]
     ):
         """Save one crop (async I/O)."""
-        gt_crop = gt_data[y:y + self.crop_size, x:x + self.crop_size]
-        noisy_crop = noisy_data[y:y + self.crop_size, x:x + self.crop_size]
+        gt_crop = gt_data[..., y:y + self.crop_size, x:x + self.crop_size]
+        noisy_crop = noisy_data[..., y:y + self.crop_size, x:x + self.crop_size]
 
         for crop_type in self.crop_types:
             crop_dir = self.output_dir / crop_type / scene_name
@@ -511,14 +515,15 @@ class CropProducerStageAsync:
         import torch
 
         # Demosaic in thread (CPU-bound)
+        # gt_crop already has shape (1, H, W) from ellipsis indexing
         gt_camrgb = await trio.to_thread.run_sync(
             raw.demosaic,
-            gt_crop[np.newaxis, :, :],
+            gt_crop,
             metadata
         )
         noisy_camrgb = await trio.to_thread.run_sync(
             raw.demosaic,
-            noisy_crop[np.newaxis, :, :],
+            noisy_crop,
             metadata
         )
 
@@ -527,7 +532,9 @@ class CropProducerStageAsync:
         if rgb_xyz_matrix is None:
             raise ValueError("rgb_xyz_matrix required for PRGB crops")
 
-        rgb_xyz_tensor = torch.tensor([rgb_xyz_matrix], dtype=torch.float32)
+        # Convert to numpy first, then to tensor (avoids nested list warning)
+        rgb_xyz_array = np.asarray(rgb_xyz_matrix, dtype=np.float32)
+        rgb_xyz_tensor = torch.from_numpy(rgb_xyz_array).unsqueeze(0)
         gt_camrgb_tensor = torch.from_numpy(gt_camrgb).unsqueeze(0).float()
         noisy_camrgb_tensor = torch.from_numpy(noisy_camrgb).unsqueeze(0).float()
 
