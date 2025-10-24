@@ -14,11 +14,13 @@ import os
 
 import trio
 
-from rawnind.dataset import DataIngestor, AsyncAligner
+from rawnind.dataset import DataIngestor, MetadataArtificer
 from rawnind.dataset.Aligner import MetadataArtificer
-from rawnind.dataset.crop_producer_stage import CropProducerStage
+from rawnind.dataset.CropProducerStage import CropProducerStage
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -38,19 +40,21 @@ class MemoryProfiler:
         snap = tracemalloc.take_snapshot()
         rss_mb = self.process.memory_info().rss / (1024 * 1024)
 
-        self.snapshots.append({'label': label, 'snapshot': snap, 'rss_mb': rss_mb})
+        self.snapshots.append({"label": label, "snapshot": snap, "rss_mb": rss_mb})
         logger.info(f"[{label}] RSS: {rss_mb:.1f} MB")
 
     def compare(self, idx1: int, idx2: int):
         s1, s2 = self.snapshots[idx1], self.snapshots[idx2]
         logger.info(f"\n{'='*60}")
         logger.info(f"{s1['label']} → {s2['label']}")
-        logger.info(f"RSS: {s1['rss_mb']:.1f} → {s2['rss_mb']:.1f} MB (Δ{s2['rss_mb']-s1['rss_mb']:+.1f})")
+        logger.info(
+            f"RSS: {s1['rss_mb']:.1f} → {s2['rss_mb']:.1f} MB (Δ{s2['rss_mb']-s1['rss_mb']:+.1f})"
+        )
         logger.info(f"{'='*60}")
 
-        top = s2['snapshot'].compare_to(s1['snapshot'], 'lineno')
+        top = s2["snapshot"].compare_to(s1["snapshot"], "lineno")
         logger.info(f"\nTop {self.top_n} increases:")
-        for stat in top[:self.top_n]:
+        for stat in top[: self.top_n]:
             logger.info(f"  {stat}")
 
     def report(self):
@@ -62,8 +66,8 @@ class MemoryProfiler:
             logger.info(f"{i}. [{s['label']}] {s['rss_mb']:.1f} MB")
 
         if len(self.snapshots) >= 2:
-            peak = max(s['rss_mb'] for s in self.snapshots)
-            growth = self.snapshots[-1]['rss_mb'] - self.snapshots[0]['rss_mb']
+            peak = max(s["rss_mb"] for s in self.snapshots)
+            growth = self.snapshots[-1]["rss_mb"] - self.snapshots[0]["rss_mb"]
             logger.info(f"\nPeak: {peak:.1f} MB | Total growth: {growth:+.1f} MB")
 
 
@@ -117,8 +121,19 @@ async def run_profiled_pipeline(max_scenes: int):
                 async for scene in ingest_recv:
                     # Only index if all files exist locally
                     all_exist = all(
-                        (dataset_root / scene.cfa_type / scene.scene_name / img.filename).exists() or
-                        (dataset_root / scene.cfa_type / scene.scene_name / "gt" / img.filename).exists()
+                        (
+                            dataset_root
+                            / scene.cfa_type
+                            / scene.scene_name
+                            / img.filename
+                        ).exists()
+                        or (
+                            dataset_root
+                            / scene.cfa_type
+                            / scene.scene_name
+                            / "gt"
+                            / img.filename
+                        ).exists()
                         for img in scene.all_images()
                     )
 
@@ -126,8 +141,15 @@ async def run_profiled_pipeline(max_scenes: int):
                         # Set local paths
                         for img in scene.all_images():
                             candidates = [
-                                dataset_root / scene.cfa_type / scene.scene_name / "gt" / img.filename,
-                                dataset_root / scene.cfa_type / scene.scene_name / img.filename
+                                dataset_root
+                                / scene.cfa_type
+                                / scene.scene_name
+                                / "gt"
+                                / img.filename,
+                                dataset_root
+                                / scene.cfa_type
+                                / scene.scene_name
+                                / img.filename,
                             ]
                             for path in candidates:
                                 if path.exists():
@@ -140,10 +162,10 @@ async def run_profiled_pipeline(max_scenes: int):
         nursery.start_soon(index_local_only)
         profiler.snapshot("3_indexer_started")
 
-        # AsyncAligner
+        # MetadataArtificer
         async def align_scenes():
             async with indexed_recv, enriched_send:
-                aligner = AsyncAligner()
+                aligner = MetadataArtificer()
                 async for scene in indexed_recv:
                     enriched = await aligner.process_scene(scene)
                     await enriched_send.send(enriched)
@@ -171,7 +193,7 @@ async def run_profiled_pipeline(max_scenes: int):
                     crop_size=256,
                     num_crops=5,
                     max_workers=2,
-                    use_systematic_tiling=False
+                    use_systematic_tiling=False,
                 )
 
                 async for scene in artifact_recv:

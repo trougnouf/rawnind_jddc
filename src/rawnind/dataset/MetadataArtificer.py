@@ -7,16 +7,19 @@ import trio
 
 from .SceneInfo import SceneInfo, ImageInfo
 from .cache import StreamingJSONCache
+from common.libs.libimganalysis import RAW_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 
-VALID_IMAGE_EXTENSIONS = frozenset({
-    ".raw", ".nef", ".cr2", ".arw", ".dng", ".rw2", ".orf", ".sr2", ".raf", ".crw",
-    ".exr", ".tif", ".tiff", ".npy"
-})
+# Valid image extensions: all raw formats plus additional processed formats
+# Raw extensions imported from single source of truth in libimganalysis.py
+VALID_IMAGE_EXTENSIONS = frozenset(
+    ["." + ext for ext in RAW_EXTENSIONS]  # Add dot prefix to raw extensions
+    + [".exr", ".tif", ".tiff", ".npy"]  # Non-raw formats
+)
 
 
-class AsyncAligner:
+class MetadataArtificer:
     def __init__(
         self,
         cache_path: Optional[Path] = None,
@@ -36,14 +39,14 @@ class AsyncAligner:
             dataset_root (Optional[Path]): Root path of dataset (for finding crops). If None, uses default.
             max_concurrent (int): Maximum number of concurrent computations
             computation_fn (Optional[Callable[[ImageInfo], Awaitable[Dict[str, Any]]]]): Async function that computes metadata for an image. If None, uses default implementation.
-            enable_crops_enrichment (bool): Whether to enrich with crops list metadata
+            enable_crops_enrichment (bool): Whether to enrich with crops list metadata #todo the f*ck is this?
             auto_compact_threshold (int): Auto-compact cache when duplicate ratio exceeds this
 
         """
         self.cache_path = cache_path or Path(
-            "src/rawnind/datasets/RawNIND/metadata_cache.jsonl"
+            "DocScan/rawnind/datasets/RawNIND/metadata_cache.jsonl"
         )
-        self.dataset_root = dataset_root or Path("src/rawnind/datasets/RawNIND/src")
+        self.dataset_root = dataset_root or Path("DocScan/rawnind/datasets/RawNIND/DocScan")
         self.max_concurrent = max_concurrent
         self.computation_fn = computation_fn  # Can be None
         self.enable_crops_enrichment = enable_crops_enrichment
@@ -299,9 +302,11 @@ class AsyncAligner:
                 "is_bayer": is_bayer,
                 "mask_mean": float(final_mask.mean()),
                 "overexposure_lb": gt_metadata.get("overexposure_lb", 1.0),
-                "rgb_xyz_matrix": gt_metadata.get("rgb_xyz_matrix", []).tolist()
-                if "rgb_xyz_matrix" in gt_metadata
-                else None,
+                "rgb_xyz_matrix": (
+                    gt_metadata.get("rgb_xyz_matrix", []).tolist()
+                    if "rgb_xyz_matrix" in gt_metadata
+                    else None
+                ),
             }
 
         # todo: this is not ideal concurrency; need to actually do this async
@@ -374,7 +379,7 @@ class AsyncAligner:
             if is_bayer:
                 bayer_image_set_dpath = (
                     crops_base
-                    / "src"
+                    / "DocScan"
                     / "bayer"
                     / scene_info.cfa_type
                     / scene_info.scene_name

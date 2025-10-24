@@ -177,7 +177,7 @@ def fetch_crops_list(image_set, gt_fpath, f_fpath, is_bayer, ds_base_dpath):
 
     if is_bayer:
         bayer_image_set_dpath = os.path.join(
-            ds_base_dpath, "crops", "src", "bayer", image_set
+            ds_base_dpath, "crops", "DocScan", "bayer", image_set
         )
 
     # Process both GT and noisy files
@@ -357,7 +357,7 @@ if __name__ == "__main__":
         content_fpath = os.path.join(
             DATASETS_ROOT, args.dataset, f"{args.dataset}_masks_and_alignments.yaml"
         )
-        bayer_ds_dpath = os.path.join(DATASETS_ROOT, args.dataset, "src", "bayer")
+        bayer_ds_dpath = os.path.join(DATASETS_ROOT, args.dataset, "DocScan", "bayer")
         linrec_ds_dpath = os.path.join(
             DATASETS_ROOT, args.dataset, "proc", "lin_rec2020"
         )

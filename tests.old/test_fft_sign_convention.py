@@ -3,7 +3,7 @@
 import numpy as np
 import sys
 
-sys.path.append("src")
+sys.path.append("DocScan")
 from rawnind.libs.rawproc import shift_images
 
 print("=" * 80)
@@ -87,7 +87,7 @@ shift_from_fft, corr = fft_phase_correlate(img, shifted_img)
 
 print()
 print(f"FFT returned: {shift_from_fft}")
-print(f"Correct shift: (-4, -4)")
+print("Correct shift: (-4, -4)")
 print(f"FFT sign: {'CORRECT' if shift_from_fft == (-4, -4) else 'WRONG'}")
 print()
 
@@ -125,7 +125,7 @@ print()
 # Test with negation
 fft_shift_negated = (-shift_from_fft[0], -shift_from_fft[1])
 print(f"5. Negated FFT result: {fft_shift_negated}")
-print(f"   Expected shift: (-4, -4)")
+print("   Expected shift: (-4, -4)")
 print(f"   Match: {'YES ✅' if fft_shift_negated == (-4, -4) else 'NO ❌'}")
 print()
 

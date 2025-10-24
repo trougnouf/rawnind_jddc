@@ -4,8 +4,6 @@ Tests for MetadataArtificer refactoring - alignment artifacts stored on ImageInf
 Enhanced with trio.testing utilities for deterministic async testing.
 """
 
-import pytest
-import trio
 import trio.testing as tt
 from pathlib import Path
 

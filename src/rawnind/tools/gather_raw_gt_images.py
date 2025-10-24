@@ -15,6 +15,7 @@ from typing import Union
 
 sys.path.append("..")
 from common.libs import libimganalysis
+from common.libs.libimganalysis import CFA_TYPE_BAYER, CFA_TYPE_XTRANS
 from common.libs import utilities
 
 ORIG_DPATH = {"trougnouf": os.path.join(os.sep, "orb", "Pictures", "ITookAPicture")}
@@ -59,8 +60,8 @@ if __name__ == "__main__":
         orig_datasets = {args.orig_name: args.orig_dpath}
     for ds_name, orig_dpath in orig_datasets.items():
         [
-            os.makedirs(os.path.join(DEST_DPATH, ds_name, "src", adir), exist_ok=True)
-            for adir in ["bayer", "x-trans"]
+            os.makedirs(os.path.join(DEST_DPATH, ds_name, "DocScan", adir), exist_ok=True)
+            for adir in [CFA_TYPE_BAYER, CFA_TYPE_XTRANS]
         ]
         for file in utilities.walk(root=orig_dpath):
             orig_fpath = os.path.join(*file)
@@ -80,10 +81,10 @@ if __name__ == "__main__":
                     continue
                 if isoval <= MAX_ISO:
                     dest_dir = (
-                        "x-trans" if orig_fpath.lower().endswith("raf") else "bayer"
+                        CFA_TYPE_XTRANS if libimganalysis.is_xtrans(orig_fpath) else CFA_TYPE_BAYER
                     )
                     dest_fpath = os.path.join(
-                        DEST_DPATH, ds_name, "src", dest_dir, file[-1]
+                        DEST_DPATH, ds_name, "DocScan", dest_dir, file[-1]
                     )
                     if not args.overwrite:
                         dest_fpath = check_for_duplicate(orig_fpath, dest_fpath)

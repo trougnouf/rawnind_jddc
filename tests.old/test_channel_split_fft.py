@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 import json
 
-sys.path.append("src")
+sys.path.append("DocScan")
 from rawnind.libs import raw
 from rawnind.libs.rawproc import shift_images, match_gain
 
@@ -174,7 +174,7 @@ print()
 with open("curated_test_dataset.json") as f:
     test_dataset = json.load(f)
 
-base_path = Path("src/rawnind/datasets/RawNIND/src")
+base_path = Path("DocScan/rawnind/datasets/RawNIND/DocScan")
 
 # Test on misaligned pairs
 for test_case in test_dataset["test_cases"]["misaligned_bayer"]:
@@ -188,7 +188,7 @@ for test_case in test_dataset["test_cases"]["misaligned_bayer"]:
     noisy_path = base_path / test_case["noisy_file"]
 
     if not gt_path.exists() or not noisy_path.exists():
-        print(f"  ❌ Files not found")
+        print("  ❌ Files not found")
         print()
         continue
 
@@ -250,7 +250,7 @@ for test_case in test_dataset["test_cases"]["misaligned_bayer"]:
 
     # Compare
     print()
-    print(f"  Comparison:")
+    print("  Comparison:")
     print(f"    Standard:       Error={error_standard}px")
     print(
         f"    Channel-median: Error={error_split_median}px {'🎯 BETTER' if error_split_median < error_standard else ''}"

@@ -4,7 +4,7 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent / "DocScan"))
 
 from rawnind.libs import raw
 import numpy as np
@@ -46,27 +46,27 @@ TEST_CASES = [
     # Bayer - known misalignments
     {
         "name": "Bark ISO65535 (bayer)",
-        "anchor": "src/rawnind/datasets/RawNIND/src/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
-        "target": "src/rawnind/datasets/RawNIND/src/bayer/Bark/Bayer_Bark_ISO65535_sha1=6ba8ed5f7fff42c4c900812c02701649f4f2d49e.cr2",
+        "anchor": "DocScan/rawnind/datasets/RawNIND/DocScan/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
+        "target": "DocScan/rawnind/datasets/RawNIND/DocScan/bayer/Bark/Bayer_Bark_ISO65535_sha1=6ba8ed5f7fff42c4c900812c02701649f4f2d49e.cr2",
         "expected": (12, -10),
     },
     {
         "name": "Bark ISO800 (bayer)",
-        "anchor": "src/rawnind/datasets/RawNIND/src/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
-        "target": "src/rawnind/datasets/RawNIND/src/bayer/Bark/Bayer_Bark_ISO800_sha1=ba86f1da64a4bb534d9216e96c1c72177ed1e625.cr2",
+        "anchor": "DocScan/rawnind/datasets/RawNIND/DocScan/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
+        "target": "DocScan/rawnind/datasets/RawNIND/DocScan/bayer/Bark/Bayer_Bark_ISO800_sha1=ba86f1da64a4bb534d9216e96c1c72177ed1e625.cr2",
         "expected": (4, -4),
     },
     {
         "name": "Kortlek ISO51200 (bayer)",
-        "anchor": "src/rawnind/datasets/RawNIND/src/bayer/Kortlek/gt/Bayer_Kortlek_GT_ISO100_sha1=b5a564cd9291224caf363b6b03054365d59d316b.cr2",
-        "target": "src/rawnind/datasets/RawNIND/src/bayer/Kortlek/Bayer_Kortlek_ISO51200_sha1=8fed453fdfb162673bb9ed41f9c5f03095331e3b.cr2",
+        "anchor": "DocScan/rawnind/datasets/RawNIND/DocScan/bayer/Kortlek/gt/Bayer_Kortlek_GT_ISO100_sha1=b5a564cd9291224caf363b6b03054365d59d316b.cr2",
+        "target": "DocScan/rawnind/datasets/RawNIND/DocScan/bayer/Kortlek/Bayer_Kortlek_ISO51200_sha1=8fed453fdfb162673bb9ed41f9c5f03095331e3b.cr2",
         "expected": (0, -4),
     },
     # X-Trans - already aligned
     {
         "name": "MuseeL-pedestal ISO6400 (x-trans)",
-        "anchor": "src/rawnind/datasets/RawNIND/src/x-trans/MuseeL-pedestal/gt/X-Trans_MuseeL-pedestal_GT_ISO200_sha1=161b21f545c4c4ed7fc4fce014f637bb7040d8aa.raf",
-        "target": "src/rawnind/datasets/RawNIND/src/x-trans/MuseeL-pedestal/X-Trans_MuseeL-pedestal_ISO6400_sha1=693af8d1f36f89ad3c4cb8c0eb0e41c924684140.raf",
+        "anchor": "DocScan/rawnind/datasets/RawNIND/DocScan/x-trans/MuseeL-pedestal/gt/X-Trans_MuseeL-pedestal_GT_ISO200_sha1=161b21f545c4c4ed7fc4fce014f637bb7040d8aa.raf",
+        "target": "DocScan/rawnind/datasets/RawNIND/DocScan/x-trans/MuseeL-pedestal/X-Trans_MuseeL-pedestal_ISO6400_sha1=693af8d1f36f89ad3c4cb8c0eb0e41c924684140.raf",
         "expected": (0, 0),
     },
 ]
@@ -111,10 +111,10 @@ def test_production_implementation():
 
         # Check result
         if shift == test_case["expected"]:
-            print(f"  ✅ PASS")
+            print("  ✅ PASS")
             passed += 1
         else:
-            print(f"  ❌ FAIL")
+            print("  ❌ FAIL")
             failed += 1
 
     print("\n" + "=" * 80)
@@ -131,9 +131,8 @@ def test_alignment_quality_comparison():
     print("=" * 80)
 
     # Import alignment backends
-    sys.path.insert(0, "src")
+    sys.path.insert(0, "DocScan")
     from rawnind.libs import alignment_backends
-    from rawnind.libs.rawproc import match_gain
 
     comparison_results = []
 
@@ -194,7 +193,7 @@ def test_alignment_quality_comparison():
         fft_mse = case_result["methods"]["fft"]["mse"]
         orig_mse = case_result["methods"]["original"]["mse"]
 
-        print(f"\n  Comparison:")
+        print("\n  Comparison:")
         print(
             f"    MAE - FFT: {fft_mae:.6f}, Original: {orig_mae:.6f} (Δ: {abs(fft_mae - orig_mae):.6f})"
         )
@@ -203,11 +202,11 @@ def test_alignment_quality_comparison():
         )
 
         if fft_mae < orig_mae:
-            print(f"    ✅ FFT produces better alignment (lower MAE)")
+            print("    ✅ FFT produces better alignment (lower MAE)")
         elif fft_mae > orig_mae:
-            print(f"    ⚠️  Original produces better alignment (lower MAE)")
+            print("    ⚠️  Original produces better alignment (lower MAE)")
         else:
-            print(f"    ➡️  Both methods produce same MAE")
+            print("    ➡️  Both methods produce same MAE")
 
     # Summary table
     print("\n\n" + "=" * 80)

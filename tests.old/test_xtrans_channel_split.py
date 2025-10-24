@@ -4,7 +4,7 @@ import numpy as np
 import sys
 from pathlib import Path
 
-sys.path.append("src")
+sys.path.append("DocScan")
 from rawnind.libs import raw
 from rawnind.libs.rawproc import shift_images, match_gain
 
@@ -256,7 +256,7 @@ print("=" * 80)
 print()
 
 # First, let's just try to load an X-Trans image
-base_path = Path("src/rawnind/datasets/RawNIND/src/x-trans")
+base_path = Path("DocScan/rawnind/datasets/RawNIND/DocScan/x-trans")
 
 # Find a valid X-Trans scene
 test_scenes = ["books", "banana", "beads", "bloop"]
@@ -271,12 +271,12 @@ for scene_name in test_scenes:
     # Find GT
     gt_dir = scene_dir / "gt"
     if not gt_dir.exists():
-        print(f"  ⚠️  No gt/ directory")
+        print("  ⚠️  No gt/ directory")
         continue
 
     gt_files = list(gt_dir.glob("*.raf"))
     if not gt_files:
-        print(f"  ⚠️  No GT .raf files")
+        print("  ⚠️  No GT .raf files")
         continue
 
     gt_file = gt_files[0]
@@ -303,7 +303,7 @@ for scene_name in test_scenes:
         noisy_files = [f for f in noisy_files if f.parent.name != "gt"]
 
         if not noisy_files:
-            print(f"  ⚠️  No noisy files")
+            print("  ⚠️  No noisy files")
             continue
 
         noisy_file = noisy_files[0]
@@ -322,7 +322,7 @@ for scene_name in test_scenes:
             gt_img, noisy_matched, method="median"
         )
 
-        print(f"    Per-channel shifts:")
+        print("    Per-channel shifts:")
         print(f"      R: {channel_shifts[0]}")
         print(f"      G: {channel_shifts[1]}")
         print(f"      B: {channel_shifts[2]}")
@@ -341,7 +341,7 @@ for scene_name in test_scenes:
         if shift != (0, 0):
             print(f"    ✓ Detected misalignment: {shift}")
         else:
-            print(f"    - Images appear aligned")
+            print("    - Images appear aligned")
 
         print()
 

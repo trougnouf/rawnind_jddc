@@ -367,15 +367,15 @@ def create_grid_figure(image_paths, output_path, grid_shape, start_index=0):
 
 if __name__ == "__main__":
     image_paths = [
-        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/src/pipeline/darktable_exported/0_nothing_ISO16000_capt0002.png",
-        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/src/pipeline/darktable_exported/1_bw_points_ISO16000_capt0002_01.png",
-        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/src/pipeline/darktable_exported/2_demosaic_linrec2020_d65_ISO16000_capt0002_02.png",
-        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/src/pipeline/darktable_exported/3_denoise_ISO16000_capt0002.arw.png",
-        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/src/pipeline/darktable_exported/4_lenscorrection_perspective_cropISO16000_capt0002.arw_01.png",
-        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/src/pipeline/darktable_exported/5_exposure_ISO16000_capt0002.arw.png",
-        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/src/pipeline/darktable_exported/6_color_calibration_ISO16000_capt0002.arw_02.png",
-        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/src/pipeline/darktable_exported/7_diffuseorsharpen_ISO16000_capt0002.arw_03.png",
-        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/src/pipeline/darktable_exported/8_colorbalance_filmicISO16000_capt0002.arw_05.png",
+        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/DocScan/pipeline/darktable_exported/0_nothing_ISO16000_capt0002.png",
+        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/DocScan/pipeline/darktable_exported/1_bw_points_ISO16000_capt0002_01.png",
+        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/DocScan/pipeline/darktable_exported/2_demosaic_linrec2020_d65_ISO16000_capt0002_02.png",
+        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/DocScan/pipeline/darktable_exported/3_denoise_ISO16000_capt0002.arw.png",
+        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/DocScan/pipeline/darktable_exported/4_lenscorrection_perspective_cropISO16000_capt0002.arw_01.png",
+        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/DocScan/pipeline/darktable_exported/5_exposure_ISO16000_capt0002.arw.png",
+        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/DocScan/pipeline/darktable_exported/6_color_calibration_ISO16000_capt0002.arw_02.png",
+        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/DocScan/pipeline/darktable_exported/7_diffuseorsharpen_ISO16000_capt0002.arw_03.png",
+        "/orb/benoit_phd/wiki/Papers/JDDC/journal_paper/figures/DocScan/pipeline/darktable_exported/8_colorbalance_filmicISO16000_capt0002.arw_05.png",
     ]
 
     # Create the 3x3 grid with all images, named _thesis

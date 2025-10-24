@@ -4,7 +4,7 @@ import numpy as np
 import sys
 from pathlib import Path
 
-sys.path.append("src")
+sys.path.append("DocScan")
 from rawnind.libs import raw
 from rawnind.libs.rawproc import shift_images, match_gain
 
@@ -124,7 +124,7 @@ test_cases = [
     ),
 ]
 
-base_dir = Path("src/rawnind/datasets/RawNIND/src/bayer")
+base_dir = Path("DocScan/rawnind/datasets/RawNIND/DocScan/bayer")
 
 print("=" * 80)
 print("TESTING FIXED FFT IMPLEMENTATION")
@@ -140,7 +140,7 @@ for scene, gt_name, noisy_name, expected_shift in test_cases:
     noisy_path = base_dir / scene / noisy_name
 
     if not gt_path.exists() or not noisy_path.exists():
-        print(f"  ❌ Files not found")
+        print("  ❌ Files not found")
         print()
         continue
 

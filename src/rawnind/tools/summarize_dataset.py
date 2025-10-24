@@ -4,8 +4,13 @@ import json
 import csv
 import shutil
 import logging
+import sys
 from collections import defaultdict
 from tqdm import tqdm
+
+# Add parent directories to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+from common.libs.libimganalysis import RAW_EXTENSIONS
 
 # Configure logging for error handling
 logging.basicConfig(
@@ -22,9 +27,9 @@ BASE_ROOT = "/orb/benoit_phd/datasets/"
 # )
 
 ROOT_DIRS = {
-    "bayer": os.path.join(BASE_ROOT, "RawNIND/src/bayer"),
-    "x-trans": os.path.join(BASE_ROOT, "RawNIND/src/x-trans"),
-    "Bostitch": os.path.join(BASE_ROOT, "RawNIND_Bostitch/src/bayer"),
+    "bayer": os.path.join(BASE_ROOT, "RawNIND/DocScan/bayer"),
+    "x-trans": os.path.join(BASE_ROOT, "RawNIND/DocScan/x-trans"),
+    "Bostitch": os.path.join(BASE_ROOT, "RawNIND_Bostitch/DocScan/bayer"),
 }
 
 # Define substrings that identify test sets per dataset
@@ -60,19 +65,9 @@ TEST_RESERVES = {
     ],
 }
 
-# Define raw image extensions (including 'raf') and handle case-insensitivity
-RAW_EXTENSIONS = {
-    ".raw",
-    ".nef",
-    ".cr2",
-    ".arw",
-    ".dng",
-    ".rw2",
-    ".orf",
-    ".sr2",
-    ".raf",
-    ".crw",
-}
+# Raw image extensions imported from single source of truth in libimganalysis.py
+# Convert tuple to set with dot prefixes for case-insensitive extension checking
+RAW_EXTENSIONS_SET = {"." + ext for ext in RAW_EXTENSIONS}
 
 # Initialize a dictionary to collect unknown extensions
 unknown_extensions = defaultdict(int)
@@ -137,7 +132,7 @@ def process_image_set(image_set_path, set_type, data):
         for file in files:
             file_lower = file.lower()
             _, ext = os.path.splitext(file_lower)
-            if ext in RAW_EXTENSIONS:
+            if ext in RAW_EXTENSIONS_SET:
                 file_path = os.path.join(root, file)
                 exif_data = get_exif_data(file_path)
                 camera = exif_data.get("Model", "UnknownCamera").strip()

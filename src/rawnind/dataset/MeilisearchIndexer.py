@@ -17,7 +17,7 @@ import httpx
 import trio
 
 from .PostDownloadWorker import PostDownloadWorker
-from .SceneInfo import SceneInfo, ImageInfo
+from .SceneInfo import SceneInfo
 
 logger = logging.getLogger(__name__)
 

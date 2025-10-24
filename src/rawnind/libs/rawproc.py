@@ -39,11 +39,11 @@ GAMMA = 2.2
 DS_DN = "RawNIND"
 DATASETS_ROOT = resources.files("rawnind").joinpath("datasets")
 DS_BASE_DPATH: str = DATASETS_ROOT / DS_DN
-BAYER_DS_DPATH: str = DS_BASE_DPATH / "src" / "bayer"
+BAYER_DS_DPATH: str = DS_BASE_DPATH / "DocScan" / "bayer"
 LINREC2020_DS_DPATH: str = DS_BASE_DPATH / "proc" / "lin_rec2020"
 MASKS_DPATH = DS_BASE_DPATH / f"masks_{LOSS_THRESHOLD}"
 RAWNIND_CONTENT_FPATH = (
-        DS_BASE_DPATH / "RawNIND_masks_and_alignments.yaml"
+    DS_BASE_DPATH / "RawNIND_masks_and_alignments.yaml"
 )  # used by tools/prep_image_dataset.py and libs/rawds.py
 
 NEIGHBORHOOD_SEARCH_WINDOW = 3
@@ -76,7 +76,7 @@ def gamma_pt(img: torch.Tensor, gamma_val: float = GAMMA, in_place=False) -> np.
 
 
 def scenelin_to_pq(
-        img: Union[np.ndarray, torch.Tensor], compat=True
+    img: Union[np.ndarray, torch.Tensor], compat=True
 ) -> Union[np.ndarray, torch.Tensor]:
     """
     Scene linear input signal to PQ opto-electronic transfer function (OETF).
@@ -115,9 +115,9 @@ def scenelin_to_pq(
             gamma = 2.40
             gamma_d = 1 / gamma
 
-            n = L_W ** gamma_d - L_B ** gamma_d
-            a = n ** gamma
-            b = L_B ** gamma_d / n
+            n = L_W**gamma_d - L_B**gamma_d
+            a = n**gamma
+            b = L_B**gamma_d / n
             if compat:
                 L = a * (V + b) ** gamma
             else:
@@ -139,7 +139,7 @@ def scenelin_to_pq(
 
 
 def pq_to_scenelin(
-        img: Union[np.ndarray, torch.Tensor],
+    img: Union[np.ndarray, torch.Tensor],
 ) -> Union[np.ndarray, torch.Tensor]:
     """
     PQ non-linear to scene linear signal, inverse opto-electronic transfer function (OETF^-1).
@@ -150,9 +150,9 @@ def pq_to_scenelin(
 
 
 def match_gain(
-        anchor_img: Union[np.ndarray, torch.Tensor],
-        other_img: Union[np.ndarray, torch.Tensor],
-        return_val: bool = False,
+    anchor_img: Union[np.ndarray, torch.Tensor],
+    other_img: Union[np.ndarray, torch.Tensor],
+    return_val: bool = False,
 ) -> Union[np.ndarray, torch.Tensor]:
     """Normalize intensity differences between paired images due to exposure variation.
 
@@ -227,11 +227,11 @@ def match_gain(
 
 
 def shift_images(
-        anchor_img: Union[np.ndarray, torch.Tensor],  # gt
-        target_img: Union[np.ndarray, torch.Tensor],  # y
-        shift: tuple,  # [int, int],  # python bw compat 2022-11-10
-        # crop_to_bayer: bool = True,
-        # maintain_shape: bool = False,  # probably not needed w/ crop_to_bayer
+    anchor_img: Union[np.ndarray, torch.Tensor],  # gt
+    target_img: Union[np.ndarray, torch.Tensor],  # y
+    shift: tuple,  # [int, int],  # python bw compat 2022-11-10
+    # crop_to_bayer: bool = True,
+    # maintain_shape: bool = False,  # probably not needed w/ crop_to_bayer
 ) -> Union[tuple, tuple]:
     #  ) -> Union[tuple[np.ndarray, np.ndarray], tuple[torch.Tensor, torch.Tensor]]:  # python bw compat 2022-11-10
     """Apply spatial alignment and crop both images to their overlapping region.
@@ -309,7 +309,7 @@ def shift_images(
     else:
         target_shift_divisor = target_is_bayer + 1
     if shift[0] > 0:  # y
-        anchor_img_out = anchor_img_out[..., shift[0]:, :]
+        anchor_img_out = anchor_img_out[..., shift[0] :, :]
         target_img_out = target_img_out[
             ..., : -(shift[0] // target_shift_divisor) or None, :
         ]
@@ -319,12 +319,12 @@ def shift_images(
 
     elif shift[0] < 0:
         anchor_img_out = anchor_img_out[..., : shift[0], :]
-        target_img_out = target_img_out[..., -shift[0] // target_shift_divisor:, :]
+        target_img_out = target_img_out[..., -shift[0] // target_shift_divisor :, :]
         if shift[0] % 2:
             anchor_img_out = anchor_img_out[..., 1:, :]
             target_img_out = target_img_out[..., 1:, :]
     if shift[1] > 0:  # x
-        anchor_img_out = anchor_img_out[..., shift[1]:]
+        anchor_img_out = anchor_img_out[..., shift[1] :]
         target_img_out = target_img_out[
             ..., : -(shift[1] // target_shift_divisor) or None
         ]
@@ -333,7 +333,7 @@ def shift_images(
             target_img_out = target_img_out[..., :-1]
     elif shift[1] < 0:
         anchor_img_out = anchor_img_out[..., : shift[1]]
-        target_img_out = target_img_out[..., -shift[1] // target_shift_divisor:]
+        target_img_out = target_img_out[..., -shift[1] // target_shift_divisor :]
         if shift[1] % 2:
             anchor_img_out = anchor_img_out[..., 1:]
             target_img_out = target_img_out[..., 1:]
@@ -368,10 +368,10 @@ def shape_is_compatible(shape1: tuple, shape2: tuple):
 
 
 def shift_mask(
-        mask: Union[np.ndarray, torch.Tensor],
-        # shift: tuple[int, int],# python bw compat 2022-11-10
-        shift: tuple,
-        crop_to_bayer: bool = True,
+    mask: Union[np.ndarray, torch.Tensor],
+    # shift: tuple[int, int],# python bw compat 2022-11-10
+    shift: tuple,
+    crop_to_bayer: bool = True,
 ) -> Union[np.ndarray, torch.Tensor]:
     """
     Shift single (anchor) image in x/y directions and crop accordingly.
@@ -382,7 +382,7 @@ def shift_mask(
     """
     mask_out = mask
     if shift[0] > 0:
-        mask_out = mask_out[..., shift[0]:, :]
+        mask_out = mask_out[..., shift[0] :, :]
         if crop_to_bayer and shift[0] % 2:
             mask_out = mask_out[..., :-1, :]
     elif shift[0] < 0:
@@ -390,7 +390,7 @@ def shift_mask(
         if crop_to_bayer and shift[0] % 2:
             mask_out = mask_out[..., 1:, :]
     if shift[1] > 0:
-        mask_out = mask_out[..., shift[1]:]
+        mask_out = mask_out[..., shift[1] :]
         if crop_to_bayer and shift[1] % 2:
             mask_out = mask_out[..., :-1]
     elif shift[1] < 0:
@@ -400,55 +400,112 @@ def shift_mask(
 
     return mask_out
 
-    # mask_out = mask
-    # if shift[0] > 0:  # y
-    #     mask_out = mask_out[..., shift[0] :, :]
-    #     if target_is_bayer and shift[0] % 2:
-    #         mask_out = mask_out[..., :-1, :]
-    # elif shift[0] < 0:
-    #     mask_out = mask_out[..., : shift[0], :]
-    #     if target_is_bayer and shift[0] % 2:
-    #         mask_out = mask_out[..., 1:, :]
-    # if shift[1] > 0:  # x
-    #     mask_out = mask_out[..., shift[1] :]
-
-    #     if target_is_bayer and shift[1] % 2:
-    #         mask_out = mask_out[..., :-1]
-    # elif shift[1] < 0:
-    #     mask_out = mask_out[..., : shift[1]]
-    #     if target_is_bayer and shift[1] % 2:
-    #         mask_out = mask_out[..., 1:]
-
-    # assert (
-    #     anchor_img_out.shape[1:]
-    #     == np.multiply(target_img_out.shape[1:], target_shift_divisor)
-    # ).all(), f"{anchor_img_out.shape=}, {target_img_out.shape=}"
-    # if maintain_shape:  # unused -> deprecated
-    #     assert isinstance(anchor_img_out, torch.Tensor)
-    #     xpad = anchor_img.size(-1) - anchor_img_out.size(-1)
-    #     ypad = anchor_img.size(-2) - anchor_img_out.size(-2)
-    #     anchor_img_out = torch.nn.functional.pad(anchor_img_out, (xpad, 0, ypad, 0))
-    #     target_img_out = torch.nn.functional.pad(target_img_out, (xpad, 0, ypad, 0))
-    return anchor_img_out, target_img_out
-
 
 def make_overexposure_mask(
-        anchor_img: np.ndarray, gt_overexposure_lb: float = GT_OVEREXPOSURE_LB
+    anchor_img: np.ndarray, gt_overexposure_lb: float = GT_OVEREXPOSURE_LB
 ):
     return (anchor_img < gt_overexposure_lb).all(axis=0)
 
 
-def make_overexposure_mask_bayer(anchor_img: np.ndarray, gt_overexposure_lb: float):
-    """Overexposure mask for 2D bayer data.
-    
+def make_overexposure_mask_bayer(
+    anchor_img: np.ndarray | torch.Tensor, gt_overexposure_lb: float
+) -> np.ndarray:
+    """Create overexposure mask for mosaiced RAW or channel-stacked inputs.
+
+    Identifies pixels where sensor saturation (clipping) would corrupt denoising training.
+    For mosaiced RAW images (Bayer, X-Trans), applies threshold directly. For channel-stacked
+    formats (RGGB, multi-channel), requires ALL channels below threshold—if any channel clips,
+    the entire pixel is invalid since clipping destroys signal relationships between channels.
+
+    This conservative "any channel clips → reject pixel" policy prevents the denoising network
+    from learning artifacts introduced by saturation. Clipped pixels don't represent the true
+    noise distribution and would bias the model.
+
+    Polymorphic behavior by input dimensionality:
+    - 2D (H, W): Direct threshold on mosaiced pattern (Bayer/X-Trans)
+    - 3D (C, H, W): All-channel threshold for stacked format (e.g., 4-channel RGGB)
+
     Args:
-        anchor_img: 2D bayer array (H, W)
-        gt_overexposure_lb: Overexposure threshold
-        
+        anchor_img: Image to mask, either:
+            - 2D (H, W): Mosaiced RAW sensor data
+            - 3D (C, H, W): Channel-separated RAW (e.g., RGGB with C=4)
+            Accepts np.ndarray or torch.Tensor (converted to numpy for output consistency).
+        gt_overexposure_lb: Overexposure threshold in [0, ∞). Pixels with values ≥ this
+            are considered overexposed. Typical values:
+            - 1.0 for normalized RAW in [0, 1]
+            - 65535 for 16-bit integer RAW
+            Must be non-negative.
+
     Returns:
-        2D boolean mask (H, W)
+        Boolean mask of shape (H, W) where:
+        - True: Valid pixel (all channels below threshold, safe for training)
+        - False: Invalid pixel (at least one channel clipped, exclude from loss)
+
+    Raises:
+        TypeError: If input is not numpy array or torch tensor
+        ValueError: If input is not 2D or 3D, or if threshold is negative
+
+    Examples:
+        >>> # 2D Bayer pattern (H, W)
+        >>> bayer = np.array([[0.5, 0.9], [0.3, 1.1]], dtype=np.float32)
+        >>> mask = make_overexposure_mask_bayer(bayer, threshold=1.0)
+        >>> mask
+        array([[ True, False],
+               [ True, False]])
+
+        >>> # 3D RGGB channels (4, H/2, W/2)
+        >>> rggb = np.ones((4, 2, 2), dtype=np.float32) * 0.5
+        >>> rggb[0, 0, 0] = 1.2  # R channel overexposed at (0,0)
+        >>> mask = make_overexposure_mask_bayer(rggb, threshold=1.0)
+        >>> mask[0, 0]  # Pixel (0,0) rejected due to R channel
+        False
+        >>> mask[0, 1]  # Pixel (0,1) valid—all channels below threshold
+        True
+
+        >>> # Torch tensor support
+        >>> tensor = torch.rand((10, 10), dtype=torch.float32)
+        >>> mask = make_overexposure_mask_bayer(tensor, threshold=0.8)
+        >>> isinstance(mask, np.ndarray)
+        True
+
+    Notes:
+        - Returns numpy array even for torch input for consistency with downstream numpy-based
+          image processing pipeline (OpenEXR I/O, scipy operations, etc.)
+        - Comparison uses strict <, so pixels exactly at threshold are considered overexposed
+        - NaN values are treated as overexposed (NaN < threshold is False)
+        - For batch processing, call this function per image (no batch dimension supported)
     """
-    return anchor_img < gt_overexposure_lb
+    # Input validation: threshold must be non-negative
+    if gt_overexposure_lb < 0:
+        raise ValueError(
+            f"threshold must be non-negative, got {gt_overexposure_lb}. "
+            "Negative thresholds are meaningless for overexposure detection."
+        )
+
+    # Convert torch tensors to numpy for consistency with downstream numpy ops
+    if isinstance(anchor_img, torch.Tensor):
+        anchor_np = anchor_img.detach().cpu().numpy()
+    elif isinstance(anchor_img, np.ndarray):
+        anchor_np = anchor_img
+    else:
+        raise TypeError(
+            f"Expected numpy array or torch tensor, got {type(anchor_img).__name__}. "
+            "Supported types: np.ndarray, torch.Tensor"
+        )
+
+    # Dispatch on dimensionality
+    if anchor_np.ndim == 2:
+        # 2D mosaiced RAW (Bayer or X-Trans): simple threshold
+        return anchor_np < gt_overexposure_lb
+    elif anchor_np.ndim == 3:
+        # 3D channel stack (e.g., 4×H/2×W/2 for Bayer RGGB, 9×H/3×W/3 for X‑Trans)
+        # Require ALL channels below threshold at each spatial location
+        return (anchor_np < gt_overexposure_lb).all(axis=0)
+    else:
+        raise ValueError(
+            f"Expected 2D or 3D input, got {anchor_np.ndim}D with shape {anchor_np.shape}. "
+            "Supported formats: (H, W) for mosaiced, (C, H, W) for channel-stacked."
+        )
 
 
 # def make_loss_mask(
@@ -480,11 +537,11 @@ def make_overexposure_mask_bayer(anchor_img: np.ndarray, gt_overexposure_lb: flo
 
 
 def make_loss_mask_bayer(
-        anchor_img: np.ndarray,
-        target_img: np.ndarray,
-        loss_threshold: float = LOSS_THRESHOLD,
-        keepers_quantile: float = KEEPERS_QUANTILE,
-        verbose: bool = False,
+    anchor_img: np.ndarray,
+    target_img: np.ndarray,
+    loss_threshold: float = LOSS_THRESHOLD,
+    keepers_quantile: float = KEEPERS_QUANTILE,
+    verbose: bool = False,
 ) -> np.ndarray:
     """Return a loss mask between two (aligned) raw bayer images.
 
@@ -529,14 +586,14 @@ def make_loss_mask_msssim_bayer(
     stride: int = 96,
 ) -> np.ndarray:
     """Loss mask using MS-SSIM + L1 combo on 4D RGGB tensors.
-    
+
     MS-SSIM + L1 is the standard for perceptual losses in image restoration.
     Computes MS-SSIM in overlapping windows to create a spatial similarity map,
     then combines with L1-based filtering (both conditions must be met).
-    
+
     Low MS-SSIM indicates structural dissimilarity (misalignment/artifacts).
     High L1 indicates intensity mismatch after gain correction.
-    
+
     Args:
         anchor_img: Ground truth bayer image (4, H, W) RGGB
         target_img: Target bayer image (4, H, W) RGGB
@@ -544,13 +601,13 @@ def make_loss_mask_msssim_bayer(
         l1_threshold: Maximum L1 loss for valid regions (default LOSS_THRESHOLD)
         window_size: Size of sliding window for MS-SSIM computation (default 64)
         stride: Stride for sliding windows (default 32, gives 50% overlap)
-    
+
     Returns:
         Binary mask (H, W) where 1=use, 0=ignore
     """
     import torch
     from common.libs.pt_losses import MS_SSIM_metric
-    
+
     # Convert to torch tensors
     if isinstance(anchor_img, np.ndarray):
         anchor_torch = torch.from_numpy(anchor_img).float()
@@ -558,80 +615,86 @@ def make_loss_mask_msssim_bayer(
     else:
         anchor_torch = anchor_img.float()
         target_torch = target_img.float()
-    
+
     # Match gain
     target_matched = match_gain(anchor_img, target_img)
     if isinstance(target_matched, np.ndarray):
         target_matched_torch = torch.from_numpy(target_matched).float()
     else:
         target_matched_torch = target_matched.float()
-    
+
     # Compute MS-SSIM per channel (R, G1, G2, B)
     num_channels, H, W = anchor_torch.shape
-    
+
     # Create per-channel MS-SSIM spatial maps using sliding windows
     # We'll compute SSIM for each of the 4 RGGB channels and average
     ssim_maps = []
-    
+
     # Use channel=1 for single-channel RGGB processing
     ms_ssim = MS_SSIM_metric(data_range=1.0, size_average=False, channel=1)
-    
+
     # Compute MS-SSIM per channel
     for ch in range(num_channels):
         ssim_map = np.ones((H, W), dtype=np.float32)
         count_map = np.zeros((H, W), dtype=np.float32)
-        
+
         # Extract single channel and expand to (1, 1, H, W) for MS-SSIM
-        anchor_ch = anchor_torch[ch:ch+1]
-        target_ch = target_matched_torch[ch:ch+1]
-        
+        anchor_ch = anchor_torch[ch : ch + 1]
+        target_ch = target_matched_torch[ch : ch + 1]
+
         # Slide windows across image
         for y in range(0, H - window_size + 1, stride):
             for x in range(0, W - window_size + 1, stride):
                 # Extract window: (1, H, W) → (1, 1, window, window)
                 # MS_SSIM with channel=1 handles single-channel input directly
-                anchor_window = anchor_ch[:, y:y+window_size, x:x+window_size].unsqueeze(0)
-                target_window = target_ch[:, y:y+window_size, x:x+window_size].unsqueeze(0)
-                
+                anchor_window = anchor_ch[
+                    :, y : y + window_size, x : x + window_size
+                ].unsqueeze(0)
+                target_window = target_ch[
+                    :, y : y + window_size, x : x + window_size
+                ].unsqueeze(0)
+
                 # Compute MS-SSIM for this window
                 with torch.no_grad():
                     ssim_score = ms_ssim(anchor_window, target_window).item()
-                
+
                 # Accumulate into spatial map
-                ssim_map[y:y+window_size, x:x+window_size] += ssim_score
-                count_map[y:y+window_size, x:x+window_size] += 1
-        
+                ssim_map[y : y + window_size, x : x + window_size] += ssim_score
+                count_map[y : y + window_size, x : x + window_size] += 1
+
         # Average overlapping windows
-        ssim_map = np.divide(ssim_map, count_map, where=count_map>0)
+        ssim_map = np.divide(ssim_map, count_map, where=count_map > 0)
         ssim_maps.append(ssim_map)
-    
+
     # Average MS-SSIM across all 4 RGGB channels
     ssim_map = np.mean(ssim_maps, axis=0)
-    
+
     # Threshold MS-SSIM map
     ssim_mask = (ssim_map > ssim_threshold).astype(np.float32)
-    
+
     # Combine with L1-based filtering (REQUIRED - MS-SSIM + L1 combo is standard)
     l1_map = np_l1(gamma(anchor_img), gamma(target_matched), avg=False)
     l1_map = l1_map.sum(axis=0)
     l1_mask = (l1_map < l1_threshold).astype(np.float32)
-    
+
     # Both conditions must be met
     loss_mask = ssim_mask * l1_mask
-    
+
     # Apply morphological cleanup
-    loss_mask = scipy.ndimage.binary_opening(loss_mask.astype(np.uint8)).astype(np.float32)
-    
+    loss_mask = scipy.ndimage.binary_opening(loss_mask.astype(np.uint8)).astype(
+        np.float32
+    )
+
     return loss_mask
 
 
 def make_loss_mask(
-        anchor_img: np.ndarray,
-        target_img: np.ndarray,
-        loss_threshold: float = LOSS_THRESHOLD,
-        keepers_quantile: float = KEEPERS_QUANTILE,
-        verbose: bool = False,
-        # ) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray]]:  # # python bw compat 2022-11-10
+    anchor_img: np.ndarray,
+    target_img: np.ndarray,
+    loss_threshold: float = LOSS_THRESHOLD,
+    keepers_quantile: float = KEEPERS_QUANTILE,
+    verbose: bool = False,
+    # ) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray]]:  # # python bw compat 2022-11-10
 ) -> Union[np.ndarray, tuple]:  # # python bw compat 2022-11-10
     """Return a loss mask between the two (aligned) images.
 
@@ -666,11 +729,11 @@ def make_loss_mask(
 
 
 def find_best_alignment_fft(
-        anchor_img: np.ndarray,
-        target_img: np.ndarray,
-        max_shift_search: int = MAX_SHIFT_SEARCH,
-        return_loss_too: bool = False,
-        verbose: bool = False,
+    anchor_img: np.ndarray,
+    target_img: np.ndarray,
+    max_shift_search: int = MAX_SHIFT_SEARCH,
+    return_loss_too: bool = False,
+    verbose: bool = False,
 ) -> Union[Tuple[int, int], Tuple[Tuple[int, int], float]]:
     """Fast alignment using FFT-based cross-correlation."""
     target_img = match_gain(anchor_img, target_img)
@@ -697,10 +760,10 @@ def find_best_alignment_fft(
     target_x_start = (target_w - min_w) // 2
 
     anchor_crop = anchor_gray[
-        anchor_y_start: anchor_y_start + min_h, anchor_x_start: anchor_x_start + min_w
+        anchor_y_start : anchor_y_start + min_h, anchor_x_start : anchor_x_start + min_w
     ]
     target_crop = target_gray[
-        target_y_start: target_y_start + min_h, target_x_start: target_x_start + min_w
+        target_y_start : target_y_start + min_h, target_x_start : target_x_start + min_w
     ]
 
     # Normalize images
@@ -740,13 +803,13 @@ def find_best_alignment_fft(
 
 
 def find_best_alignment(
-        anchor_img: np.ndarray,
-        target_img: np.ndarray,
-        max_shift_search: int = MAX_SHIFT_SEARCH,
-        return_loss_too: bool = False,
-        verbose: bool = False,
-        method: str = "auto",
-        # ) -> Union[tuple[int, int], tuple[tuple[int, int], float]]: # python bw compat 2022-11-10
+    anchor_img: np.ndarray,
+    target_img: np.ndarray,
+    max_shift_search: int = MAX_SHIFT_SEARCH,
+    return_loss_too: bool = False,
+    verbose: bool = False,
+    method: str = "auto",
+    # ) -> Union[tuple[int, int], tuple[tuple[int, int], float]]: # python bw compat 2022-11-10
 ) -> Union[tuple, tuple]:  # python bw compat 2022-11-10
     """Find the optimal spatial shift to align two images captured of the same scene.
 
@@ -848,9 +911,12 @@ def find_best_alignment(
     return result
 
 
-@lru_cache(maxsize=32)  # Cache recently loaded images
 def img_fpath_to_np_mono_flt_and_metadata(fpath: str):
-    """Load image with caching to avoid repeated I/O operations."""
+    """Load image with caching to avoid repeated I/O operations.
+
+    Note: Caching removed to allow ImageBuf's IMAGECACHE mode to manage memory efficiently.
+    The OIIO ImageCache handles caching internally without forcing full-image allocations.
+    """
     if fpath.endswith(".exr"):
         return np_imgops.img_fpath_to_np_flt(fpath), {"overexposure_lb": 1.0}
     return raw.raw_fpath_to_mono_img_and_metadata(fpath)
@@ -1049,7 +1115,7 @@ def get_best_alignment_compute_gain_and_make_loss_mask(kwargs: dict) -> dict:
 
 
 def camRGB_to_lin_rec2020_images(
-        camRGB_images: torch.Tensor, rgb_xyz_matrices: torch.Tensor
+    camRGB_images: torch.Tensor, rgb_xyz_matrices: torch.Tensor
 ) -> np.ndarray:
     """Convert a batch of camRGB debayered images to the lin_rec2020 color profile."""
     # cam_to_xyzd65 = torch.linalg.inv(rgb_xyz_matrices[:, :3, :])
@@ -1070,7 +1136,7 @@ def camRGB_to_lin_rec2020_images(
     orig_dims = camRGB_images.shape
     # print(orig_dims)
     lin_rec2020_images = (
-            color_matrices @ camRGB_images.reshape(orig_dims[0], 3, -1)
+        color_matrices @ camRGB_images.reshape(orig_dims[0], 3, -1)
     ).reshape(orig_dims)
 
     return lin_rec2020_images
@@ -1123,7 +1189,7 @@ class Test_Rawproc(unittest.TestCase):
             self.assertTrue(
                 torch.allclose(
                     single_conversion,
-                    batched_conversion[i: i + 1],
+                    batched_conversion[i : i + 1],
                     atol=1e-04,
                     rtol=1e-04,
                 )

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Generator, Optional, Set, Tuple
+from typing import Dict, Generator, Set, Tuple
 
 import trio
 

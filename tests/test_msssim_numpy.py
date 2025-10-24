@@ -9,8 +9,8 @@ import sys
 import time
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Add DocScan to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "DocScan"))
 
 from common.libs.msssim_numpy import (
     compute_msssim_numpy,

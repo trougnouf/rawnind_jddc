@@ -5,7 +5,7 @@ Base class for post-processing stages that produce artifacts from enriched scene
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from concurrent.futures import ProcessPoolExecutor
 import trio
 

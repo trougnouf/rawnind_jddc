@@ -7,7 +7,7 @@ import cv2
 sys.path.append("..")
 from rawnind.libs import raw
 
-IMAGE_SETS_DPATH = os.path.join("..", "..", "datasets", "rawNIND", "src", "bayer")
+IMAGE_SETS_DPATH = os.path.join("..", "..", "datasets", "rawNIND", "DocScan", "bayer")
 
 if __name__ == "__main__":
     losses = []

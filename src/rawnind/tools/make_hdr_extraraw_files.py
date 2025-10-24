@@ -47,7 +47,7 @@ def proc_dataset(dataset: str, num_threads: int = NUM_THREADS):
     else:
         ds_names = sorted(os.listdir(EXTRARAW_DATA_DPATH))
     for ds_name in ds_names:
-        src_dpath = os.path.join(EXTRARAW_DATA_DPATH, ds_name, "src", "bayer")
+        src_dpath = os.path.join(EXTRARAW_DATA_DPATH, ds_name, "DocScan", "bayer")
         dest_dpath = os.path.join(
             src_dpath, "..", "..", "proc", raw.OUTPUT_COLOR_PROFILE
         )

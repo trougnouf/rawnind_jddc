@@ -4,7 +4,7 @@ import pytest
 import trio
 
 from rawnind.dataset.PipelineBuilder import PipelineBuilder
-from rawnind.dataset.SceneInfo import SceneInfo, ImageInfo
+from rawnind.dataset.SceneInfo import SceneInfo
 
 pytestmark = pytest.mark.dataset
 

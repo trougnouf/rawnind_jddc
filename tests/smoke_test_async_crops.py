@@ -1,64 +1,76 @@
 #!/usr/bin/env python3
 """Smoke test for the pipeline architecture with live visualization (Async Crop Producer variant)."""
+# todo: expand these tests as this P.O.S. is complicated and important
 
 import argparse
 import logging
 import os
 from pathlib import Path
 
-import trio
-import tracemalloc
 import psutil
+import trio
 
 from rawnind.dataset import (
     DataIngestor,
     Downloader,
     SceneIndexer,
-    AsyncAligner,
+    MetadataArtificer,
+    AsyncPipelineBridge,
+    CropProducerStage,
 )
-from rawnind.dataset.Aligner import MetadataArtificer
-from rawnind.dataset.crop_producer_stage_async import CropProducerStageAsync
-from rawnind.dataset.AsyncPipelineBridge import AsyncPipelineBridge
-from rawnind.dataset.visualizer import PipelineVisualizer
 from rawnind.dataset.channel_utils import (
     create_channel_dict,
     merge_channels,
     limit_producer,
 )
+from rawnind.dataset.visualizer import PipelineVisualizer
 
 # Constants
 CHANNEL_BUFFER_MULTIPLIER = 2.5
 DEFAULT_DOWNLOAD_CONCURRENCY = max(1, int(os.cpu_count() * 0.75))
 DEFAULT_MAX_WORKERS = max(1, int(os.cpu_count() * 0.75))
-LOG_FILE = Path('/tmp/smoke_test_async_crops.log')
-MEMORY_LOG_FILE = Path('/tmp/smoke_test_async_crops_memory.log')
+LOG_FILE = Path("/tmp/smoke_test_async_crops.log")
+MEMORY_LOG_FILE = Path("/tmp/smoke_test_async_crops_memory.log")
 
 
 class MemoryProfiler:
-    """Lightweight memory profiler for smoke test."""
+    """
+    Provides tools for profiling memory usage and tracking memory changes.
+
+    The MemoryProfiler class facilitates capturing memory-related snapshots
+    and enables comparison and reporting of memory growth or reduction over time.
+    It uses `psutil` for RSS memory tracking and `tracemalloc` for detailed
+    memory usage snapshots. The collected data is stored in a log file for analysis.
+
+    Attributes:
+        process (psutil.Process): The process being monitored for memory usage.
+        snapshots (list): A collection of memory snapshots with their labels,
+            memory usage, and detailed `tracemalloc` snapshots.
+        log_file (TextIO): The file where memory profiling logs are recorded.
+    """
 
     def __init__(self):
         self.process = psutil.Process(os.getpid())
         self.snapshots = []
-        self.log_file = MEMORY_LOG_FILE.open('w')
+        self.log_file = MEMORY_LOG_FILE.open("w")
 
     def snapshot(self, label: str):
         snap = tracemalloc.take_snapshot()
         rss_mb = self.process.memory_info().rss / (1024 * 1024)
-        self.snapshots.append({'label': label, 'snapshot': snap, 'rss_mb': rss_mb})
+        self.snapshots.append({"label": label, "snapshot": snap, "rss_mb": rss_mb})
         msg = f"[{label}] RSS: {rss_mb:.1f} MB"
-        self.log_file.write(msg + '\n')
+        self.log_file.write(msg + "\n")
         self.log_file.flush()
 
     def compare_last(self, top_n=10):
         if len(self.snapshots) < 2:
             return
         s1, s2 = self.snapshots[-2], self.snapshots[-1]
-        delta = s2['rss_mb'] - s1['rss_mb']
+        delta = s2["rss_mb"] - s1["rss_mb"]
         msg = f"\n{s1['label']} → {s2['label']}: Δ{delta:+.1f} MB"
-        self.log_file.write(msg + '\n')
+        self.log_file.write(msg + "\n")
 
-        top = s2['snapshot'].compare_to(s1['snapshot'], 'lineno')
+        top = s2["snapshot"].compare_to(s1["snapshot"], "lineno")
         self.log_file.write(f"Top {top_n} increases:\n")
         for stat in top[:top_n]:
             self.log_file.write(f"  {stat}\n")
@@ -67,8 +79,8 @@ class MemoryProfiler:
     def report(self):
         if not self.snapshots:
             return
-        peak = max(s['rss_mb'] for s in self.snapshots)
-        growth = self.snapshots[-1]['rss_mb'] - self.snapshots[0]['rss_mb']
+        peak = max(s["rss_mb"] for s in self.snapshots)
+        growth = self.snapshots[-1]["rss_mb"] - self.snapshots[0]["rss_mb"]
         msg = f"\n{'='*60}\nMemory Summary: Peak={peak:.1f} MB, Growth={growth:+.1f} MB\n{'='*60}\n"
         self.log_file.write(msg)
         self.log_file.close()
@@ -77,18 +89,20 @@ class MemoryProfiler:
 
 def setup_logging():
     """Configure logging for the smoke test."""
-    file_handler = logging.FileHandler(LOG_FILE, mode='w')
+    file_handler = logging.FileHandler(LOG_FILE, mode="w")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(
-        logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     )
     logging.root.addHandler(file_handler)
     logging.root.setLevel(logging.DEBUG)
 
-    logging.getLogger('rawnind.dataset.Downloader').setLevel(logging.CRITICAL)
-    logging.getLogger('rawnind.dataset.AsyncAligner').setLevel(logging.INFO)
-    logging.getLogger('rawnind.dataset.MetadataArtificer').setLevel(logging.DEBUG)
-    logging.getLogger('rawnind.dataset.crop_producer_stage_async').setLevel(logging.DEBUG)
+    logging.getLogger("rawnind.dataset.Downloader").setLevel(logging.CRITICAL)
+    logging.getLogger("rawnind.dataset.MetadataArtificer").setLevel(logging.INFO)
+    logging.getLogger("rawnind.dataset.MetadataArtificer").setLevel(logging.DEBUG)
+    logging.getLogger("rawnind.dataset.crop_producer_stage_async").setLevel(
+        logging.DEBUG
+    )
 
     print(f"Logging to: {LOG_FILE}")
 
@@ -152,7 +166,9 @@ async def downloader_with_stats(downloader, recv, send, viz):
                 nursery.start_soon(download_one, img_info)
 
 
-async def verifier_with_stats(recv, verified_send, missing_send, max_retries, viz, max_concurrent=None):
+async def verifier_with_stats(
+    recv, verified_send, missing_send, max_retries, viz, max_concurrent=None
+):
     """Verifier stage with metrics tracking, retry logic, and concurrent processing."""
     from rawnind.dataset import hash_sha1
 
@@ -193,7 +209,9 @@ async def verifier_with_stats(recv, verified_send, missing_send, max_retries, vi
                 logging.warning(f"File not found: {img_info.local_path}")
                 if img_info.retry_count >= max_retries:
                     await viz.update(errors=1)
-                    logging.error(f"File {img_info.filename} missing after {max_retries} retries")
+                    logging.error(
+                        f"File {img_info.filename} missing after {max_retries} retries"
+                    )
 
     async with recv, verified_send, trio.open_nursery() as nursery:
         async for img_info in recv:
@@ -246,16 +264,11 @@ async def enricher_with_stats(enricher, recv, send, viz, debug, max_concurrent=N
         await send.aclose()
 
 
-
-
-
-
-
-
 async def test_dataloader_integration(dataset_root, viz):
     """Test that YAML → Dataset → DataLoader → Model works."""
     import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+    sys.path.insert(0, str(Path(__file__).parent.parent / "DocScan"))
 
     from rawnind.libs.rawds import CleanProfiledRGBNoisyBayerImageCropsDataset
     from rawnind.models.raw_denoiser import UtNet2
@@ -277,9 +290,14 @@ async def test_dataloader_integration(dataset_root, viz):
     try:
         # Create dataset from YAML
         await viz.update(dataloader_init=1)
-        dataset = CleanProfiledRGBNoisyBayerImageCropsDataset(num_crops=2, crop_size=256, test_reserve=[],
-                                                              bayer_only=True, content_fpaths=[str(yaml_path)],
-                                                              test=False)
+        dataset = CleanProfiledRGBNoisyBayerImageCropsDataset(
+            num_crops=2,
+            crop_size=256,
+            test_reserve=[],
+            bayer_only=True,
+            content_fpaths=[str(yaml_path)],
+            test=False,
+        )
 
         print(f"✓ Dataset created: {len(dataset)} scenes")
         await viz.update(dataloader_images=len(dataset))
@@ -289,7 +307,7 @@ async def test_dataloader_integration(dataset_root, viz):
             dataset,
             batch_size=2,
             shuffle=False,
-            num_workers=0  # Single-threaded for smoke test
+            num_workers=0,  # Single-threaded for smoke test
         )
 
         print("✓ DataLoader created")
@@ -311,14 +329,16 @@ async def test_dataloader_integration(dataset_root, viz):
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
         loss_fn = nn.MSELoss()
 
-        print(f"✓ Model created with {sum(p.numel() for p in model.parameters()):,} parameters")
+        print(
+            f"✓ Model created with {sum(p.numel() for p in model.parameters()):,} parameters"
+        )
 
         # Run one training step
         print("✓ Running one training step...")
         model.train()
 
-        input_tensor = batch['y_crops']  # Noisy bayer crops
-        target_tensor = batch['x_crops']  # Clean bayer crops
+        input_tensor = batch["y_crops"]  # Noisy bayer crops
+        target_tensor = batch["x_crops"]  # Clean bayer crops
 
         # Forward pass
         output = model(input_tensor)
@@ -328,8 +348,8 @@ async def test_dataloader_integration(dataset_root, viz):
             target_tensor = nn.functional.interpolate(
                 target_tensor,
                 size=output.shape[-2:],
-                mode='bilinear',
-                align_corners=False
+                mode="bilinear",
+                align_corners=False,
             )
 
         # Compute loss
@@ -351,10 +371,13 @@ async def test_dataloader_integration(dataset_root, viz):
         print(f"\n❌ DataLoader/Model test failed: {e}")
         await viz.update(dataloader_errors=1)
         import traceback
+
         traceback.print_exc()
 
 
-async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, download_concurrency=None):
+async def run_smoke_test(
+    max_scenes=None, timeout_seconds=None, debug=False, download_concurrency=None
+):
     """
     Run the pipeline smoke test.
 
@@ -379,7 +402,9 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
     ingestor = DataIngestor(dataset_root=dataset_root)
     downloader = Downloader(max_concurrent=download_concurrency, progress=False)
     indexer = SceneIndexer(dataset_root)
-    enricher = AsyncAligner(dataset_root=dataset_root, enable_crops_enrichment=False)
+    enricher = MetadataArtificer(
+        dataset_root=dataset_root, enable_crops_enrichment=False
+    )
 
     # Initialize PostDownloadWorker stages with decorator-based progress tracking
     # Use unbuffered channels (0) for stages that load images to prevent OOM
@@ -390,11 +415,11 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
         write_metadata=True,
     ).attach_visualizer(viz)
 
-    cropper = CropProducerStageAsync(
+    cropper = CropProducerStage(
         output_dir=dataset_root / "crops",
         crop_size=256,
         num_crops=5,
-        max_workers=DEFAULT_MAX_WORKERS
+        max_workers=DEFAULT_MAX_WORKERS,
     ).attach_visualizer(viz)
 
     bridge = AsyncPipelineBridge(
@@ -402,8 +427,7 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
         backwards_compat_mode=True,
     )
 
-
-    #TODO Seperation of concerns: the following needs to be encapsulated and moved into PipelineBuilder
+    # TODO Seperation of concerns: the following needs to be encapsulated and moved into PipelineBuilder
     async with aligner, cropper:
         async with trio.open_nursery() as nursery:
             if timeout_seconds is not None:
@@ -411,68 +435,102 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
 
             # Create channels
             channels = create_channel_dict(
-                ['scene', 'new_file', 'missing', 'downloaded', 'verified',
-                 'complete_scene'],
-                buffer_size
+                [
+                    "scene",
+                    "new_file",
+                    "missing",
+                    "downloaded",
+                    "verified",
+                    "complete_scene",
+                ],
+                buffer_size,
             )
             # Create unbuffered channels for image-heavy stages to prevent OOM
             enriched_send, enriched_recv = trio.open_memory_channel(0)
             aligned_send, aligned_recv = trio.open_memory_channel(0)
             cropped_send, cropped_recv = trio.open_memory_channel(0)
-            channels.update({
-                'enriched_send': enriched_send, 'enriched_recv': enriched_recv,
-                'aligned_send': aligned_send, 'aligned_recv': aligned_recv,
-                'cropped_send': cropped_send, 'cropped_recv': cropped_recv,
-            })
+            channels.update(
+                {
+                    "enriched_send": enriched_send,
+                    "enriched_recv": enriched_recv,
+                    "aligned_send": aligned_send,
+                    "aligned_recv": aligned_recv,
+                    "cropped_send": cropped_send,
+                    "cropped_recv": cropped_recv,
+                }
+            )
             merged_send, merged_recv = trio.open_memory_channel(buffer_size)
 
             # Start pipeline stages
             nursery.start_soon(
                 limit_producer,
-                ingestor.produce_scenes, max_scenes,
-                channels['scene_send'], buffer_size
+                ingestor.produce_scenes,
+                max_scenes,
+                channels["scene_send"],
+                buffer_size,
             )
             nursery.start_soon(
                 scanner_with_stats,
-                dataset_root, channels['scene_recv'], channels['new_file_send'],
-                channels['missing_send'], viz
+                dataset_root,
+                channels["scene_recv"],
+                channels["new_file_send"],
+                channels["missing_send"],
+                viz,
             )
             nursery.start_soon(
                 downloader_with_stats,
-                downloader, channels['missing_recv'], channels['downloaded_send'], viz
+                downloader,
+                channels["missing_recv"],
+                channels["downloaded_send"],
+                viz,
             )
             nursery.start_soon(
                 merge_channels,
-                channels['new_file_recv'], channels['downloaded_recv'], merged_send
+                channels["new_file_recv"],
+                channels["downloaded_recv"],
+                merged_send,
             )
             nursery.start_soon(
                 verifier_with_stats,
-                merged_recv, channels['verified_send'], channels['missing_send'], 2, viz, DEFAULT_MAX_WORKERS
+                merged_recv,
+                channels["verified_send"],
+                channels["missing_send"],
+                2,
+                viz,
+                DEFAULT_MAX_WORKERS,
             )
             nursery.start_soon(
                 indexer_with_stats,
-                indexer, channels['verified_recv'], channels['complete_scene_send'], viz
+                indexer,
+                channels["verified_recv"],
+                channels["complete_scene_send"],
+                viz,
             )
             nursery.start_soon(
                 enricher_with_stats,
-                enricher, channels['complete_scene_recv'], channels['enriched_send'], viz, debug, DEFAULT_MAX_WORKERS
+                enricher,
+                channels["complete_scene_recv"],
+                channels["enriched_send"],
+                viz,
+                debug,
+                DEFAULT_MAX_WORKERS,
             )
             # Decorated workers handle metrics automatically
             nursery.start_soon(
                 aligner.consume_and_produce,
-                channels['enriched_recv'], channels['aligned_send']
+                channels["enriched_recv"],
+                channels["aligned_send"],
             )
 
             # AsyncCropProducer uses consume_and_produce pattern (handles its own unloading)
             nursery.start_soon(
                 cropper.consume_and_produce,
-                channels['aligned_recv'], channels['cropped_send']
+                channels["aligned_recv"],
+                channels["cropped_send"],
             )
             # Bridge consumes cropped scenes and exposes legacy interface in-memory
-            nursery.start_soon(
-                bridge.consume,
-                channels['cropped_recv']
-            )
+            nursery.start_soon(bridge.consume, channels["cropped_recv"])
+
             # Watch bridge progress and update visualizer
             # Also trigger dataloader test as soon as YAML is ready
             async def _watch_bridge():
@@ -482,14 +540,18 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
                     await trio.sleep(0.1)
                     n = len(bridge)
                     if n > last:
-                        logging.info(f"Bridge progress: {n} scenes collected (was {last})")
+                        logging.info(
+                            f"Bridge progress: {n} scenes collected (was {last})"
+                        )
                         await viz.update(complete=(n - last))
                         last = n
-                    elif n == 0 and viz.counters.get('cropped', 0) > 0:
+                    elif n == 0 and viz.counters.get("cropped", 0) > 0:
                         # Debug: cropping happened but bridge is empty
-                        logging.warning(f"Bridge empty despite {viz.counters['cropped']} scenes cropped. Bridge state: {bridge.state.value}")
+                        logging.warning(
+                            f"Bridge empty despite {viz.counters['cropped']} scenes cropped. Bridge state: {bridge.state.value}"
+                        )
 
-                    #TODO: This is not how this should work/ be triggered. I think the key issue is that we need to
+                    # TODO: This is not how this should work/ be triggered. I think the key issue is that we need to
                     # have  a `BatchAccumulator the the next stage should _pull_ from - no push/trigger but natural
                     # demand pressure. The training loop needs to be able to trigger for a single batch but I think
                     # we are basically there.
@@ -498,14 +560,19 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
                     if n >= 2 and not yaml_tested:
                         yaml_tested = True
                         yaml_path = dataset_root / "pipeline_output.yaml"
-                        print(f"\nWriting {n} scene(s) to {yaml_path} for early dataloader test...")
+                        print(
+                            f"\nWriting {n} scene(s) to {yaml_path} for early dataloader test..."
+                        )
                         bridge.write_yaml_compatible_cache(yaml_path, dataset_root)
                         print("✓ YAML written, testing dataloader...")
-                        nursery.start_soon(test_dataloader_integration, dataset_root, viz)
+                        nursery.start_soon(
+                            test_dataloader_integration, dataset_root, viz
+                        )
 
                     if max_scenes and n >= max_scenes:
                         nursery.cancel_scope.cancel()
                         break
+
             nursery.start_soon(_watch_bridge)
 
     # Display summary
@@ -527,8 +594,8 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
     profiler.snapshot("9_complete")
     profiler.report()
 
-    total_errors = viz.counters['errors']
-    failed_verifications = viz.counters['failed']
+    total_errors = viz.counters["errors"]
+    failed_verifications = viz.counters["failed"]
 
     if total_errors > 0 or failed_verifications > 0:
         print("\n⚠️  ISSUES DETECTED:")
@@ -544,6 +611,7 @@ async def run_smoke_test(max_scenes=None, timeout_seconds=None, debug=False, dow
 
 if __name__ == "__main__":
     import tracemalloc
+
     tracemalloc.start()
 
     setup_logging()
@@ -552,20 +620,20 @@ if __name__ == "__main__":
         description="Pipeline smoke test with live visualization (Async Crop Producer variant)"
     )
     parser.add_argument(
-        "--max-scenes", type=int, default=None,
-        help="Maximum scenes allowed 'in flight' through the pipeline during processing."
+        "--max-scenes",
+        type=int,
+        default=None,
+        help="Maximum scenes allowed 'in flight' through the pipeline during processing.",
     )
     parser.add_argument(
-        "--timeout", type=int, default=None,
-        help="Maximum time to run in seconds"
+        "--timeout", type=int, default=None, help="Maximum time to run in seconds"
     )
+    parser.add_argument("--debug", action="store_true", help="Print debug information")
     parser.add_argument(
-        "--debug", action="store_true",
-        help="Print debug information"
-    )
-    parser.add_argument(
-        "--download-concurrency", type=int, default=None,
-        help=f"Maximum concurrent downloads (default: {DEFAULT_DOWNLOAD_CONCURRENCY})"
+        "--download-concurrency",
+        type=int,
+        default=None,
+        help=f"Maximum concurrent downloads (default: {DEFAULT_DOWNLOAD_CONCURRENCY})",
     )
 
     args = parser.parse_args()

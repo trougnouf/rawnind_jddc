@@ -8,7 +8,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1600_sha1=af0f3666ef5da429111561962257e25a4c260316.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1600_sha1=af0f3666ef5da429111561962257e25a4c260316.png
   mask_mean: 0.999906599521637
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0809690952301025
@@ -36,7 +36,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO2000_sha1=6c3bd2817f550ce4db624e1d8e6ae75a1476bdc9.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO2000_sha1=6c3bd2817f550ce4db624e1d8e6ae75a1476bdc9.png
   mask_mean: 0.9999057650566101
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0388028621673584
@@ -64,7 +64,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1250_sha1=99080840281a58dfc75d63ddaa2aeca4d8684f3d.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1250_sha1=99080840281a58dfc75d63ddaa2aeca4d8684f3d.png
   mask_mean: 0.9999051094055176
   overexposure_lb: 0.93554281393737
   raw_gain: 2.022524356842041
@@ -92,7 +92,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO4000_sha1=33e81ab0fc7647cac9334eb33cc33106e67d4002.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO4000_sha1=33e81ab0fc7647cac9334eb33cc33106e67d4002.png
   mask_mean: 0.9999057650566101
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0531294345855713
@@ -120,7 +120,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO500_sha1=a35321dfaae9551e6b61bca751da29b3a2b6e32c.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO500_sha1=a35321dfaae9551e6b61bca751da29b3a2b6e32c.png
   mask_mean: 0.9999051094055176
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0590481758117676
@@ -148,7 +148,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO125_sha1=98a609cd6add01ef1a772c5c98cf63398ade4f6d.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO125_sha1=98a609cd6add01ef1a772c5c98cf63398ade4f6d.png
   mask_mean: 0.99990314245224
   overexposure_lb: 0.93554281393737
   raw_gain: 2.014291524887085
@@ -176,7 +176,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO2500_sha1=6730860d55b6e9a5ee367da9a14740c431c9027f.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO2500_sha1=6730860d55b6e9a5ee367da9a14740c431c9027f.png
   mask_mean: 0.9999069571495056
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0608372688293457
@@ -204,7 +204,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1000_sha1=6e6c67d46bfecb7dea36e2bd2f506961c5c154e5.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1000_sha1=6e6c67d46bfecb7dea36e2bd2f506961c5c154e5.png
   mask_mean: 0.9999011754989624
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0705060958862305
@@ -232,7 +232,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1600_sha1=af0f3666ef5da429111561962257e25a4c260316.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1600_sha1=af0f3666ef5da429111561962257e25a4c260316.png
   mask_mean: 0.999906599521637
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0809690952301025
@@ -260,7 +260,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO2000_sha1=6c3bd2817f550ce4db624e1d8e6ae75a1476bdc9.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO2000_sha1=6c3bd2817f550ce4db624e1d8e6ae75a1476bdc9.png
   mask_mean: 0.9999057650566101
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0388028621673584
@@ -288,7 +288,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1250_sha1=99080840281a58dfc75d63ddaa2aeca4d8684f3d.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1250_sha1=99080840281a58dfc75d63ddaa2aeca4d8684f3d.png
   mask_mean: 0.9999051094055176
   overexposure_lb: 0.93554281393737
   raw_gain: 2.022524356842041
@@ -316,7 +316,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO4000_sha1=33e81ab0fc7647cac9334eb33cc33106e67d4002.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO4000_sha1=33e81ab0fc7647cac9334eb33cc33106e67d4002.png
   mask_mean: 0.9999057650566101
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0531294345855713
@@ -344,7 +344,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO500_sha1=a35321dfaae9551e6b61bca751da29b3a2b6e32c.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO500_sha1=a35321dfaae9551e6b61bca751da29b3a2b6e32c.png
   mask_mean: 0.9999051094055176
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0590481758117676
@@ -372,7 +372,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO125_sha1=98a609cd6add01ef1a772c5c98cf63398ade4f6d.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO125_sha1=98a609cd6add01ef1a772c5c98cf63398ade4f6d.png
   mask_mean: 0.99990314245224
   overexposure_lb: 0.93554281393737
   raw_gain: 2.014291524887085
@@ -400,7 +400,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO2500_sha1=6730860d55b6e9a5ee367da9a14740c431c9027f.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO2500_sha1=6730860d55b6e9a5ee367da9a14740c431c9027f.png
   mask_mean: 0.9999069571495056
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0608372688293457
@@ -428,7 +428,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1000_sha1=6e6c67d46bfecb7dea36e2bd2f506961c5c154e5.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0b53d7342784df8c9c4657ba7974ccd7815a7a69_Bayer_LeslieMountains_ISO1000_sha1=6e6c67d46bfecb7dea36e2bd2f506961c5c154e5.png
   mask_mean: 0.9999011754989624
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0705060958862305
@@ -456,7 +456,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO1600_sha1=af0f3666ef5da429111561962257e25a4c260316.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO1600_sha1=af0f3666ef5da429111561962257e25a4c260316.png
   mask_mean: 0.9999054670333862
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0542407035827637
@@ -484,7 +484,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO2000_sha1=6c3bd2817f550ce4db624e1d8e6ae75a1476bdc9.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO2000_sha1=6c3bd2817f550ce4db624e1d8e6ae75a1476bdc9.png
   mask_mean: 0.9999048113822937
   overexposure_lb: 0.93554281393737
   raw_gain: 2.012615919113159
@@ -512,7 +512,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO1250_sha1=99080840281a58dfc75d63ddaa2aeca4d8684f3d.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO1250_sha1=99080840281a58dfc75d63ddaa2aeca4d8684f3d.png
   mask_mean: 0.9999042749404907
   overexposure_lb: 0.93554281393737
   raw_gain: 1.9965463876724243
@@ -540,7 +540,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO4000_sha1=33e81ab0fc7647cac9334eb33cc33106e67d4002.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO4000_sha1=33e81ab0fc7647cac9334eb33cc33106e67d4002.png
   mask_mean: 0.9999064207077026
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0267584323883057
@@ -568,7 +568,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO500_sha1=a35321dfaae9551e6b61bca751da29b3a2b6e32c.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO500_sha1=a35321dfaae9551e6b61bca751da29b3a2b6e32c.png
   mask_mean: 0.9999059438705444
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0326011180877686
@@ -596,7 +596,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO125_sha1=98a609cd6add01ef1a772c5c98cf63398ade4f6d.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO125_sha1=98a609cd6add01ef1a772c5c98cf63398ade4f6d.png
   mask_mean: 0.9999034404754639
   overexposure_lb: 0.93554281393737
   raw_gain: 1.9884194135665894
@@ -624,7 +624,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO2500_sha1=6730860d55b6e9a5ee367da9a14740c431c9027f.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO2500_sha1=6730860d55b6e9a5ee367da9a14740c431c9027f.png
   mask_mean: 0.9999076128005981
   overexposure_lb: 0.93554281393737
   raw_gain: 2.034367084503174
@@ -652,7 +652,7 @@
   gt_fpath: gt/Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae.arw
   image_set: LeslieMountains
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO1000_sha1=6e6c67d46bfecb7dea36e2bd2f506961c5c154e5.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/LeslieMountains_Bayer_LeslieMountains_GT_ISO50_sha1=0605c040144373d51fc35faeec79cd7ca175e7ae_Bayer_LeslieMountains_ISO1000_sha1=6e6c67d46bfecb7dea36e2bd2f506961c5c154e5.png
   mask_mean: 0.9999009966850281
   overexposure_lb: 0.93554281393737
   raw_gain: 2.043911933898926
@@ -680,7 +680,7 @@
   gt_fpath: gt/Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38.crw
   image_set: D60-2
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/D60-2_Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38_Bayer_D60-2_ISO1037_sha1=aaa5a0772e45a487b03bd39beec503f2dc439c87.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/D60-2_Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38_Bayer_D60-2_ISO1037_sha1=aaa5a0772e45a487b03bd39beec503f2dc439c87.png
   mask_mean: 0.999825656414032
   overexposure_lb: 1.0
   raw_gain: 1.422633171081543
@@ -708,7 +708,7 @@
   gt_fpath: gt/Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38.crw
   image_set: D60-2
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/D60-2_Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38_Bayer_D60-2_ISO200_sha1=168089b71f4106cfc85febf1d689869e41e64687.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/D60-2_Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38_Bayer_D60-2_ISO200_sha1=168089b71f4106cfc85febf1d689869e41e64687.png
   mask_mean: 0.9998086094856262
   overexposure_lb: 1.0
   raw_gain: 1.0976605415344238
@@ -736,7 +736,7 @@
   gt_fpath: gt/Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38.crw
   image_set: D60-2
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/D60-2_Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38_Bayer_D60-2_ISO400_sha1=9f411646fa1d0f9a69cebb8546b0377efde699b0.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/D60-2_Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38_Bayer_D60-2_ISO400_sha1=9f411646fa1d0f9a69cebb8546b0377efde699b0.png
   mask_mean: 0.9998080134391785
   overexposure_lb: 1.0
   raw_gain: 1.0512210130691528
@@ -764,7 +764,7 @@
   gt_fpath: gt/Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38.crw
   image_set: D60-2
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/D60-2_Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38_Bayer_D60-2_ISO800_sha1=67a5e80d99f1c3c44f17e04cf2b4292154d073cf.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/D60-2_Bayer_D60-2_GT_ISO100_sha1=29f5b93638b1cf60d4afbd83fb2c1caca5c1ac38_Bayer_D60-2_ISO800_sha1=67a5e80d99f1c3c44f17e04cf2b4292154d073cf.png
   mask_mean: 0.9998092651367188
   overexposure_lb: 1.0
   raw_gain: 1.0614173412322998
@@ -792,7 +792,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO6400_sha1=1791bf53b82c4aaa139a9738c9c2796ecdec4720.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO6400_sha1=1791bf53b82c4aaa139a9738c9c2796ecdec4720.png
   mask_mean: 0.9916637539863586
   overexposure_lb: 0.93554281393737
   raw_gain: 1.969778060913086
@@ -820,7 +820,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO500_sha1=d7f31606888d82cbf989daebe045c7f953dcbb9f.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO500_sha1=d7f31606888d82cbf989daebe045c7f953dcbb9f.png
   mask_mean: 0.991682231426239
   overexposure_lb: 0.93554281393737
   raw_gain: 2.026369571685791
@@ -848,7 +848,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=c7f72fe07e21d6750f379deda47f016695ce2726.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=c7f72fe07e21d6750f379deda47f016695ce2726.png
   mask_mean: 0.9916648864746094
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0150034427642822
@@ -876,7 +876,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=cd3b28d2f00512561672734bfed0bd0ec26e808b.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=cd3b28d2f00512561672734bfed0bd0ec26e808b.png
   mask_mean: 0.9916802048683167
   overexposure_lb: 0.93554281393737
   raw_gain: 1.9446227550506592
@@ -904,7 +904,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO640_sha1=64dd3247c074cfb312026e68e34b19c61425ccb5.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO640_sha1=64dd3247c074cfb312026e68e34b19c61425ccb5.png
   mask_mean: 0.9916774034500122
   overexposure_lb: 0.93554281393737
   raw_gain: 2.102893590927124
@@ -932,7 +932,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=96d0edee18e4145c6e74d4596c8456abd1d26a9f.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=96d0edee18e4145c6e74d4596c8456abd1d26a9f.png
   mask_mean: 0.9916658997535706
   overexposure_lb: 0.93554281393737
   raw_gain: 2.1042919158935547
@@ -960,7 +960,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO3200_sha1=fd161a6baa9f74eeab6d6e4bf6c83223e67ef5b5.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO3200_sha1=fd161a6baa9f74eeab6d6e4bf6c83223e67ef5b5.png
   mask_mean: 0.9916713237762451
   overexposure_lb: 0.93554281393737
   raw_gain: 1.972084641456604
@@ -988,7 +988,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=9eed492dc6ff3f2f2df3dd1a1b648ee794de8d49.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2b9ac14816f886d24de9d09768cae3146f88ff1f_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=9eed492dc6ff3f2f2df3dd1a1b648ee794de8d49.png
   mask_mean: 0.9916802048683167
   overexposure_lb: 0.93554281393737
   raw_gain: 1.9542282819747925
@@ -1016,7 +1016,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO6400_sha1=1791bf53b82c4aaa139a9738c9c2796ecdec4720.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO6400_sha1=1791bf53b82c4aaa139a9738c9c2796ecdec4720.png
   mask_mean: 0.9916576147079468
   overexposure_lb: 0.93554281393737
   raw_gain: 1.9556646347045898
@@ -1044,7 +1044,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO500_sha1=d7f31606888d82cbf989daebe045c7f953dcbb9f.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO500_sha1=d7f31606888d82cbf989daebe045c7f953dcbb9f.png
   mask_mean: 0.9916746020317078
   overexposure_lb: 0.93554281393737
   raw_gain: 2.011850595474243
@@ -1072,7 +1072,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=c7f72fe07e21d6750f379deda47f016695ce2726.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=c7f72fe07e21d6750f379deda47f016695ce2726.png
   mask_mean: 0.9916592836380005
   overexposure_lb: 0.93554281393737
   raw_gain: 2.000566005706787
@@ -1100,7 +1100,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=cd3b28d2f00512561672734bfed0bd0ec26e808b.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=cd3b28d2f00512561672734bfed0bd0ec26e808b.png
   mask_mean: 0.9916726350784302
   overexposure_lb: 0.93554281393737
   raw_gain: 1.9306895732879639
@@ -1128,7 +1128,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO640_sha1=64dd3247c074cfb312026e68e34b19c61425ccb5.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO640_sha1=64dd3247c074cfb312026e68e34b19c61425ccb5.png
   mask_mean: 0.9916715025901794
   overexposure_lb: 0.93554281393737
   raw_gain: 2.0878262519836426
@@ -1156,7 +1156,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=96d0edee18e4145c6e74d4596c8456abd1d26a9f.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=96d0edee18e4145c6e74d4596c8456abd1d26a9f.png
   mask_mean: 0.9916605949401855
   overexposure_lb: 0.93554281393737
   raw_gain: 2.089214563369751
@@ -1184,7 +1184,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO3200_sha1=fd161a6baa9f74eeab6d6e4bf6c83223e67ef5b5.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO3200_sha1=fd161a6baa9f74eeab6d6e4bf6c83223e67ef5b5.png
   mask_mean: 0.991664707660675
   overexposure_lb: 0.93554281393737
   raw_gain: 1.95795476436615
@@ -1212,7 +1212,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=9eed492dc6ff3f2f2df3dd1a1b648ee794de8d49.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=8f42d64b0c93e2e17db1c3010ee69a383903f638_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=9eed492dc6ff3f2f2df3dd1a1b648ee794de8d49.png
   mask_mean: 0.9916732907295227
   overexposure_lb: 0.93554281393737
   raw_gain: 1.9402261972427368
@@ -1240,7 +1240,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO6400_sha1=1791bf53b82c4aaa139a9738c9c2796ecdec4720.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO6400_sha1=1791bf53b82c4aaa139a9738c9c2796ecdec4720.png
   mask_mean: 0.9920774102210999
   overexposure_lb: 0.93554281393737
   raw_gain: 1.8424897193908691
@@ -1268,7 +1268,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO500_sha1=d7f31606888d82cbf989daebe045c7f953dcbb9f.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO500_sha1=d7f31606888d82cbf989daebe045c7f953dcbb9f.png
   mask_mean: 0.9920942187309265
   overexposure_lb: 0.93554281393737
   raw_gain: 1.8954241275787354
@@ -1296,7 +1296,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=c7f72fe07e21d6750f379deda47f016695ce2726.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=c7f72fe07e21d6750f379deda47f016695ce2726.png
   mask_mean: 0.9920775890350342
   overexposure_lb: 0.93554281393737
   raw_gain: 1.8847925662994385
@@ -1324,7 +1324,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=cd3b28d2f00512561672734bfed0bd0ec26e808b.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=cd3b28d2f00512561672734bfed0bd0ec26e808b.png
   mask_mean: 0.9920934438705444
   overexposure_lb: 0.93554281393737
   raw_gain: 1.8189599514007568
@@ -1352,7 +1352,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO640_sha1=64dd3247c074cfb312026e68e34b19c61425ccb5.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO640_sha1=64dd3247c074cfb312026e68e34b19c61425ccb5.png
   mask_mean: 0.9920904636383057
   overexposure_lb: 0.93554281393737
   raw_gain: 1.9670032262802124
@@ -1380,7 +1380,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=96d0edee18e4145c6e74d4596c8456abd1d26a9f.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO8000_sha1=96d0edee18e4145c6e74d4596c8456abd1d26a9f.png
   mask_mean: 0.992077112197876
   overexposure_lb: 0.93554281393737
   raw_gain: 1.9683111906051636
@@ -1408,7 +1408,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO3200_sha1=fd161a6baa9f74eeab6d6e4bf6c83223e67ef5b5.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO3200_sha1=fd161a6baa9f74eeab6d6e4bf6c83223e67ef5b5.png
   mask_mean: 0.9920838475227356
   overexposure_lb: 0.93554281393737
   raw_gain: 1.8446472883224487
@@ -1436,7 +1436,7 @@
   gt_fpath: gt/Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461.arw
   image_set: MuseeL-Sepik-A7C
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=9eed492dc6ff3f2f2df3dd1a1b648ee794de8d49.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-Sepik-A7C_Bayer_MuseeL-Sepik-A7C_GT_ISO50_sha1=2e9d93e313df22260059c60b105ccd21d30aa461_Bayer_MuseeL-Sepik-A7C_ISO200_sha1=9eed492dc6ff3f2f2df3dd1a1b648ee794de8d49.png
   mask_mean: 0.9920932650566101
   overexposure_lb: 0.93554281393737
   raw_gain: 1.8279447555541992
@@ -1464,7 +1464,7 @@
   gt_fpath: gt/Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576.cr2
   image_set: MuseeL-sol-C500D
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-sol-C500D_Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576_Bayer_MuseeL-sol-C500D_ISO3200_sha1=16e9a4e5c7862bea889a69cd754148ead6d10641.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-sol-C500D_Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576_Bayer_MuseeL-sol-C500D_ISO3200_sha1=16e9a4e5c7862bea889a69cd754148ead6d10641.png
   mask_mean: 0.9998015761375427
   overexposure_lb: 1.0
   raw_gain: 2.5418694019317627
@@ -1492,7 +1492,7 @@
   gt_fpath: gt/Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576.cr2
   image_set: MuseeL-sol-C500D
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-sol-C500D_Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576_Bayer_MuseeL-sol-C500D_ISO400_sha1=ff1bc8ccbbaccf44afd334041041006e43926c1c.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-sol-C500D_Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576_Bayer_MuseeL-sol-C500D_ISO400_sha1=ff1bc8ccbbaccf44afd334041041006e43926c1c.png
   mask_mean: 0.9998989105224609
   overexposure_lb: 1.0
   raw_gain: 1.1023374795913696
@@ -1520,7 +1520,7 @@
   gt_fpath: gt/Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576.cr2
   image_set: MuseeL-sol-C500D
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-sol-C500D_Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576_Bayer_MuseeL-sol-C500D_ISO800_sha1=2b8ae3f23201d0718c7399d6c5766320a58a027e.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-sol-C500D_Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576_Bayer_MuseeL-sol-C500D_ISO800_sha1=2b8ae3f23201d0718c7399d6c5766320a58a027e.png
   mask_mean: 0.9998988509178162
   overexposure_lb: 1.0
   raw_gain: 1.009454369544983
@@ -1548,7 +1548,7 @@
   gt_fpath: gt/Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576.cr2
   image_set: MuseeL-sol-C500D
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-sol-C500D_Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576_Bayer_MuseeL-sol-C500D_ISO200_sha1=46151d1099aa1373698864348b78283864557267.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-sol-C500D_Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576_Bayer_MuseeL-sol-C500D_ISO200_sha1=46151d1099aa1373698864348b78283864557267.png
   mask_mean: 0.9998975992202759
   overexposure_lb: 1.0
   raw_gain: 1.1121461391448975
@@ -1576,7 +1576,7 @@
   gt_fpath: gt/Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576.cr2
   image_set: MuseeL-sol-C500D
   is_bayer: true
-  mask_fpath: /mnt/ceph/rawnind_jddc/src/rawnind/datasets/RawNIND/masks_0.4/MuseeL-sol-C500D_Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576_Bayer_MuseeL-sol-C500D_ISO3200_sha1=b565e770c91841dd7ce155b5fea2aee4c962002b.png
+  mask_fpath: /mnt/ceph/rawnind_jddc/DocScan/rawnind/datasets/RawNIND/masks_0.4/MuseeL-sol-C500D_Bayer_MuseeL-sol-C500D_GT_ISO100_sha1=1aecbe5ee04fea452bfb0a380a6e0f9b67f71576_Bayer_MuseeL-sol-C500D_ISO3200_sha1=b565e770c91841dd7ce155b5fea2aee4c962002b.png
   mask_mean: 0.9998994469642639
   overexposure_lb: 1.0
   raw_gain: 1.1055063009262085

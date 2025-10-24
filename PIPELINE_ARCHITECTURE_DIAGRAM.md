@@ -41,7 +41,7 @@ graph TB
         Downloader[Downloader<br/>Stage 3: Download Missing]
         Verifier[Verifier<br/>Stage 4: Hash Validation]
         Indexer[SceneIndexer<br/>Stage 5: Scene Grouping]
-        Enricher[AsyncAligner<br/>Stage 6: Metadata Addition]
+        Enricher[MetadataArtificer<br/>Stage 6: Metadata Addition]
         MetadataArtificer[MetadataArtificer<br/>Stage 7: Alignment Computation]
         Cropper[CropProducerStage<br/>Stage 8: Crop Extraction]
         YAMLWriter[YAMLArtifactWriter<br/>Stage 9: YAML Generation]
@@ -112,19 +112,6 @@ graph TB
     E2EWrapper ==>|__getitem__| E2EOutput
     
     style E2EOutput fill:#1a3d5c,stroke:#2e5c8a,stroke-width:3px,color:#e0e0e0
-
-    %% ============================================
-    %% MOCK PROCESSORS (Processing Components - ERROR)
-    %% ============================================
-    BayerProc[BayerProcessor<br/>COMPONENT<br/>---<br/>ERROR: MOCK ONLY<br/>Uses torch.randn<br/>Ignores actual data]
-    
-    RGBProc[RGBProcessor<br/>COMPONENT<br/>---<br/>ERROR: MOCK ONLY<br/>Uses torch.randn<br/>Ignores actual data]
-    
-    E2EWrapper -.->|needs real impl| BayerProc
-    E2EWrapper -.->|needs real impl| RGBProc
-    
-    style BayerProc fill:#6b1a1a,stroke:#8b1a1a,stroke-width:3px,color:#e0e0e0
-    style RGBProc fill:#6b1a1a,stroke:#8b1a1a,stroke-width:3px,color:#e0e0e0
 
     %% ============================================
     %% DATALOADER MANAGER (Processing Component)
@@ -257,7 +244,7 @@ SceneInfo (List) → Indexed Access → Dict Output → Batches → Model Output
 3. **Downloader** - Missing file downloads
 4. **Verifier** - Hash validation
 5. **SceneIndexer** - Scene grouping
-6. **AsyncAligner** - Metadata augmentation
+6. **MetadataArtificer** - Metadata augmentation
 7. **MetadataArtificer** - Alignment computation
 8. **CropProducerStage** - Crop extraction
 9. **YAMLArtifactWriter** - YAML generation
@@ -265,7 +252,6 @@ SceneInfo (List) → Indexed Access → Dict Output → Batches → Model Output
 **Downstream Components:**
 - **PipelineOrchestrator** - Pipeline lifecycle management (⚠️ import error)
 - **AsyncPipelineBridge** - Async-to-sync conversion (📍 wrong location)
-- **E2EDatasetWrapper** - PyTorch dataset wrapper (⚠️ uses mocks)
 - **BayerProcessor** - Bayer tensor creation (❌ mock only)
 - **RGBProcessor** - RGB tensor creation (❌ mock only)
 - **DataLoaderManager** - DataLoader factory (✅ working)
@@ -304,17 +290,7 @@ SceneInfo (List) → Indexed Access → Dict Output → Batches → Model Output
   - `__getitem__(index: int) → SceneInfo`
   - `__len__() → int`
 
-### 3. **E2EDatasetWrapper** (⚠️ Mock Implementation)
-- **Type**: Processing Component
-- **Location**: `archive/newark_training_integration/e2e_training_utils_refactored.py`
-- **Purpose**: Wraps bridge for PyTorch DataLoader
-- **Output Data Structure**: `Dict` with keys `input` and `target`
-- **Critical Issue**: Uses mock processors that generate random data
-- **Signature**:
-  - `__init__(bridge, split, crop_size, transform)`
-  - `__getitem__(idx: int) → Dict[str, Tensor]`
-
-### 4. **BayerProcessor & RGBProcessor** (❌ Missing Implementation)
+### 3. **BayerProcessor & RGBProcessor** (❌ Missing Implementation)
 - **Type**: Processing Components
 - **Location**: `archive/newark_training_integration/e2e_training_utils_refactored.py`
 - **Purpose**: Convert SceneInfo to tensor data structures
@@ -324,7 +300,7 @@ SceneInfo (List) → Indexed Access → Dict Output → Batches → Model Output
   - Read Bayer/RGB data from disk using rawpy
   - Apply proper normalization and preprocessing
 
-### 5. **RawNIND Dataset Classes** (⚠️ Signature Mismatch)
+### 4. **RawNIND Dataset Classes** (⚠️ Signature Mismatch)
 - **Type**: Processing Components (Alternative Path)
 - **Location**: `src/rawnind/libs/rawds.py`
 - **Input Data Structure**: YAML file paths (not SceneInfo objects)
@@ -335,7 +311,7 @@ SceneInfo (List) → Indexed Access → Dict Output → Batches → Model Output
   - `CleanProfiledRGBNoisyProfiledRGBImageCropsDataset`
   - `CleanProfiledRGBNoisyBayerImageCropsValidationDataset`
 
-### 6. **UtNet2 Model** (✅ Working)
+### 5. **UtNet2 Model** (✅ Working)
 - **Type**: Processing Component
 - **Location**: `src/rawnind/models/raw_denoiser.py`
 - **Input Data Structure**: Single tensor (Bayer 4-channel or RGB 3-channel)
@@ -344,7 +320,7 @@ SceneInfo (List) → Indexed Access → Dict Output → Batches → Model Output
   - ✅ Works with E2EDatasetWrapper
   - ⚠️ Needs key mapping for RawNIND datasets
 
-### 7. **DataLoaderManager** (✅ Working)
+### 6. **DataLoaderManager** (✅ Working)
 - **Type**: Processing Component
 - **Location**: `archive/newark_training_integration/e2e_training_smoke_refactored.py`
 - **Purpose**: Factory for creating PyTorch DataLoaders
@@ -352,61 +328,6 @@ SceneInfo (List) → Indexed Access → Dict Output → Batches → Model Output
   - `create_train_loader() → DataLoader`
   - `create_val_loader() → DataLoader`
 - **Note**: Functions correctly but relies on mock data from upstream
-
-## Missing Pieces Summary
-
-### ❌ Critical Missing Implementations
-
-1. **Real Image Data Extraction**
-   - **What's missing**: Actual implementation of BayerProcessor.process() and RGBProcessor.process()
-   - **Current state**: Both use `torch.randn()` synthetic data
-   - **Needed**: 
-     - Load image files from SceneInfo crop paths
-     - Read Bayer raw data using rawpy or similar
-     - Read RGB processed data
-     - Apply proper normalization and preprocessing
-
-2. **AsyncPipelineBridge Location**
-   - **Expected**: `src/rawnind/dataset/async_to_sync_bridge.py`
-   - **Actual**: `archive/newark_training_integration/async_to_sync_bridge.py`
-   - **Impact**: orchestrator.py has import errors
-   - **Solution**: Either move bridge or update imports
-
-3. **SceneInfo to YAML Integration**
-   - **Issue**: RawNIND datasets read YAML files, but format may not match YAMLArtifactWriter output
-   - **Missing**: Verification that pipeline YAML output matches dataset YAML input expectations
-
-### ⚠️ Signature Inconsistencies
-
-1. **Dataset Output Format**
-   - **E2EDatasetWrapper**: `{"input": Tensor, "target": Tensor}`
-   - **RawNIND Datasets**: `{"x_crops": Tensor, "y_crops": Tensor, "mask_crops": Tensor, "rgb_xyz_matrix": Tensor, "gain": float}`
-   - **Impact**: Cannot interchange dataset implementations without adapter
-   - **Solution**: Create adapter or standardize output format
-
-2. **Model Input Expectations**
-   - **UtNet2.forward()**: Expects single tensor `l`
-   - **E2EDatasetWrapper**: Provides `batch["input"]` - ✅ Compatible
-   - **RawNIND Datasets**: Provides `batch["y_crops"]` for noisy input - ⚠️ Needs key mapping
-
-3. **Collate Functions**
-   - **Location**: `archive/newark_training_integration/collate_functions.py`
-   - **Issue**: Not examined, may be needed for batch processing
-   - **Status**: Unknown compatibility
-
-### 📍 Architectural Issues
-
-1. **Two Parallel Data Paths (not ann issue - two distinct modes**
-   - **Path 1**: Async Pipeline → Bridge → E2EDatasetWrapper → DataLoader
-   - **Path 2**: YAML files → RawNIND Datasets → DataLoader (legacy compat)
-   - **
-   - **Missing**: Bridge from async pipeline output to RawNIND dataset input (yamls must be written and read from the same place)
-
-2. **Test Example vs Production**
-   - **tests/smoke_test.py**: Complete async pipeline example
-   - **archive/e2e_training_smoke_refactored.py**: Uses mock bridge with synthetic data
-   - **Issue**: No production integration example (planned))
-   - **Missing**: End-to-end example with real data flow (planned)
 
 ## Color Code Legend
 
@@ -417,8 +338,4 @@ SceneInfo (List) → Indexed Access → Dict Output → Batches → Model Output
 
 ## Recommendations
 
-1. **Implement Real Data Processing**: Replace mock BayerProcessor/RGBProcessor with actual image loading
-2. **Fix Bridge Location**: Move AsyncPipelineBridge to src/rawnind/dataset/ or update imports
-3**Create Integration Example**: Build end-to-end example connecting real pipeline to training
-4**Add Collate Function**: Ensure batch processing handles all metadata correctly
-5**Validate YAML Format**: Ensure pipeline output YAML matches dataset input expectations
+1**Add Collate Function**: Ensure batch processing handles all metadata correctly

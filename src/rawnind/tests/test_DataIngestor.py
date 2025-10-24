@@ -1,11 +1,9 @@
-from pathlib import Path
 
 import pytest
 import trio
 import yaml
 
 from rawnind.dataset.DataIngestor import DataIngestor
-from rawnind.dataset.SceneInfo import SceneInfo
 
 pytestmark = pytest.mark.dataset
 
@@ -96,7 +94,6 @@ async def test_fetch_remote_index(tmp_path, mocker):
     mock_metadata = '{"data": {"latestVersion": {"files": []}}}'
 
     def mock_fetch_yaml():
-        import yaml
         return mock_yaml_data
 
     def mock_fetch_metadata():

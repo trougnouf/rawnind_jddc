@@ -113,7 +113,7 @@ print("  → Solution: Split into R/G/B channels, FFT each, combine results")
 print()
 
 # Check files exist
-base_path = Path("src/rawnind/datasets/RawNIND/src")
+base_path = Path("DocScan/rawnind/datasets/RawNIND/DocScan")
 print("Verifying files exist...")
 all_good = True
 

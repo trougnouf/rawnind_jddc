@@ -40,6 +40,62 @@ from rawnind.libs import rawproc
 
 VALID_IMG_EXT = ["png", "jpg", "jpeg", "bmp", "gif", "tiff", "ppm", "j2k", "webp"]
 
+# Raw camera file extensions - single source of truth
+RAW_EXTENSIONS = (
+    "3fr",
+    "ari",
+    "arw",
+    "bay",
+    "braw",
+    "crw",
+    "cr2",
+    "cr3",
+    "cap",
+    "data",
+    "dcs",
+    "dcr",
+    "dng",
+    "drf",
+    "eip",
+    "erf",
+    "fff",
+    "gpr",
+    "iiq",
+    "k25",
+    "kdc",
+    "mdc",
+    "mef",
+    "mos",
+    "mrw",
+    "nef",
+    "nrw",
+    "obm",
+    "orf",
+    "pef",
+    "ptx",
+    "pxn",
+    "r3d",
+    "raf",
+    "raw",
+    "rwl",
+    "rw2",
+    "rwz",
+    "sr2",
+    "srf",
+    "srw",
+    "x3f",
+    "cri",
+    "jxs",
+    "tco",
+)
+
+# X-Trans sensor formats (Fujifilm) - subset of RAW_EXTENSIONS
+XTRANS_EXTENSIONS = ("raf",)
+
+# CFA type constants - single source of truth for CFA type strings
+CFA_TYPE_BAYER = "bayer"
+CFA_TYPE_XTRANS = "x-trans"
+
 
 def get_iso(fpath):
     def piexif_get_iso(fpath):
@@ -98,56 +154,39 @@ def get_iso(fpath):
 
 
 def is_raw(fpath: str) -> bool:
-    if fpath.split(".")[-1].lower() in (
-        "3fr",
-        "ari",
-        "arw",
-        "bay",
-        "braw",
-        "crw",
-        "cr2",
-        "cr3",
-        "cap",
-        "data",
-        "dcs",
-        "dcr",
-        "dng",
-        "drf",
-        "eip",
-        "erf",
-        "fff",
-        "gpr",
-        "iiq",
-        "k25",
-        "kdc",
-        "mdc",
-        "mef",
-        "mos",
-        "mrw",
-        "nef",
-        "nrw",
-        "obm",
-        "orf",
-        "pef",
-        "ptx",
-        "pxn",
-        "r3d",
-        "raf",
-        "raw",
-        "rwl",
-        "rw2",
-        "rwz",
-        "sr2",
-        "srf",
-        "srw",
-        # "tif",
-        "x3f",
-        "cri",
-        "jxs",
-        "tco",
-    ):
-        return True
-    return False
+    """Check if a file is a raw camera format based on its extension.
+    
+    Args:
+        fpath: File path to check
+        
+    Returns:
+        True if the file extension matches a known raw format, False otherwise
+    """
+    return fpath.split(".")[-1].lower() in RAW_EXTENSIONS
+
+
+def is_xtrans(fpath: str) -> bool:
+    """Check if a file is an X-Trans sensor raw format (Fujifilm).
+    
+    Args:
+        fpath: File path to check
+        
+    Returns:
+        True if the file extension matches an X-Trans format, False otherwise
+    """
+    return fpath.split(".")[-1].lower() in XTRANS_EXTENSIONS
+
+
+def get_cfa_type(fpath: str) -> str:
+    """Detect CFA type from file path.
+    
+    Args:
+        fpath: File path to check
+        
+    Returns:
+        CFA_TYPE_XTRANS if file is X-Trans format, CFA_TYPE_BAYER otherwise
+    """
+    return CFA_TYPE_XTRANS if is_xtrans(fpath) else CFA_TYPE_BAYER
 
 
 def piqa_msssim(img1path: str, img2path: str):
@@ -250,7 +289,7 @@ def is_valid_img(img_fpath, open_img=False, save_img=False, clean=False):
             img, metadata = rawproc.img_fpath_to_np_mono_flt_and_metadata(img_fpath)
             return True
         except AssertionError:
-            if img_fpath.lower().endswith(".raf"):  # cannot check RAF atm
+            if is_xtrans(img_fpath):  # cannot check X-Trans (RAF) atm
                 return True
             return False
         except ValueError:

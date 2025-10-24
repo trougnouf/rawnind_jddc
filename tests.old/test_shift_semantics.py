@@ -9,7 +9,7 @@ FINDING: shift=(dy,dx) represents NEGATIVE of physical content displacement.
 import numpy as np
 import sys
 
-sys.path.append("src")
+sys.path.append("DocScan")
 from rawnind.libs.rawproc import shift_images
 
 print("=" * 80)

@@ -23,7 +23,7 @@ graph TB
     style TitleNote fill:#1e4d7b,stroke:#2e5c8a,stroke-width:2px,color:#e0e0e0
 
     %% ============================================
-    %% ROW 1 — ASYNC PIPELINE (src/rawnind/dataset/) → WRITES TO DISK
+    %% ROW 1 — ASYNC PIPELINE (DocScan/rawnind/dataset/) → WRITES TO DISK
     %% ============================================
     subgraph Row1["ROW 1 — Async Pipeline src/rawnind/dataset/ → On-Disk YAML"]
         direction LR
@@ -32,7 +32,7 @@ graph TB
         Downloader[Downloader<br/>Stage 3: Download Missing]
         Verifier[Verifier<br/>Stage 4: Hash Validation]
         Indexer[SceneIndexer<br/>Stage 5: Scene Grouping]
-        Enricher[AsyncAligner<br/>Stage 6: Metadata Addition]
+        Enricher[MetadataArtificer<br/>Stage 6: Metadata Addition]
         MetadataArtificer[MetadataArtificer<br/>Stage 7: Alignment Computation]
         Cropper[CropProducerStage<br/>Stage 8: Crop Extraction]
         YAMLWriter[YAMLArtifactWriter<br/>Stage 9: YAML Generation]

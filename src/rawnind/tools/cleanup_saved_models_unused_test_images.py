@@ -150,10 +150,10 @@ def main():
 
     # Paths to the YAML configuration files
     trained_dc_models_yaml = Path(
-        "/orb/benoit_phd/src/rawnind/config/trained_dc_models.yaml"
+        "/orb/benoit_phd/DocScan/rawnind/config/trained_dc_models.yaml"
     )
     trained_denoise_models_yaml = Path(
-        "/orb/benoit_phd/src/rawnind/config/trained_denoise_models.yaml"
+        "/orb/benoit_phd/DocScan/rawnind/config/trained_denoise_models.yaml"
     )
 
     # Base directories for compression and denoising models

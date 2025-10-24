@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-sys.path.insert(0, "src")
+sys.path.insert(0, "DocScan")
 from rawnind.libs import alignment_backends, raw
 
 

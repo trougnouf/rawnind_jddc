@@ -1,31 +1,20 @@
-"""
-Pipeline orchestration for managing async pipeline lifecycle.
+"""Data pipeline orchestrator for managing experiment execution.
 
-This module provides orchestration components for coordinating the async
-dataset pipeline with synchronous PyTorch training loops, including:
-- Pipeline lifecycle management with health monitoring
-- Graceful shutdown and resource cleanup
-- Training loop integration with automatic retries
-- Fallback strategies for pipeline failures
-- Resource tracking and leak prevention
+The module defines classes for controlling the lifecycle of a data pipeline
+used in scientific experiments.  The primary class, ExperimentOrchestrator,
+coordinates pipeline initialization, execution, retry logic, monitoring,
+and graceful shutdown.  PipelineMetrics provides runtime statistics
+such as throughput and error counts, while PipelineState enumerates
+the possible lifecycle states of the orchestrator.
 
-Example Usage:
-    >>> from rawnind.dataset.orchestrator import PipelineOrchestrator
-    >>> from rawnind.dataset.async_to_sync_bridge import AsyncPipelineBridge
-    >>>
-    >>> # Initialize orchestrator
-    >>> orchestrator = PipelineOrchestrator(
-    >>>     pipeline=dataset_pipeline,
-    >>>     eager_start=True,
-    >>>     max_retries=3
-    >>> )
-    >>>
-    >>> # Run pipeline into bridge
-    >>> bridge = AsyncPipelineBridge(max_scenes=100)
-    >>> await orchestrator.run_into_bridge(bridge, min_scenes=10)
-    >>>
-    >>> # Graceful shutdown
-    >>> await orchestrator.shutdown(timeout_seconds=5)
+Exported classes
+----------------
+ExperimentOrchestrator
+    Coordinates the pipeline lifecycle.
+PipelineMetrics
+    Stores execution metrics.
+PipelineState
+    Enum of orchestrator states.
 """
 
 import logging
@@ -39,13 +28,13 @@ import torch
 import torch.utils.data as data
 import trio
 
-from rawnind.dataset.async_to_sync_bridge import AsyncPipelineBridge
+from rawnind.dataset import AsyncPipelineBridge
 from rawnind.dataset.constants import (
     DEFAULT_PIPELINE_TIMEOUT_SECONDS,
     DEFAULT_PER_SCENE_TIMEOUT,
     DEFAULT_TOTAL_TIMEOUT,
     DEFAULT_DELAY_MS,
-    DEFAULT_CHANNEL_BUFFER_SIZE
+    DEFAULT_CHANNEL_BUFFER_SIZE,
 )
 
 # Configure module logger
@@ -54,7 +43,18 @@ logger.setLevel(logging.INFO)
 
 
 class PipelineState(Enum):
-    """Pipeline lifecycle states."""
+    """Represents the various states a pipeline can be in during its lifecycle.
+
+    The PipelineState enumeration defines a set of string constants that
+    represent each possible state of a pipeline. The states cover the
+    full lifecycle, from the moment the pipeline is created (UNINITIALIZED)
+    to its termination (STOPPED or ERROR). Each state is used by pipeline
+    control logic to determine the correct actions and transitions.
+
+    Attributes:
+        None
+    """
+
     UNINITIALIZED = "uninitialized"
     INITIALIZED = "initialized"
     STARTING = "starting"
@@ -66,7 +66,39 @@ class PipelineState(Enum):
 
 @dataclass
 class PipelineMetrics:
-    """Metrics for pipeline monitoring."""
+    """Pipeline metrics for a scene processing pipeline.
+
+    This dataclass collects runtime statistics and operational counters for a
+    processing pipeline.  It stores timestamps marking the start and end of a
+    run, counts of processed scenes, and lists of errors and warnings that were
+    encountered.  Counters for retry attempts, fallback triggers, channel
+    lifecycle events, and throughput calculations are also available.
+
+    The class provides helper methods that compute the total runtime in seconds
+    and the average throughput (scenes per second) based on the recorded data.
+
+    Attributes:
+        start_time: Optional[float]
+            Timestamp (seconds since epoch) when the pipeline started.
+        stop_time: Optional[float]
+            Timestamp when the pipeline finished or was stopped.
+        scenes_processed: int
+            Number of scenes successfully processed during the run.
+        errors_encountered: List[str]
+            Error messages collected while the pipeline executed.
+        warnings: List[str]
+            Warning messages generated during execution.
+        retries_attempted: int
+            Total number of retry attempts that were made.
+        fallbacks_triggered: int
+            Number of times a fallback mechanism was activated.
+        channels_created: int
+            Total count of channels created during the run.
+        channels_closed: int
+            Total count of channels that were closed.
+
+    """
+
     start_time: Optional[float] = None
     stop_time: Optional[float] = None
     scenes_processed: int = 0
@@ -93,51 +125,117 @@ class PipelineMetrics:
         return None
 
 
-class PipelineOrchestrator:
-    """
-    Orchestrator for async pipeline lifecycle management.
+class ExperimentOrchestrator:
+    """\
+    ExperimentOrchestrator
 
-    Features:
-        - Startup/shutdown with timeout enforcement
-        - Health monitoring and status reporting
-        - Automatic retry on failures
-        - Resource tracking and cleanup
-        - Integration with multiple bridges
-        - Performance metrics collection
+    Brief summary
+    -------------
+    The ExperimentOrchestrator class manages the lifecycle of a data pipeline
+    by coordinating its startup, execution, monitoring, and shutdown. It supports
+    configurable retry logic, optional eager execution, streaming of batches,
+    and optional metrics collection.
+
+    Detailed description
+    --------------------
+    An ExperimentOrchestrator instance is created with a reference to a pipeline
+    object and optional configuration flags. It provides asynchronous methods
+    to start the pipeline, run the pipeline with a bridge while applying retry
+    logic, and gracefully shut it down within a timeout. The orchestrator
+    maintains an internal state machine to track whether the pipeline is
+    initialised, running, stopping, or stopped. Monitoring can be enabled to
+    collect execution metrics such as start and stop times, number of retries
+    attempted, and error messages.
+
+    The class exposes public attributes that can be inspected for debugging
+    or integration purposes. Private members prefixed with an underscore are
+    used internally for task and channel management and are intentionally
+    omitted from the documentation.
+
+    Attributes
+    ----------
+    DEFAULT_MAX_RETRIES (int):
+        The default maximum number of retry attempts for a pipeline run.
+
+    DEFAULT_RETRY_DELAY_SECONDS (float):
+        The default delay between consecutive retry attempts, expressed in
+        seconds.
+
+    pipeline (Pipeline):
+        The pipeline instance that will be orchestrated. The pipeline is
+        expected to expose optional `initialize`, `cleanup`, and other
+        lifecycle methods.
+
+    eager_start (bool):
+        When True, the pipeline is started immediately upon creation.
+        If False, the pipeline must be explicitly started via `start()`.
+
+    stream_batches (bool):
+        Indicates whether the pipeline should process data batches as a
+        continuous stream rather than in discrete batches.
+
+    max_retries (int):
+        The maximum number of times the orchestrator will retry a failed
+        pipeline run before marking the pipeline as in an error state.
+
+    enable_monitoring (bool):
+        Flag to enable collection of metrics during pipeline execution.
+        If False, the `metrics` attribute will be `None`.
+
+    channel_buffer_size (int):
+        The buffer size used for internal communication channels
+        between pipeline components.
+
+    state (PipelineState):
+        Current state of the pipeline, one of INITIALIZED, RUNNING,
+        STARTING, STOPPING, STOPPED, or ERROR.
+
+    metrics (Optional[PipelineMetrics]):
+        Instance holding runtime metrics when monitoring is enabled; otherwise
+        `None`.  The metrics include timestamps, retry counts, and error logs.
     """
 
     DEFAULT_MAX_RETRIES = 3
     DEFAULT_RETRY_DELAY_SECONDS = 1.0
 
     def __init__(
-            self,
-            pipeline,
-            eager_start: bool = False,
-            stream_batches: bool = False,
-            max_retries: int = DEFAULT_MAX_RETRIES,
-            enable_monitoring: bool = True,
-            channel_buffer_size: int = DEFAULT_CHANNEL_BUFFER_SIZE
+        self,
+        pipeline,
+        eager_start: bool = False,
+        stream_batches: bool = False,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        enable_monitoring: bool = True,
+        channel_buffer_size: int = DEFAULT_CHANNEL_BUFFER_SIZE,
     ):
         """
-        Initialize pipeline orchestrator.
+        Initializes a PipelineOrchestrator.
+
+        Sets up the orchestrator with the provided pipeline and configuration options.
+        Validates input parameters and initializes internal state, metrics, and task
+        tracking structures.
 
         Args:
-            pipeline: Async pipeline instance
-            eager_start: Start returning scenes before full collection
-            stream_batches: Enable streaming of batches
-            max_retries: Maximum retry attempts on failure
-            enable_monitoring: Enable metrics collection
-            channel_buffer_size: Buffer size for trio channels
+            pipeline: The pipeline instance to be orchestrated.
+            eager_start: If ``True``, the orchestrator will start immediately upon
+                initialization.
+            stream_batches: If ``True``, batches will be streamed instead of collected.
+            max_retries: Maximum number of retry attempts for a failed task. Must be
+                non‑negative.
+            enable_monitoring: If ``True``, pipeline metrics will be collected.
+            channel_buffer_size: Size of the internal channel buffer. Must be positive.
 
         Raises:
-            ValueError: If invalid configuration provided
+            ValueError: If *pipeline* is ``None``, *max_retries* is negative, or
+                *channel_buffer_size* is not positive.
         """
         if not pipeline:
             raise ValueError("Pipeline cannot be None")
         if max_retries < 0:
             raise ValueError(f"max_retries must be non-negative, got {max_retries}")
         if channel_buffer_size <= 0:
-            raise ValueError(f"channel_buffer_size must be positive, got {channel_buffer_size}")
+            raise ValueError(
+                f"channel_buffer_size must be positive, got {channel_buffer_size}"
+            )
 
         self.pipeline = pipeline
         self.eager_start = eager_start
@@ -160,10 +258,23 @@ class PipelineOrchestrator:
 
     async def start(self) -> None:
         """
-        Start the pipeline with error handling.
+        Starts the pipeline.
+
+        This method transitions the pipeline from an idle or error state into a running
+        state. It performs any necessary initialization, updates metrics, and logs progress. If the
+        pipeline is already running or in the STARTING state, a RuntimeError is raised. Any exception
+        that occurs during initialization is logged and re‑raised after setting the pipeline state to
+        ERROR.
+
+        Args:
+            self: The Pipeline instance.
+
+        Returns:
+            None.
 
         Raises:
-            RuntimeError: If pipeline is already running or in error state
+            RuntimeError: If the pipeline is already running or in the STARTING state.
+            Exception: If an error occurs during initialization or startup.
         """
         if self.state in [PipelineState.RUNNING, PipelineState.STARTING]:
             raise RuntimeError(f"Pipeline already running (state: {self.state})")
@@ -178,7 +289,7 @@ class PipelineOrchestrator:
 
         try:
             # Perform any pipeline initialization
-            if hasattr(self.pipeline, 'initialize'):
+            if hasattr(self.pipeline, "initialize"):
                 await self.pipeline.initialize()
 
             self.state = PipelineState.RUNNING
@@ -191,15 +302,23 @@ class PipelineOrchestrator:
                 self.metrics.errors_encountered.append(str(e))
             raise
 
-    async def shutdown(self, timeout_seconds: int = DEFAULT_PIPELINE_TIMEOUT_SECONDS) -> None:
+    async def shutdown(
+        self, timeout_seconds: int = DEFAULT_PIPELINE_TIMEOUT_SECONDS
+    ) -> None:
         """
-        Perform graceful shutdown with timeout.
+        Shuts down the pipeline, ensuring that all resources are cleaned up within
+        the specified timeout.
 
         Args:
-            timeout_seconds: Maximum time to wait for shutdown
+            timeout_seconds (int): Maximum number of seconds to wait for the
+                shutdown process to complete. If the timeout is reached, a
+                TimeoutError is raised.
+
+        Returns:
+            None
 
         Raises:
-            TimeoutError: If shutdown exceeds timeout
+            TimeoutError: Raised when the shutdown exceeds ``timeout_seconds``.
         """
         if self.state == PipelineState.STOPPED:
             logger.debug("Pipeline already stopped")
@@ -214,7 +333,9 @@ class PipelineOrchestrator:
 
             if cancel_scope.cancelled_caught:
                 logger.error(f"Shutdown timed out after {timeout_seconds} seconds")
-                raise TimeoutError(f"Pipeline shutdown exceeded {timeout_seconds} seconds")
+                raise TimeoutError(
+                    f"Pipeline shutdown exceeded {timeout_seconds} seconds"
+                )
 
         finally:
             self.state = PipelineState.STOPPED
@@ -224,19 +345,32 @@ class PipelineOrchestrator:
             logger.info("Pipeline shutdown complete")
 
     async def _cleanup_resources(self) -> None:
-        """Clean up all pipeline resources."""
+        """
+        Cleans up resources used by the pipeline.
+
+        This coroutine cancels any currently running asynchronous tasks, closes
+        all active channels, and runs the pipeline‑specific cleanup routine if it
+        is defined. After performing these actions, it clears the internal
+        collections that track running tasks and active channels.
+
+        Args:
+            self: The instance whose resources are being cleaned up.
+
+        Returns:
+            None
+        """
         # Cancel running tasks
         for task in self._running_tasks:
-            if hasattr(task, 'cancel'):
+            if hasattr(task, "cancel"):
                 task.cancel()
 
         # Close active channels
         for channel in self._active_channels:
-            if hasattr(channel, 'aclose'):
+            if hasattr(channel, "aclose"):
                 await channel.aclose()
 
         # Pipeline-specific cleanup
-        if hasattr(self.pipeline, 'cleanup'):
+        if hasattr(self.pipeline, "cleanup"):
             await self.pipeline.cleanup()
 
         self._running_tasks.clear()
@@ -261,22 +395,40 @@ class PipelineOrchestrator:
         return self.metrics
 
     async def run_into_bridge(
-            self,
-            bridge: AsyncPipelineBridge,
-            min_scenes: Optional[int] = None,
-            timeout_seconds: Optional[float] = None
+        self,
+        bridge: AsyncPipelineBridge,
+        min_scenes: Optional[int] = None,
+        timeout_seconds: Optional[float] = None,
     ) -> None:
         """
-        Run pipeline and feed scenes into bridge with retry logic.
+        Runs the pipeline using the provided bridge, optionally enforcing a minimum
+        number of scenes and a timeout for the overall operation.
+
+        This method first verifies that the pipeline is in a healthy state. It then
+        attempts to execute the pipeline, respecting the configured maximum number of
+        retries. Each attempt is bounded by a timeout; if the timeout elapses the
+        run is aborted and a ``TimeoutError`` is raised.  On failure, the method
+        increments retry counters, records metrics (if enabled), and waits for an
+        increasing delay before the next attempt.  When the run succeeds, the
+        method exits after logging a success message.
 
         Args:
-            bridge: Bridge to receive scenes
-            min_scenes: Minimum scenes before returning (for eager start)
-            timeout_seconds: Overall timeout for operation
+            bridge: The asynchronous pipeline bridge used to communicate with the
+                downstream components.
+            min_scenes: Optional minimum number of scenes that must be processed
+                before the run is considered successful. If ``None``, no minimum is
+                enforced.
+            timeout_seconds: Optional total timeout for a single run attempt. If
+                ``None``, a default timeout value is used.
+
+        Returns:
+            None.
 
         Raises:
-            RuntimeError: If pipeline fails after all retries
-            TimeoutError: If operation exceeds timeout
+            RuntimeError: If the pipeline is not healthy before starting, or if the
+                maximum number of retries is exceeded and the run fails permanently.
+            TimeoutError: If a single run attempt exceeds the specified timeout.
+            Exception: Propagates any unexpected exception raised during execution.
         """
         if not self.is_healthy():
             raise RuntimeError(f"Pipeline not healthy (state: {self.state})")
@@ -286,13 +438,17 @@ class PipelineOrchestrator:
 
         while retry_count <= self.max_retries:
             try:
-                logger.info(f"Starting pipeline run (attempt {retry_count + 1}/{self.max_retries + 1})")
+                logger.info(
+                    f"Starting pipeline run (attempt {retry_count + 1}/{self.max_retries + 1})"
+                )
 
                 with trio.move_on_after(timeout_seconds) as cancel_scope:
                     await self._run_with_monitoring(bridge, min_scenes)
 
                 if cancel_scope.cancelled_caught:
-                    raise TimeoutError(f"Pipeline run exceeded {timeout_seconds} seconds")
+                    raise TimeoutError(
+                        f"Pipeline run exceeded {timeout_seconds} seconds"
+                    )
 
                 # Success - exit retry loop
                 logger.info("Pipeline run completed successfully")
@@ -305,7 +461,9 @@ class PipelineOrchestrator:
                     self.metrics.errors_encountered.append(str(e))
 
                 if retry_count > self.max_retries:
-                    logger.error(f"Pipeline failed after {self.max_retries} retries: {e}")
+                    logger.error(
+                        f"Pipeline failed after {self.max_retries} retries: {e}"
+                    )
                     self.state = PipelineState.ERROR
                     raise RuntimeError(f"Pipeline failed permanently: {e}")
 
@@ -313,20 +471,32 @@ class PipelineOrchestrator:
                 await trio.sleep(self.DEFAULT_RETRY_DELAY_SECONDS * retry_count)
 
     async def _run_with_monitoring(
-            self,
-            bridge: AsyncPipelineBridge,
-            min_scenes: Optional[int]
+        self, bridge: AsyncPipelineBridge, min_scenes: Optional[int]
     ) -> None:
         """
-        Internal run with monitoring and resource tracking.
+        Runs the pipeline and monitoring tasks within a Trio nursery.
+
+        This method creates a pair of memory channels for communication between the
+        pipeline and the consumer, registers the channels for resource tracking, and
+        starts the pipeline execution task. Depending on the `eager_start` flag and the
+        provided `min_scenes` value, it either begins eager collection of results or
+        delegates consumption to the supplied bridge. All started tasks are added to
+        the internal list of running tasks for later management.
 
         Args:
-            bridge: Bridge to receive scenes
-            min_scenes: Minimum scenes for eager start
+            bridge: An AsyncPipelineBridge responsible for consuming messages from the
+                pipeline.
+            min_scenes: Minimum number of scenes required before eager collection starts.
+                If `None` or falsy, eager start is disabled.
+
+        Returns:
+            None
         """
         async with trio.open_nursery() as nursery:
             # Create channels
-            send_channel, recv_channel = trio.open_memory_channel(self.channel_buffer_size)
+            send_channel, recv_channel = trio.open_memory_channel(
+                self.channel_buffer_size
+            )
 
             # Track resources
             with self._lock:
@@ -341,25 +511,30 @@ class PipelineOrchestrator:
             # Start collection task
             if self.eager_start and min_scenes:
                 collection_task = nursery.start_soon(
-                    self._collect_with_eager_start,
-                    bridge,
-                    recv_channel,
-                    min_scenes
+                    self._collect_with_eager_start, bridge, recv_channel, min_scenes
                 )
             else:
                 collection_task = nursery.start_soon(
                     bridge.consume,
                     recv_channel,
-                    self._progress_callback if self.metrics else None
+                    self._progress_callback if self.metrics else None,
                 )
             self._running_tasks.append(collection_task)
 
     async def _run_pipeline_safe(self, send_channel) -> None:
         """
-        Run pipeline with error handling.
+        Runs the pipeline safely, ensuring the channel is closed and metrics are
+        updated even if an error occurs.
 
         Args:
-            send_channel: Channel to send scenes to
+            send_channel: The asynchronous channel used to send data through the
+                pipeline.
+
+        Returns:
+            None.
+
+        Raises:
+            Exception: Propagates any exception raised during pipeline execution.
         """
         try:
             async with send_channel:
@@ -373,18 +548,29 @@ class PipelineOrchestrator:
                     self.metrics.channels_closed += 1
 
     async def _collect_with_eager_start(
-            self,
-            bridge: AsyncPipelineBridge,
-            recv_channel,
-            min_scenes: int
+        self, bridge: AsyncPipelineBridge, recv_channel, min_scenes: int
     ) -> None:
         """
-        Collect scenes with eager start capability.
+        Collect scenes from an asynchronous channel and delegate processing to a bridge,
+        triggering a ready signal once a minimum number of scenes have been processed.
+
+        This coroutine continuously reads scenes from ``recv_channel`` within an async
+        context manager. For each received scene it attempts to invoke the bridge's
+        ``_process_scene`` method (if present). When the bridge confirms successful
+        processing, the internal counter is incremented and optional metrics are
+        updated. Once the count reaches ``min_scenes`` a ready signal is logged and
+        subsequent scenes continue to be processed without further signaling.
 
         Args:
-            bridge: Bridge to collect into
-            recv_channel: Channel to receive from
-            min_scenes: Minimum scenes before signaling ready
+            bridge: An instance providing a ``_process_scene`` coroutine used to handle
+                each incoming scene.
+            recv_channel: An asynchronous iterable channel that yields scenes. It must
+                support the async context manager protocol.
+            min_scenes: The threshold of successfully processed scenes required to log
+                the eager‑start ready message.
+
+        Returns:
+            None
         """
         collected = 0
         ready_signaled = False
@@ -392,7 +578,7 @@ class PipelineOrchestrator:
         async with recv_channel:
             async for scene in recv_channel:
                 # Process scene (delegate to bridge)
-                if hasattr(bridge, '_process_scene'):
+                if hasattr(bridge, "_process_scene"):
                     if await bridge._process_scene(scene, collected):
                         collected += 1
 
@@ -407,11 +593,20 @@ class PipelineOrchestrator:
 
     def _progress_callback(self, current: int, total: Optional[int]) -> None:
         """
-        Progress callback for metrics tracking.
+        Updates progress metrics and logs collection status.
+
+        This callback is invoked during scene collection to keep track of the number
+        of processed scenes. If a metrics object is available, it updates the
+        `scenes_processed` attribute. Depending on whether the total number of
+        scenes is known, it logs either a percentage progress or a simple count.
 
         Args:
-            current: Current scene count
-            total: Total expected scenes (if known)
+            current: Number of scenes that have been processed so far.
+            total: Total number of scenes to be processed, or ``None`` if the total
+                is not known.
+
+        Returns:
+            None
         """
         if self.metrics:
             self.metrics.scenes_processed = current
@@ -434,39 +629,47 @@ class PipelineOrchestrator:
             "is_running": self.is_running(),
             "is_healthy": self.is_healthy(),
             "active_tasks": len(self._running_tasks),
-            "active_channels": len(self._active_channels)
+            "active_channels": len(self._active_channels),
         }
 
         if self.metrics:
-            health.update({
-                "metrics": {
-                    "runtime_seconds": self.metrics.runtime_seconds(),
-                    "scenes_processed": self.metrics.scenes_processed,
-                    "throughput": self.metrics.throughput(),
-                    "errors": len(self.metrics.errors_encountered),
-                    "retries": self.metrics.retries_attempted
+            health.update(
+                {
+                    "metrics": {
+                        "runtime_seconds": self.metrics.runtime_seconds(),
+                        "scenes_processed": self.metrics.scenes_processed,
+                        "throughput": self.metrics.throughput(),
+                        "errors": len(self.metrics.errors_encountered),
+                        "retries": self.metrics.retries_attempted,
+                    }
                 }
-            })
+            )
 
         return health
 
 
 class ShutdownManager:
     """
-    Enhanced shutdown manager with graceful termination and resource verification.
+    Handles graceful shutdown of a pipeline with timeout and cleanup verification.
 
-    Coordinates clean shutdown across multiple components with:
-        - Timeout enforcement
-        - Resource leak detection
-        - Graceful degradation
-        - Forced termination as last resort
+    The manager coordinates the shutdown of a pipeline, ensuring that all
+    components receive a shutdown signal, wait for completion, and optionally
+    verify that resources such as open files, running tasks, and active channels
+    have been released. If the shutdown does not finish within the configured
+    timeout, the manager forces termination and records any resource leaks.
+
+    Attributes:
+        pipeline: Pipeline to manage.
+        timeout_seconds: Shutdown timeout in seconds.
+        verify_cleanup: Whether to verify that all resources are released after
+            shutdown.
     """
 
     def __init__(
-            self,
-            pipeline,
-            timeout_seconds: int = DEFAULT_PIPELINE_TIMEOUT_SECONDS,
-            verify_cleanup: bool = True
+        self,
+        pipeline,
+        timeout_seconds: int = DEFAULT_PIPELINE_TIMEOUT_SECONDS,
+        verify_cleanup: bool = True,
     ):
         """
         Initialize shutdown manager.
@@ -533,12 +736,12 @@ class ShutdownManager:
 
     async def _signal_shutdown(self) -> None:
         """Signal all components to begin shutdown."""
-        if hasattr(self.pipeline, 'signal_shutdown'):
+        if hasattr(self.pipeline, "signal_shutdown"):
             await self.pipeline.signal_shutdown()
 
     async def _wait_for_completion(self) -> None:
         """Wait for all components to complete shutdown."""
-        if hasattr(self.pipeline, 'wait_shutdown'):
+        if hasattr(self.pipeline, "wait_shutdown"):
             await self.pipeline.wait_shutdown()
         else:
             # Fallback: simple wait
@@ -546,7 +749,7 @@ class ShutdownManager:
 
     async def _force_termination(self) -> None:
         """Force termination of stuck components."""
-        if hasattr(self.pipeline, 'force_stop'):
+        if hasattr(self.pipeline, "force_stop"):
             await self.pipeline.force_stop()
 
     async def _verify_resources_released(self) -> List[str]:
@@ -559,17 +762,17 @@ class ShutdownManager:
         leaks = []
 
         # Check for open files
-        if hasattr(self.pipeline, 'open_files'):
+        if hasattr(self.pipeline, "open_files"):
             if self.pipeline.open_files:
                 leaks.append(f"Open files: {len(self.pipeline.open_files)}")
 
         # Check for running tasks
-        if hasattr(self.pipeline, 'running_tasks'):
+        if hasattr(self.pipeline, "running_tasks"):
             if self.pipeline.running_tasks:
                 leaks.append(f"Running tasks: {len(self.pipeline.running_tasks)}")
 
         # Check for active channels
-        if hasattr(self.pipeline, 'active_channels'):
+        if hasattr(self.pipeline, "active_channels"):
             if self.pipeline.active_channels:
                 leaks.append(f"Active channels: {len(self.pipeline.active_channels)}")
 
@@ -578,20 +781,34 @@ class ShutdownManager:
 
 class TrainingLoopIntegrator:
     """
-    Training loop integration with automatic recovery.
+    Integrates a training loop with an asynchronous data pipeline.
 
-    Manages DataLoader creation, epoch coordination, and failure handling for
-    integration with PyTorch training loops.
+    This class manages the creation of a PyTorch DataLoader from an
+    AsyncPipelineBridge instance, runs training epochs with optional
+    batch processing limits, and tracks statistics such as epochs
+    completed and total batches processed. It also provides simple
+    recovery logic to continue training after encountering a batch
+    processing error.
+
+    Attributes:
+        bridge: AsyncPipelineBridge instance used as the source of data.
+        batch_size: Batch size used by the DataLoader.
+        num_workers: Number of worker processes for data loading.
+        shuffle: Whether to shuffle the dataset each epoch.
+        prefetch_factor: Number of batches to prefetch when using
+            multiple workers.
+        enable_recovery: Enables automatic recovery when a batch
+            processing error occurs.
     """
 
     def __init__(
-            self,
-            bridge: AsyncPipelineBridge,
-            batch_size: int = 2,
-            num_workers: int = 0,
-            shuffle: bool = True,
-            prefetch_factor: int = 2,
-            enable_recovery: bool = True
+        self,
+        bridge: AsyncPipelineBridge,
+        batch_size: int = 2,
+        num_workers: int = 0,
+        shuffle: bool = True,
+        prefetch_factor: int = 2,
+        enable_recovery: bool = True,
     ):
         """
         Initialize training loop integrator.
@@ -624,7 +841,9 @@ class TrainingLoopIntegrator:
             f"workers={num_workers}, shuffle={shuffle}"
         )
 
-    def create_dataloader(self, collate_fn: Optional[Callable] = None) -> data.DataLoader:
+    def create_dataloader(
+        self, collate_fn: Optional[Callable] = None
+    ) -> data.DataLoader:
         """
         Create PyTorch DataLoader from bridge.
 
@@ -645,8 +864,7 @@ class TrainingLoopIntegrator:
 
         # Create dataset adapter
         dataset = PipelineDataLoaderAdapter(
-            self.bridge,
-            worker_safe=(self.num_workers > 0)
+            self.bridge, worker_safe=(self.num_workers > 0)
         )
 
         # Create DataLoader
@@ -658,7 +876,7 @@ class TrainingLoopIntegrator:
             collate_fn=collate_fn,
             prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None,
             persistent_workers=(self.num_workers > 0),
-            pin_memory=torch.cuda.is_available()
+            pin_memory=torch.cuda.is_available(),
         )
 
         logger.info(f"Created DataLoader with {len(dataset)} scenes")
@@ -666,9 +884,7 @@ class TrainingLoopIntegrator:
         return dataloader
 
     def run_epoch(
-            self,
-            process_batch: Callable,
-            max_batches: Optional[int] = None
+        self, process_batch: Callable, max_batches: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Run one training epoch with error recovery.
@@ -688,7 +904,7 @@ class TrainingLoopIntegrator:
             "epoch": self._epochs_completed,
             "batches_processed": 0,
             "scenes_processed": 0,
-            "errors": []
+            "errors": [],
         }
 
         try:
@@ -716,7 +932,9 @@ class TrainingLoopIntegrator:
 
                     # Try to recover
                     if not self._attempt_recovery(batch_idx):
-                        raise RuntimeError("Failed to recover from batch processing error")
+                        raise RuntimeError(
+                            "Failed to recover from batch processing error"
+                        )
 
         except Exception as e:
             self._last_error = e
@@ -758,223 +976,32 @@ class TrainingLoopIntegrator:
             "epochs_completed": self._epochs_completed,
             "total_batches_processed": self._total_batches_processed,
             "last_error": str(self._last_error) if self._last_error else None,
-            "bridge_scenes": len(self.bridge)
+            "bridge_scenes": len(self.bridge),
         }
-
-
-class LegacyDataLoaderFallback:
-    """
-    Fallback mechanism to legacy dataloaders on pipeline failure.
-
-    Provides automatic detection, switching, and recovery with minimal disruption
-    to training workflows.
-    """
-
-    def __init__(
-            self,
-            pipeline,
-            legacy_dataset_class,
-            auto_fallback: bool = True,
-            fallback_threshold: int = 3
-    ):
-        """
-        Initialize legacy fallback.
-
-        Args:
-            pipeline: Primary pipeline to use
-            legacy_dataset_class: Legacy dataset class for fallback
-            auto_fallback: Enable automatic fallback
-            fallback_threshold: Number of failures before fallback
-        """
-        self.pipeline = pipeline
-        self.legacy_dataset_class = legacy_dataset_class
-        self.auto_fallback = auto_fallback
-        self.fallback_threshold = fallback_threshold
-
-        self._failure_count = 0
-        self._using_fallback = False
-        self._fallback_reason = None
-
-        logger.info(
-            f"LegacyFallback initialized: auto={auto_fallback}, "
-            f"threshold={fallback_threshold}"
-        )
-
-    def get_dataloader(
-            self,
-            batch_size: int = 2,
-            on_fallback: Optional[Callable] = None,
-            **kwargs
-    ) -> data.DataLoader:
-        """
-        Get dataloader with automatic fallback on failure.
-
-        Args:
-            batch_size: Batch size for DataLoader
-            on_fallback: Callback when fallback triggered
-            **kwargs: Additional DataLoader arguments
-
-        Returns:
-            PyTorch DataLoader (either pipeline or legacy)
-        """
-        # Try pipeline first (unless already failed)
-        if not self._using_fallback:
-            try:
-                # Check pipeline health
-                if self._check_pipeline_health():
-                    # Create pipeline-based loader
-                    from rawnind.dataset.adapters import PipelineDataLoaderAdapter
-
-                    adapter = PipelineDataLoaderAdapter(self.pipeline)
-                    dataloader = data.DataLoader(
-                        adapter,
-                        batch_size=batch_size,
-                        **kwargs
-                    )
-
-                    logger.info("Using pipeline-based DataLoader")
-                    return dataloader
-
-            except Exception as e:
-                self._failure_count += 1
-                logger.warning(f"Pipeline failed (attempt {self._failure_count}): {e}")
-
-                if self._failure_count >= self.fallback_threshold:
-                    self._trigger_fallback(str(e), on_fallback)
-
-        # Use legacy fallback
-        if self._using_fallback or self.auto_fallback:
-            logger.info("Using legacy DataLoader fallback")
-
-            # Create legacy dataset
-            legacy_dataset = self._create_legacy_dataset()
-
-            dataloader = data.DataLoader(
-                legacy_dataset,
-                batch_size=batch_size,
-                **kwargs
-            )
-
-            return dataloader
-
-        # No fallback available
-        raise RuntimeError("Pipeline failed and fallback is disabled")
-
-    def _check_pipeline_health(self) -> bool:
-        """
-        Check if pipeline is healthy.
-
-        Returns:
-            bool: True if pipeline appears healthy
-        """
-        # Check various health indicators
-        if hasattr(self.pipeline, 'fail_on_startup'):
-            if self.pipeline.fail_on_startup:
-                return False
-
-        if hasattr(self.pipeline, 'is_healthy'):
-            return self.pipeline.is_healthy()
-
-        # Default: assume healthy
-        return True
-
-    def _trigger_fallback(self, reason: str, callback: Optional[Callable]) -> None:
-        """
-        Trigger fallback to legacy loader.
-
-        Args:
-            reason: Reason for fallback
-            callback: Optional callback to invoke
-        """
-        self._using_fallback = True
-        self._fallback_reason = reason
-
-        logger.warning(f"Triggering fallback to legacy DataLoader: {reason}")
-
-        if callback:
-            try:
-                callback(reason)
-            except Exception as e:
-                logger.error(f"Fallback callback failed: {e}")
-
-    def _create_legacy_dataset(self):
-        """
-        Create legacy dataset instance.
-
-        Returns:
-            Legacy dataset instance
-        """
-        # Create with default configuration
-        # In production, this would use proper configuration
-        return self.legacy_dataset_class()
-
-    def reset(self) -> None:
-        """Reset fallback state for retry."""
-        self._failure_count = 0
-        self._using_fallback = False
-        self._fallback_reason = None
-        logger.info("Fallback state reset")
-
-    def get_status(self) -> Dict[str, Any]:
-        """
-        Get fallback status.
-
-        Returns:
-            dict: Fallback status information
-        """
-        return {
-            "using_fallback": self._using_fallback,
-            "failure_count": self._failure_count,
-            "fallback_reason": self._fallback_reason,
-            "auto_fallback": self.auto_fallback,
-            "threshold": self.fallback_threshold
-        }
-
-
-# Keep minimal versions of other classes for compatibility
-class FallbackManager:
-    """Manages graceful degradation on pipeline failures."""
-
-    def __init__(self, pipeline, fallback_to_cache: bool = True):
-        """Initialize fallback manager."""
-        self.pipeline = pipeline
-        self.fallback_to_cache = fallback_to_cache
-
-    async def run_with_recovery(
-            self,
-            send_channel,
-            warnings: list
-    ) -> None:
-        """Run pipeline with error recovery."""
-        try:
-            if hasattr(self.pipeline, 'fail_after_count'):
-                fail_after = self.pipeline.fail_after_count
-                count = 0
-                async with send_channel:
-                    async for scene in self.pipeline.generate_scenes():
-                        await send_channel.send(scene)
-                        count += 1
-                        if count >= fail_after:
-                            warnings.append("Pipeline failed after 5 scenes")
-                            break
-            else:
-                await self.pipeline.run(send_channel)
-        except Exception as e:
-            warnings.append(f"Pipeline error: {e}")
 
 
 class TimeoutManager:
     """Enforces timeouts on pipeline operations."""
 
-    def __init__(self, per_scene_timeout: float = DEFAULT_PER_SCENE_TIMEOUT,
-                 total_timeout: float = DEFAULT_TOTAL_TIMEOUT):
+    def __init__(
+        self,
+        per_scene_timeout: float = DEFAULT_PER_SCENE_TIMEOUT,
+        total_timeout: float = DEFAULT_TOTAL_TIMEOUT,
+    ):
         """Initialize timeout manager."""
         self.per_scene_timeout = per_scene_timeout
         self.total_timeout = total_timeout
 
 
 class ResourceTracker:
-    """Tracks resource lifecycle for cleanup verification."""
+    """Track resource usage across channels and files.
+
+    This class keeps a record of active trio channels and open
+    files so that callers can assert that all resources have been
+    released after a test or operation.  The internal state is
+    maintained in private lists; callers interact with the class
+    exclusively through the public methods.
+    """
 
     def __init__(self):
         """Initialize resource tracker."""
@@ -999,13 +1026,26 @@ class ResourceTracker:
 
 
 class SceneValidator:
-    """Validates scene completeness."""
+    """Validate scenes based on image content.
+
+    The SceneValidator class encapsulates logic for checking that a scene
+    contains an acceptable set of clean and noisy images.  It exposes a
+    configurable set of parameters that control the strictness of the
+    validation and the minimum image counts required.
+
+    Attributes:
+        require_clean: Indicates whether the scene must contain at least one
+            clean image.  If set to ``True`` the validator will reject a
+            scene that has no clean images.
+        min_noisy_images: Minimum number of noisy images that must be present
+            in the scene for it to be considered valid.  The default is
+            one.
+        strict: Flag that can be used to enable additional, more strict
+            checks in future extensions.  Currently it does not affect the
+            validation logic."""
 
     def __init__(
-            self,
-            require_clean: bool = True,
-            min_noisy_images: int = 1,
-            strict: bool = True
+        self, require_clean: bool = True, min_noisy_images: int = 1, strict: bool = True
     ):
         """Initialize scene validator."""
         self.require_clean = require_clean

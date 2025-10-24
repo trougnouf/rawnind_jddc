@@ -1,7 +1,6 @@
 """
 Basic tests for MeilisearchIndexer.
 
-Lighter test coverage than YAMLArtifactWriter since this is a utility/debug tool.
 
 Enhanced with trio.testing utilities for deterministic async testing:
 - MockClock for timeout/timing tests
@@ -10,20 +9,19 @@ Enhanced with trio.testing utilities for deterministic async testing:
 """
 
 from pathlib import Path
-from typing import Dict, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 import trio
 import trio.testing
-import httpx
 
-from rawnind.dataset.SceneInfo import SceneInfo, ImageInfo
 from rawnind.dataset.MeilisearchIndexer import (
     MeilisearchIndexer,
     scene_to_meilisearch_document,
-    search_scenes
+    search_scenes,
 )
+from rawnind.dataset.SceneInfo import SceneInfo, ImageInfo
 
 pytestmark = pytest.mark.dataset
 
@@ -32,9 +30,15 @@ pytestmark = pytest.mark.dataset
 # Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def minimal_scene():
-    """Create a minimal valid SceneInfo for testing."""
+    """
+    Creates a minimal test scene with one clean and one noisy image for testing purposes.
+
+    Returns:
+        SceneInfo: A minimal scene object with one clean image and one noisy image.
+    """
     gt_img = ImageInfo(
         filename="gt.exr",
         sha1="abc123",
@@ -61,7 +65,7 @@ def minimal_scene():
             "mask_mean": 0.92,
             "raw_gain": 1.5,
             "crops": [{"coordinates": [512, 256]}],
-        }
+        },
     )
 
     return SceneInfo(
@@ -87,8 +91,31 @@ def mock_httpx_client():
 # Tests for scene_to_meilisearch_document()
 # ============================================================================
 
+
 def test_scene_to_meilisearch_document_basic(minimal_scene):
-    """Test basic document generation."""
+    """
+    Transforms a minimal scene object into a Meilisearch document format.
+
+    This function processes a scene object and converts it into a dictionary
+    that can be indexed by Meilisearch. The resulting document contains
+    various metadata fields about the scene including image counts, sensor
+    information, and file paths.
+
+    Args:
+        minimal_scene: A scene object containing minimal scene data for
+            processing into a Meilisearch document.
+
+    Returns:
+        A dictionary representing the Meilisearch document with fields
+            including id, scene_name, cfa_type, unknown_sensor, test_reserve,
+            clean_image_count, noisy_image_count, avg_alignment_loss,
+            avg_mask_mean, total_crops, has_metadata, gt_filename,
+            noisy_filenames, and indexed_at timestamp.
+
+    Raises:
+        AssertionError: If any of the expected assertions about the document
+            structure or values fail during validation.
+    """
     document = scene_to_meilisearch_document(minimal_scene)
 
     assert document["id"] == "test_scene"
@@ -115,14 +142,16 @@ def test_scene_to_meilisearch_document_no_metadata():
         unknown_sensor=True,
         test_reserve=True,
         clean_images=[],
-        noisy_images=[ImageInfo(
-            filename="noisy.arw",
-            sha1="abc",
-            is_clean=False,
-            scene_name="minimal_scene",
-            scene_images=["noisy.arw"],
-            cfa_type="x-trans",
-        )],
+        noisy_images=[
+            ImageInfo(
+                filename="noisy.arw",
+                sha1="abc",
+                is_clean=False,
+                scene_name="minimal_scene",
+                scene_images=["noisy.arw"],
+                cfa_type="x-trans",
+            )
+        ],
     )
 
     document = scene_to_meilisearch_document(scene)
@@ -151,7 +180,7 @@ def test_scene_to_meilisearch_document_multiple_noisy():
                 scene_name="multi_scene",
                 scene_images=["noisy1.arw"],
                 cfa_type="bayer",
-                metadata={"alignment_loss": 0.1, "mask_mean": 0.9, "crops": [1, 2]}
+                metadata={"alignment_loss": 0.1, "mask_mean": 0.9, "crops": [1, 2]},
             ),
             ImageInfo(
                 filename="noisy2.arw",
@@ -160,7 +189,7 @@ def test_scene_to_meilisearch_document_multiple_noisy():
                 scene_name="multi_scene",
                 scene_images=["noisy2.arw"],
                 cfa_type="bayer",
-                metadata={"alignment_loss": 0.2, "mask_mean": 0.8, "crops": [3, 4, 5]}
+                metadata={"alignment_loss": 0.2, "mask_mean": 0.8, "crops": [3, 4, 5]},
             ),
         ],
     )
@@ -176,6 +205,7 @@ def test_scene_to_meilisearch_document_multiple_noisy():
 # ============================================================================
 # Tests for MeilisearchIndexer Initialization
 # ============================================================================
+
 
 def test_meilisearch_indexer_init(tmp_path):
     """Test MeilisearchIndexer initialization."""
@@ -207,6 +237,7 @@ def test_meilisearch_indexer_strips_trailing_slash(tmp_path):
 # Tests for process_scene()
 # ============================================================================
 
+
 @pytest.mark.trio
 async def test_process_scene_buffers_document(minimal_scene, tmp_path):
     """Test that process_scene buffers documents.
@@ -226,7 +257,9 @@ async def test_process_scene_buffers_document(minimal_scene, tmp_path):
 
 
 @pytest.mark.trio
-async def test_process_scene_flushes_at_batch_size(minimal_scene, tmp_path, mock_httpx_client):
+async def test_process_scene_flushes_at_batch_size(
+    minimal_scene, tmp_path, mock_httpx_client
+):
     """Test that buffer flushes at batch size.
 
     Uses wait_all_tasks_blocked to verify flush completion deterministically.
@@ -267,12 +300,13 @@ async def test_process_scene_flushes_at_batch_size(minimal_scene, tmp_path, mock
 # Tests for Meilisearch Integration (Mocked)
 # ============================================================================
 
+
 @pytest.mark.trio
 async def test_startup_creates_client(tmp_path):
     """Test that startup creates HTTP client."""
     indexer = MeilisearchIndexer(output_dir=tmp_path)
 
-    with patch('httpx.AsyncClient') as mock_client_class:
+    with patch("httpx.AsyncClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get.return_value = MagicMock(raise_for_status=lambda: None)
         mock_client_class.return_value = mock_client
@@ -303,7 +337,7 @@ async def test_flush_buffer_sends_to_meilisearch(tmp_path, mock_httpx_client):
 
     async def capture_post(*args, **kwargs):
         nonlocal json_payload_captured
-        json_payload_captured = list(kwargs['json'])  # Make a copy
+        json_payload_captured = list(kwargs["json"])  # Make a copy
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
         return mock_response
@@ -350,10 +384,11 @@ async def test_flush_buffer_handles_errors(tmp_path, mock_httpx_client, caplog):
 # Tests for search_scenes() Utility
 # ============================================================================
 
+
 @pytest.mark.trio
 async def test_search_scenes():
     """Test search_scenes utility function."""
-    with patch('httpx.AsyncClient') as mock_client_class:
+    with patch("httpx.AsyncClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -372,7 +407,7 @@ async def test_search_scenes():
             "http://localhost:7700",
             query="test",
             filters="cfa_type = 'bayer'",
-            limit=10
+            limit=10,
         )
 
         assert len(results) == 2
@@ -383,6 +418,7 @@ async def test_search_scenes():
 # Tests for PostDownloadWorker Compatibility
 # ============================================================================
 
+
 def test_inherits_from_post_download_worker(tmp_path):
     """Test that MeilisearchIndexer properly inherits from PostDownloadWorker."""
     from rawnind.dataset.PostDownloadWorker import PostDownloadWorker
@@ -390,6 +426,6 @@ def test_inherits_from_post_download_worker(tmp_path):
     indexer = MeilisearchIndexer(output_dir=tmp_path)
 
     assert isinstance(indexer, PostDownloadWorker)
-    assert hasattr(indexer, 'consume_and_produce')
-    assert hasattr(indexer, 'startup')
-    assert hasattr(indexer, 'shutdown')
+    assert hasattr(indexer, "consume_and_produce")
+    assert hasattr(indexer, "startup")
+    assert hasattr(indexer, "shutdown")

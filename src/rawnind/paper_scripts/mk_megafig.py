@@ -8,7 +8,7 @@ import hashlib
 import imageio.v3 as iio  # Modern imageio API for loading images
 
 # REC2020_ICC_FPATH = (
-#     "/orb/benoit_phd/src/ext/image_color_processing/data/lin_rec2020_from_dt.icc"
+#     "/orb/benoit_phd/DocScan/ext/image_color_processing/data/lin_rec2020_from_dt.icc"
 # )
 
 # also in grapher.py
@@ -40,8 +40,8 @@ LITERATURE = {
 }
 
 YAML_FILES = [
-    "/orb/benoit_phd/src/rawnind/plot_cfg/Picture2_32.yaml",
-    "/orb/benoit_phd/src/rawnind/plot_cfg/Picture1_32.yaml",
+    "/orb/benoit_phd/DocScan/rawnind/plot_cfg/Picture2_32.yaml",
+    "/orb/benoit_phd/DocScan/rawnind/plot_cfg/Picture1_32.yaml",
 ]
 
 # Rec. 2020 to Rec. 709 transformation matrix

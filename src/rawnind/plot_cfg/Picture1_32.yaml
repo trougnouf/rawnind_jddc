@@ -1,22 +1,22 @@
 Input:
   - method: "bayer input"
     images:
-      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/MuseeL-bluebirds-A7C/gt/darktable_exported/ISO50_capt0015.png"
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/DocScan/faux_Bayer/MuseeL-bluebirds-A7C/gt/darktable_exported/ISO50_capt0015.png"
         caption: "MS-SSIM: 1.00, s.s.: 8 s, ISO50"
         parameters: "s.s.: 8 s, ISO50"
         msssim: 1.00
         bpp: 5.27
-      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/MuseeL-bluebirds-A7C/darktable_exported/ISO16000_capt0002.png"
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/DocScan/faux_Bayer/MuseeL-bluebirds-A7C/darktable_exported/ISO16000_capt0002.png"
         caption: "MS-SSIM: 0.859, s.s.: 1/40 s, ISO16000"
         msssim: 0.859
         bpp: 8.57
         parameters: "s.s.: 1/40 s, ISO16000"
-      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/MuseeL-bluebirds-A7C/darktable_exported/ISO64000_capt0007.png"
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/DocScan/faux_Bayer/MuseeL-bluebirds-A7C/darktable_exported/ISO64000_capt0007.png"
         caption: "MS-SSIM: 0.577, s.s.: 1/160 s, ISO64000"
         msssim: 0.577
         parameters: "s.s.: 1/160 s, ISO64000"
         bpp: 9.62
-      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/MuseeL-bluebirds-A7C/darktable_exported/ISO204800_capt0010.png"
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/DocScan/faux_Bayer/MuseeL-bluebirds-A7C/darktable_exported/ISO204800_capt0010.png"
         caption: "MS-SSIM: 0.237, s.s.: 1/500 s, ISO204800"
         msssim: 0.237
         parameters: "s.s.: 1/500 s, ISO204800"

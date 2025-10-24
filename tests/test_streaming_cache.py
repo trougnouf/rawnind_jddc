@@ -4,11 +4,11 @@ Test suite for StreamingJSONCache - async cache streaming results to disk.
 
 import json
 import os
+import shutil
+import sys
 import tempfile
 import time
 from pathlib import Path
-import shutil
-import sys
 
 import pytest
 import trio
@@ -324,7 +324,7 @@ async def test_auto_compact_threshold(cache_path):
 
 @pytest.mark.trio
 async def test_with_metadata_enricher_pattern(cache_path):
-    """Test cache works with AsyncAligner access patterns."""
+    """Test cache works with MetadataArtificer access patterns."""
     cache = StreamingJSONCache(cache_path)
     await cache.load()
 

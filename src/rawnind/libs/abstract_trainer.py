@@ -177,7 +177,7 @@ class ImageToImageNN:
         os.makedirs(os.path.join(self.save_dpath, "saved_models"), exist_ok=True)
 
         save_src.save_src(
-            dest_root_dpath=os.path.join(self.save_dpath, "src"),
+            dest_root_dpath=os.path.join(self.save_dpath, "DocScan"),
             included_dirs=("rawnind", "common"),
         )
 

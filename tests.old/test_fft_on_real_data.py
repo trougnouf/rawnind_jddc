@@ -4,7 +4,7 @@ import numpy as np
 import sys
 from pathlib import Path
 
-sys.path.append("src")
+sys.path.append("DocScan")
 from rawnind.libs import raw
 from rawnind.libs.rawproc import shift_images, match_gain
 
@@ -121,7 +121,7 @@ print("=" * 80)
 print()
 
 # Load real RAW image
-base_dir = Path("src/rawnind/datasets/RawNIND/src/bayer")
+base_dir = Path("DocScan/rawnind/datasets/RawNIND/DocScan/bayer")
 gt_path = (
     base_dir
     / "Bark"

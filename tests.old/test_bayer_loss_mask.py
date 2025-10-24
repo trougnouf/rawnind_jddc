@@ -15,8 +15,8 @@ import sys
 import numpy as np
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# Add DocScan to path
+sys.path.insert(0, str(Path(__file__).parent / "DocScan"))
 
 from rawnind.libs import rawproc, raw
 from rawnind.libs.rawproc import (
@@ -194,7 +194,7 @@ def test_bayer_vs_rgb_pipeline():
                 f"    Noisy image MAE: {noisy_mae:.6f}, Max error: {noisy_max_error:.6f}"
             )
         else:
-            print(f"    Image shapes differ (expected due to cropping):")
+            print("    Image shapes differ (expected due to cropping):")
             print(f"      bayer path: {gt_rgb_from_bayer.shape}")
             print(f"      RGB path: {gt_rgb_aligned.shape}")
             img_mae = None
@@ -223,7 +223,7 @@ def test_bayer_vs_rgb_pipeline():
             )
             print(f"    Pixels rejected by bayer but accepted by RGB: {rgb_only.sum()}")
         else:
-            print(f"    Loss mask shapes differ:")
+            print("    Loss mask shapes differ:")
             print(f"      bayer path: {loss_mask_bayer.shape}")
             print(f"      RGB path: {loss_mask_rgb.shape}")
             mask_mae = None
@@ -257,7 +257,7 @@ def test_bayer_vs_rgb_pipeline():
     valid_img_comparisons = [r for r in results if r["img_mae"] is not None]
     if valid_img_comparisons:
         avg_img_mae = np.mean([r["img_mae"] for r in valid_img_comparisons])
-        print(f"\nAligned GT images (after demosaicing bayer):")
+        print("\nAligned GT images (after demosaicing bayer):")
         print(f"  Average MAE: {avg_img_mae:.6f}")
         for r in valid_img_comparisons:
             print(f"    {r['image_set']}: MAE={r['img_mae']:.6f}")
@@ -268,7 +268,7 @@ def test_bayer_vs_rgb_pipeline():
         avg_agreement = np.mean(
             [r["mask_agreement_pct"] for r in valid_mask_comparisons]
         )
-        print(f"\nLoss masks:")
+        print("\nLoss masks:")
         print(f"  Average MAE: {avg_mask_mae:.6f}")
         print(f"  Average agreement: {avg_agreement:.2f}%")
         for r in valid_mask_comparisons:

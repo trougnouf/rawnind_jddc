@@ -8,7 +8,7 @@ TDD WORKFLOW:
 
 import pytest
 import numpy as np
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 def test_demosaic_uses_oiio_not_cv2():

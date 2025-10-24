@@ -66,7 +66,7 @@ def proc_dataset(
     bad_exposure_files = []
     # list_of_src_dest: list[tuple[str, str]] = []  # bw compat, 2022-11-09
     list_of_src_dest: list = []
-    src_dpath = os.path.join(data_dpath, "src", "bayer")
+    src_dpath = os.path.join(data_dpath, "DocScan", "bayer")
     dest_dpath = os.path.join(src_dpath, "..", "..", "proc", raw.OUTPUT_COLOR_PROFILE)
     image_sets = (single_set,) if single_set else os.listdir(src_dpath)
     if test_images_only:

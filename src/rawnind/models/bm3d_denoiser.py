@@ -69,7 +69,7 @@ class BM3D_Denoiser(raw_denoiser.Denoiser):
         # # convert noisy_image to uint8
         # noisy_image = (noisy_image * 255).astype(np.uint8)
 
-        # denoised_image = cv2.xphoto.bm3dDenoising(src=noisy_image, h=float(self.sigma))
+        # denoised_image = cv2.xphoto.bm3dDenoising(DocScan=noisy_image, h=float(self.sigma))
         # denoised_image = (
         #     torch.from_numpy(denoised_image).to(dtype=orig_dtype) / 255
         # ).unsqueeze(0)

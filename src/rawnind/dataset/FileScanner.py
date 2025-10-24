@@ -3,7 +3,7 @@ from typing import List
 
 import trio
 
-from .SceneInfo import ImageInfo, SceneInfo
+from .SceneInfo import ImageInfo
 
 
 class FileScanner:

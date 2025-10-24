@@ -23,13 +23,13 @@ class DataIngestor:
         Args:
             cache_paths: Tuple of (yaml_cache_path, metadata_cache_path).
                         Defaults to (dataset_root/dataset_index.yaml, dataset_root/dataset_metadata.json)
-            dataset_root: Root directory for dataset files (default: src/rawnind/datasets/RawNIND/src)
+            dataset_root: Root directory for dataset files (default: DocScan/rawnind/datasets/RawNIND/DocScan)
             dataset_metadata_url: URL for dataset metadata API (default: Dataverse API URL)
         """
         self.dataset_root = (
             Path(dataset_root)
             if dataset_root
-            else Path("src/rawnind/datasets/RawNIND/src")
+            else Path("DocScan/rawnind/datasets/RawNIND/DocScan")
         )
         self.dataset_metadata_url = dataset_metadata_url or (
             "https://dataverse.uclouvain.be/api/datasets/:persistentId"

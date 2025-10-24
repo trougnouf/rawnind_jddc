@@ -6,7 +6,7 @@ verifying both methods detect the correct shift.
 
 import sys
 
-sys.path.insert(0, "src")
+sys.path.insert(0, "DocScan")
 from rawnind.libs import alignment_backends
 
 

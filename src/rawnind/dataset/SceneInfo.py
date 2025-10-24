@@ -6,7 +6,39 @@ import trio
 
 @dataclass
 class ImageInfo:
-    """Information about a single image file."""
+    """
+    Represents metadata and processing state for a RAW image file.
+
+    This class encapsulates all information required to locate, download,
+    load, and cache a RAW image.  It stores identifiers used for
+    interacting with the Dataverse repository, the local file path,
+    verification status, and any additional metadata extracted from
+    the image or its sidecar files.  The class provides a convenient
+    interface for retrieving a download URL, accessing the loaded
+    image tensor, and applying alignment corrections when present.
+
+    Attributes:
+        DATAVERSE_BASE_URL (str): Base URL for the Dataverse API.
+        filename (str): Original filename of the image.
+        sha1 (str): SHA‑1 hash used for integrity verification.
+        is_clean (bool): Flag indicating whether the image passed
+                         initial checks.
+        scene_name (str): Identifier of the capture scene.
+        scene_images (list[str]): Filenames belonging to the same scene.
+        cfa_type (str): Color filter array type, either 'bayer' or
+                        'X-Trans'.
+        local_path (Optional[Path]): Filesystem path to the local copy
+                                     of the image.
+        validated (bool): Whether the image metadata has been fully
+                          validated.
+        file_id (str): Dataverse file ID used to construct the download
+                       URL.
+        retry_count (int): Number of times verification has been retried.
+        metadata (Dict[str, Any]): Additional metadata extracted from
+                                   the RAW file or sidecar.
+        xmp_path (Optional[Path]): Path to the associated .xmp sidecar
+                                   file.
+    """
 
     DATAVERSE_BASE_URL: ClassVar[str] = "https://dataverse.uclouvain.be"
 

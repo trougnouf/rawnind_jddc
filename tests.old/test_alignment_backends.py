@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 # Will implement alignment_backends module to pass these tests
-# from src.rawnind.libs.alignment_backends import (
+# from DocScan.rawnind.libs.alignment_backends import (
 #     find_best_alignment_cpu,
 #     get_alignment_backend
 # )

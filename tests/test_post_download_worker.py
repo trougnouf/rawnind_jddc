@@ -1,11 +1,13 @@
 """
 Tests for PostDownloadWorker base class and implementation.
+#todo: deprecate these
 """
 
 import tempfile
-import trio
 from pathlib import Path
 from unittest import TestCase, main
+
+import trio
 
 from src.rawnind.dataset.PostDownloadWorker import PostDownloadWorker
 from src.rawnind.dataset.SceneInfo import SceneInfo

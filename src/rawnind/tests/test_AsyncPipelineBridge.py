@@ -1,5 +1,5 @@
 """
-Comprehensive TDD test suite for AsyncPipelineBridge.
+TDD test suite for AsyncPipelineBridge.
 
 Tests cover (target >=90% coverage):
 1. Bridge Core Functionality
@@ -24,7 +24,7 @@ Tests cover (target >=90% coverage):
    - Trio channel consumption
    - Backpressure handling
    - Channel closure and cleanup
-   - Integration with AsyncAligner output
+   - Integration with MetadataArtificer output
 
 4. Future Components (stub tests, marked skip)
    - Advanced caching strategies
@@ -38,24 +38,20 @@ Tests fail initially (RED) until implementation is complete.
 
 import json
 import logging
-import tempfile
 import threading
-import time
-from pathlib import Path
-from typing import List, Dict, Any
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 import trio
 import yaml
 
-from rawnind.dataset.SceneInfo import SceneInfo, ImageInfo
 # This will fail initially - we're writing tests first (RED phase)
 from rawnind.dataset.AsyncPipelineBridge import (
     AsyncPipelineBridge,
     BridgeState,
     BridgeStats,
 )
+from rawnind.dataset.SceneInfo import SceneInfo, ImageInfo
 
 pytestmark = pytest.mark.dataset
 
@@ -67,6 +63,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # Test Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def minimal_scene():
@@ -107,7 +104,7 @@ def minimal_scene():
                     "f_linrec2020_fpath": "/fake/crops/noisy_512_256.exr",
                 }
             ],
-        }
+        },
     )
 
     return SceneInfo(
@@ -155,7 +152,7 @@ def xtrans_scene():
             "alignment_loss": 0.01,
             "mask_mean": 0.95,
             "raw_gain": 1.2,
-        }
+        },
     )
 
     return SceneInfo(
@@ -180,6 +177,7 @@ def mock_cache():
 # ============================================================================
 # Part 1: Bridge Core Functionality Tests
 # ============================================================================
+
 
 class TestBridgeInitialization:
     """Test bridge initialization and configuration."""
@@ -363,11 +361,7 @@ class TestBridgeSceneCollection:
             scenes.append(scene)
 
         async with trio.open_nursery() as nursery:
-            nursery.start_soon(
-                bridge.consume,
-                recv_channel,
-                progress_callback
-            )
+            nursery.start_soon(bridge.consume, recv_channel, progress_callback)
 
             for scene in scenes:
                 await send_channel.send(scene)
@@ -416,11 +410,7 @@ class TestBridgeSceneCollection:
 
         with pytest.raises(trio.TooSlowError):
             # Directly await the collection to raise in this task (no ExceptionGroup)
-            await bridge.consume(
-                recv_channel,
-                None,
-                0.01  # 10ms timeout
-            )
+            await bridge.consume(recv_channel, None, 0.01)  # 10ms timeout
 
     @pytest.mark.trio
     async def test_collect_mock_mode(self):
@@ -659,10 +649,7 @@ class TestBridgeStatistics:
     @pytest.mark.trio
     async def test_stats_track_scenes_filtered(self, minimal_scene, test_reserve_scene):
         """Test statistics track filtered scenes."""
-        bridge = AsyncPipelineBridge(
-            filter_test_reserve=True,
-            enable_monitoring=True
-        )
+        bridge = AsyncPipelineBridge(filter_test_reserve=True, enable_monitoring=True)
         send_channel, recv_channel = trio.open_memory_channel(10)
 
         async with trio.open_nursery() as nursery:
@@ -772,9 +759,7 @@ class TestBridgeCacheIntegration:
     def test_get_scene_tracks_cache_hits(self, minimal_scene, mock_cache):
         """Test cache hits are tracked in statistics."""
         bridge = AsyncPipelineBridge(
-            cache=mock_cache,
-            enable_caching=True,
-            enable_monitoring=True
+            cache=mock_cache, enable_caching=True, enable_monitoring=True
         )
         bridge._scenes = [minimal_scene]
 
@@ -788,9 +773,7 @@ class TestBridgeCacheIntegration:
     def test_get_scene_tracks_cache_misses(self, minimal_scene, mock_cache):
         """Test cache misses are tracked in statistics."""
         bridge = AsyncPipelineBridge(
-            cache=mock_cache,
-            enable_caching=True,
-            enable_monitoring=True
+            cache=mock_cache, enable_caching=True, enable_monitoring=True
         )
         bridge._scenes = [minimal_scene]
 
@@ -836,7 +819,7 @@ class TestBridgeSceneFiltering:
 
             # Send mix of bayer and X-Trans
             await send_channel.send(minimal_scene)  # bayer
-            await send_channel.send(xtrans_scene)   # X-Trans, should be filtered
+            await send_channel.send(xtrans_scene)  # X-Trans, should be filtered
             await send_channel.send(minimal_scene)  # bayer
 
             await send_channel.aclose()
@@ -880,9 +863,7 @@ class TestBridgeSceneValidation:
         send_channel, recv_channel = trio.open_memory_channel(10)
 
         # Create scene without proper attributes
-        invalid_scene = type('SceneInfo', (), {
-            'scene_name': 'test'
-        })()
+        invalid_scene = type("SceneInfo", (), {"scene_name": "test"})()
 
         async with trio.open_nursery() as nursery:
             nursery.start_soon(bridge.consume, recv_channel)
@@ -981,6 +962,7 @@ class TestBridgeCleanup:
 # Part 2: Legacy Dataloader Compatibility Tests
 # ============================================================================
 
+
 class TestLegacyDataloaderDiskCache:
     """Test disk cache mode for legacy dataloader compatibility."""
 
@@ -997,7 +979,7 @@ class TestLegacyDataloaderDiskCache:
         assert cache_file.exists()
 
         # Verify JSONL format
-        with open(cache_file, 'r') as f:
+        with open(cache_file, "r") as f:
             lines = f.readlines()
             assert len(lines) == 3
 
@@ -1017,8 +999,8 @@ class TestLegacyDataloaderDiskCache:
             "test_reserve": False,
         }
 
-        with open(cache_file, 'w') as f:
-            f.write(json.dumps(test_scene_dict) + '\n')
+        with open(cache_file, "w") as f:
+            f.write(json.dumps(test_scene_dict) + "\n")
 
         bridge = AsyncPipelineBridge()
 
@@ -1039,7 +1021,7 @@ class TestLegacyDataloaderDiskCache:
         bridge.write_yaml_compatible_cache(cache_file)
 
         # Verify YAML structure matches legacy format
-        with open(cache_file, 'r') as f:
+        with open(cache_file, "r") as f:
             data = yaml.safe_load(f)
 
         assert isinstance(data, list)
@@ -1049,12 +1031,19 @@ class TestLegacyDataloaderDiskCache:
 
         # Check required fields for legacy dataloader
         required_fields = [
-            "scene_name", "image_set", "is_bayer",
-            "best_alignment", "best_alignment_loss",
-            "mask_mean", "mask_fpath",
-            "raw_gain", "rgb_gain",
-            "f_fpath", "gt_fpath",
-            "crops", "rgb_xyz_matrix",
+            "scene_name",
+            "image_set",
+            "is_bayer",
+            "best_alignment",
+            "best_alignment_loss",
+            "mask_mean",
+            "mask_fpath",
+            "raw_gain",
+            "rgb_gain",
+            "f_fpath",
+            "gt_fpath",
+            "crops",
+            "rgb_xyz_matrix",
         ]
 
         for field in required_fields:
@@ -1159,13 +1148,16 @@ class TestBackwardsCompatibilityMode:
         bridge = AsyncPipelineBridge(backwards_compat_mode=False)
         bridge._scenes = [minimal_scene]
 
-        with pytest.raises(RuntimeError, match="Backwards compatibility mode not enabled"):
+        with pytest.raises(
+            RuntimeError, match="Backwards compatibility mode not enabled"
+        ):
             bridge.get_clean_noisy_pair(0)
 
 
 # ============================================================================
 # Part 3: Upstream Pipeline Connection Tests
 # ============================================================================
+
 
 class TestTrioChannelConsumption:
     """Test consuming from trio channels."""
@@ -1229,7 +1221,7 @@ class TestTrioChannelConsumption:
 
 
 class TestMetadataEnricherIntegration:
-    """Test integration with AsyncAligner output."""
+    """Test integration with MetadataArtificer output."""
 
     @pytest.mark.trio
     async def test_consumes_enriched_scenes(self, minimal_scene):
@@ -1285,12 +1277,15 @@ class TestPipelineBackpressure:
         # Verify interleaving (backpressure forces send/receive alternation)
         # Without backpressure, all sends would complete before receives
         assert "send_complete_0" in receive_order
-        assert receive_order.index("send_start_1") > receive_order.index("send_complete_0")
+        assert receive_order.index("send_start_1") > receive_order.index(
+            "send_complete_0"
+        )
 
 
 # ============================================================================
 # Part 4: Future Component Tests (Stubs, marked skip)
 # ============================================================================
+
 
 @pytest.mark.skip(reason="Future feature: advanced caching strategies")
 class TestAdvancedCaching:
@@ -1363,6 +1358,7 @@ class TestDistributedPipeline:
 # ============================================================================
 # Integration Tests
 # ============================================================================
+
 
 class TestEndToEndIntegration:
     """End-to-end integration tests."""
@@ -1440,7 +1436,9 @@ class TestEndToEndIntegration:
 
         assert len(samples) == 5
 
+
 # Additional Trio testing fixtures and deterministic concurrency tests
+
 
 @pytest.fixture
 def autojump_clock():

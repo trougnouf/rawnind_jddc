@@ -8,7 +8,7 @@ to remove `YAMLArtifactWriter` and replace it with an in-memory `AsyncPipelineBr
 ### What lives in `src/rawnind/dataset/` and what each piece does
 
 - `__init__.py`
-  - Re-exports top-level components for easy imports: `DataIngestor`, `FileScanner`, `Downloader`, `Verifier`, `SceneIndexer`, `AsyncAligner`, `PipelineBuilder`, `SceneInfo`/`ImageInfo`.
+  - Re-exports top-level components for easy imports: `DataIngestor`, `FileScanner`, `Downloader`, `Verifier`, `SceneIndexer`, `MetadataArtificer`, `PipelineBuilder`, `SceneInfo`/`ImageInfo`.
 
 - `SceneInfo.py`
   - Defines `ImageInfo` and `SceneInfo` dataclasses and the tensor cache contract.
@@ -42,7 +42,7 @@ to remove `YAMLArtifactWriter` and replace it with an in-memory `AsyncPipelineBr
 - `SceneIndexer.py`
   - Aggregates `ImageInfo` into complete `SceneInfo` once all SHA1s for a scene are present; then emits complete scenes.
 
-- `AsyncAligner.py`
+- `MetadataArtificer.py`
   - Adds derived metadata to `ImageInfo.metadata` (alignment estimates, gains, masks, color matrices, etc.). Also supports an optional “crops list” enrichment path when `enable_crops_enrichment` is True.
   - In smoke test it’s instantiated with `enable_crops_enrichment=False`, i.e., we expect downstream stages (MetadataArtificer/Cropper) to produce real crop metadata.
 
@@ -59,7 +59,7 @@ to remove `YAMLArtifactWriter` and replace it with an in-memory `AsyncPipelineBr
   - `PostDownloadWorker` that writes optional alignment artifacts (masks, per-pair YAML) and populates alignment-related metadata on `ImageInfo.metadata`.
   - Uses `@stage(progress=("aligning","aligned"))` for progress.
 
-- `crop_producer_stage.py` (`CropProducerStage`)
+- `CropProducerStage.py` (`CropProducerStage`)
   - `PostDownloadWorker` that converts cached tensors to numpy, unloads them in the main process (critical for memory), then offloads heavy crop extraction and saving into a process pool via static `_extract_and_save_crops`.
   - After the pool returns crop descriptors, it attaches them into `noisy_img.metadata['crops']`.
   - This stage is memory-conscious: it explicitly calls `gt_img.unload_image()` and `noisy_img.unload_image()` right after conversion to numpy and before dispatch to the process pool.

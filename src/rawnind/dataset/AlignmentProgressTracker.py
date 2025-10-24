@@ -3,13 +3,21 @@ Progress tracking utilities for domain-specific tasks.
 Extracted from mt_runner to provide clean separation of concerns.
 """
 
-from typing import Any, Dict, Optional, Callable
+from typing import Any, Optional, Callable
 
 
 class AlignmentProgressTracker:
     """
-    Tracks progress for alignment computation tasks.
-    Extracts scene and method information from results for display.
+    Brief summary of what the class does.
+
+    The `AlignmentProgressTracker` maintains state about the last processed
+    alignment result.  It keeps track of the scene and method associated with
+    the most recent result and can generate a human‑readable progress
+    description when a new scene or method is encountered.
+
+    Attributes:
+        current_scene: The name of the scene that was last processed.
+        current_method: The name of the alignment method that was last processed.
     """
 
     def __init__(self):
@@ -47,8 +55,26 @@ class AlignmentProgressTracker:
 
 
 class GenericProgressTracker:
-    """
-    Generic progress tracker that can be customized with extraction functions.
+    """Generic progress tracker that extracts a description from processing results.
+
+    This class provides a lightweight mechanism for tracking progress
+    by attempting to extract a textual description from each result
+    object that is processed.  If a custom extraction function is
+    supplied, it will be called with the result; otherwise a default
+    description is used.  The tracker only reports a new description
+    when it differs from the last one that was returned, which
+    helps reduce unnecessary updates.
+
+    The tracker can be reset to clear its internal state, allowing it
+    to start reporting from the beginning again.
+
+    Attributes:
+        extract_fn:
+            Optional callable that accepts a result object and returns
+            an optional string to be used as the progress description.
+        default_desc:
+            Default string used when extraction fails or no callable is
+            provided.
     """
 
     def __init__(self,

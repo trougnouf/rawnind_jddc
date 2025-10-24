@@ -4,7 +4,7 @@ import numpy as np
 import sys
 from pathlib import Path
 
-sys.path.append("src")
+sys.path.append("DocScan")
 from rawnind.libs import raw
 from rawnind.libs.rawproc import shift_images, match_gain
 
@@ -55,7 +55,7 @@ def find_alignment_simple(anchor_img, candidate_img, max_shift=128, neighborhood
 
 
 # Find all Bayer scenes
-bayer_dir = Path("src/rawnind/datasets/RawNIND/src/bayer")
+bayer_dir = Path("DocScan/rawnind/datasets/RawNIND/DocScan/bayer")
 scene_dirs = sorted([d for d in bayer_dir.iterdir() if d.is_dir()])
 
 print(f"Found {len(scene_dirs)} total scenes")

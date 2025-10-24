@@ -11,10 +11,9 @@ from pathlib import Path
 import sys
 
 # Add project to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent / "DocScan"))
 
 from rawnind.libs import raw
-from scipy import signal
 
 
 def load_raw_image(fpath: str):
@@ -238,7 +237,7 @@ def test_synthetic_bayer():
     print("=" * 80)
 
     # Load a Bayer image pair
-    base_path = Path("src/rawnind/datasets/RawNIND/src/bayer/Bark")
+    base_path = Path("DocScan/rawnind/datasets/RawNIND/DocScan/bayer/Bark")
     gt_file = (
         base_path
         / "gt"
@@ -305,7 +304,7 @@ def test_synthetic_xtrans():
     print("=" * 80)
 
     # Load an X-Trans image
-    base_path = Path("src/rawnind/datasets/RawNIND/src/x-trans/books")
+    base_path = Path("DocScan/rawnind/datasets/RawNIND/DocScan/x-trans/books")
     gt_file = (
         base_path
         / "gt"

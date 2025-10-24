@@ -13,7 +13,7 @@ sys.path.append("..")
 from rawnind.libs import raw
 from rawnind.libs.rawproc import (
     DS_BASE_DPATH,  # os.path.join("..", "..", "datasets", "RawNIND")
-    # BAYER_DS_DPATH,  # os.path.join(DS_BASE_DPATH, "src", "bayer")
+    # BAYER_DS_DPATH,  # os.path.join(DS_BASE_DPATH, "DocScan", "bayer")
     # LINREC2020_DS_DPATH,  # os.path.join(DS_BASE_DPATH, "proc", "lin_rec2020")
     MAX_SHIFT_SEARCH,
     EXTRARAW_DS_DPATH,
@@ -24,7 +24,7 @@ from common.libs import np_imgops
 
 LOG_FPATH = os.path.join("logs", os.path.basename(__file__) + ".log")
 
-# OUT_RAW_DPATH: str = os.path.join(DS_BASE_DPATH, "crops", "src", "bayer")
+# OUT_RAW_DPATH: str = os.path.join(DS_BASE_DPATH, "crops", "DocScan", "bayer")
 # OUT_PRGB_DPATH: str = os.path.join(DS_BASE_DPATH, "crops", "proc", "lin_rec2020")
 # OUT_METADATA_DPATH: str = os.path.join(DS_BASE_DPATH, "metadata")
 PREPROCESS_RAW_SIZE: int = 1024
@@ -158,14 +158,14 @@ def create_raw_img_crops_mtrunner(args: list):
 
 
 def crop_paired_dataset(ds_base_dpath: str):
-    # BAYER_DS_DPATH,  # os.path.join(DS_BASE_DPATH, "src", "bayer")
+    # BAYER_DS_DPATH,  # os.path.join(DS_BASE_DPATH, "DocScan", "bayer")
     # LINREC2020_DS_DPATH,  # os.path.join(DS_BASE_DPATH, "proc", "lin_rec2020")
-    # OUT_RAW_DPATH_root: str = os.path.join(DS_BASE_DPATH, "crops", "src", "bayer")
+    # OUT_RAW_DPATH_root: str = os.path.join(DS_BASE_DPATH, "crops", "DocScan", "bayer")
     # OUT_PRGB_DPATH_root: str = os.path.join(DS_BASE_DPATH, "crops", "proc", "lin_rec2020")
     # OUT_METADATA_DPATH_root: str = os.path.join(DS_BASE_DPATH, "metadata")
-    bayer_ds_dpath = os.path.join(ds_base_dpath, "src", "bayer")
+    bayer_ds_dpath = os.path.join(ds_base_dpath, "DocScan", "bayer")
     linrec2020_ds_dpath = os.path.join(ds_base_dpath, "proc", "lin_rec2020")
-    out_raw_dpath_root = os.path.join(ds_base_dpath, "crops", "src", "bayer")
+    out_raw_dpath_root = os.path.join(ds_base_dpath, "crops", "DocScan", "bayer")
     out_prgb_dpath_root = os.path.join(ds_base_dpath, "crops", "proc", "lin_rec2020")
     out_metadata_dpath_root = os.path.join(ds_base_dpath, "metadata")
     in_dpaths = [bayer_ds_dpath]
@@ -293,10 +293,10 @@ if __name__ == "__main__":
         for dn in subdatasets:
             if not os.path.isdir(os.path.join(EXTRARAW_DS_DPATH, dn)) or dn == "crops":
                 continue
-            for fn in os.listdir(os.path.join(EXTRARAW_DS_DPATH, dn, "src", "bayer")):
-                in_fpath = os.path.join(EXTRARAW_DS_DPATH, dn, "src", "bayer", fn)
+            for fn in os.listdir(os.path.join(EXTRARAW_DS_DPATH, dn, "DocScan", "bayer")):
+                in_fpath = os.path.join(EXTRARAW_DS_DPATH, dn, "DocScan", "bayer", fn)
                 out_raw_dpath = os.path.join(
-                    EXTRARAW_DS_DPATH, dn, "crops", "src", "bayer"
+                    EXTRARAW_DS_DPATH, dn, "crops", "DocScan", "bayer"
                 )
                 out_prgb_dpath = os.path.join(
                     EXTRARAW_DS_DPATH, dn, "crops", "proc", "lin_rec2020"

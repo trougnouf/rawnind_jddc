@@ -1,5 +1,6 @@
-"""
-Crop producer stage for training data generation.
+"""DEPRECATED
+Crop producer stage for training data generation. Kept for comparison/testing
+purposes.
 
 This module extracts aligned crops from paired ground-truth (GT) and noisy RAW-like
 images produced by earlier pipeline stages. It supports CFA-aware sampling for
@@ -29,10 +30,12 @@ Suggested reading:
 
 import logging
 import os
-import numpy as np
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
+import numpy as np
+
+from common.libs.libimganalysis import CFA_TYPE_BAYER, CFA_TYPE_XTRANS
 from .PostDownloadWorker import PostDownloadWorker
 from .SceneInfo import SceneInfo, ImageInfo
 from .pipeline_decorators import stage
@@ -67,7 +70,7 @@ class CropProducerStage(PostDownloadWorker):
         config: Optional[Dict[str, Any]] = None,
         cfa_type: Optional[str] = None,
         stride: Optional[int] = None,
-        use_systematic_tiling: bool = True
+        use_systematic_tiling: bool = True,
     ):
         """Initialize the crop producer.
 
@@ -102,17 +105,19 @@ class CropProducerStage(PostDownloadWorker):
             max_workers = max(1, int(os.cpu_count() * 0.75))
 
         super().__init__(output_dir, max_workers, use_process_pool=False, config=config)
-        
+
         # Validate crop_size respects CFA block boundaries
-        if cfa_type == "Bayer":
+        if cfa_type == CFA_TYPE_BAYER:
             assert crop_size % 2 == 0, f"Bayer crop_size must be even: {crop_size}"
-        elif cfa_type == "X-Trans":
-            assert crop_size % 3 == 0, f"X-Trans crop_size must be multiple of 3: {crop_size}"
-        
+        elif cfa_type == CFA_TYPE_XTRANS:
+            assert (
+                crop_size % 3 == 0
+            ), f"X-Trans crop_size must be multiple of 3: {crop_size}"
+
         self.crop_size = crop_size
         self.num_crops = num_crops
         self.save_format = save_format
-        self.crop_types = crop_types or ["bayer", "prgb"]
+        self.crop_types = crop_types or [CFA_TYPE_BAYER, "prgb"]
         self.stride = stride if stride is not None else crop_size // 4
         self.use_systematic_tiling = use_systematic_tiling
 
@@ -163,7 +168,9 @@ class CropProducerStage(PostDownloadWorker):
         logger.info(f"→ CropProducer.process_scene: {scene.scene_name}")
         gt_img = scene.get_gt_image()
         if not gt_img:
-            logger.warning(f"Scene {scene.scene_name} has no valid GT image, skipping crops")
+            logger.warning(
+                f"Scene {scene.scene_name} has no valid GT image, skipping crops"
+            )
             return scene
 
         # Process each noisy image paired with GT
@@ -186,16 +193,17 @@ class CropProducerStage(PostDownloadWorker):
                 noisy_img.metadata["crops"] = []
             noisy_img.metadata["crops"].extend(crop_metadata)
 
-        total_crops = sum(len(img.metadata.get("crops", [])) for img in scene.noisy_images)
-        logger.info(f"← CropProducer.process_scene: {scene.scene_name} ({total_crops} crops)")
-        
+        total_crops = sum(
+            len(img.metadata.get("crops", [])) for img in scene.noisy_images
+        )
+        logger.info(
+            f"← CropProducer.process_scene: {scene.scene_name} ({total_crops} crops)"
+        )
+
         return scene
 
     async def _generate_crops_for_pair(
-        self,
-        scene: SceneInfo,
-        gt_img: ImageInfo,
-        noisy_img: ImageInfo
+        self, scene: SceneInfo, gt_img: ImageInfo, noisy_img: ImageInfo
     ) -> List[Dict[str, Any]]:
         """Generate crops for one GT/noisy image pair.
 
@@ -221,17 +229,18 @@ class CropProducerStage(PostDownloadWorker):
         is_bayer = noisy_img.metadata.get("is_bayer", True)
 
         # Load images using cached tensors (tensor-native architecture)
-        # ImageInfo._image_tensor is already loaded by AsyncAligner
+        # ImageInfo._image_tensor is already loaded by MetadataArtificer
         gt_data = await gt_img.load_image(as_torch=True)
         noisy_data = await noisy_img.load_image(as_torch=True)
-        
+
         # Convert to numpy for process pool (torch tensors don't serialize well)
         import torch
+
         if isinstance(gt_data, torch.Tensor):
             gt_data = gt_data.cpu().numpy()
         if isinstance(noisy_data, torch.Tensor):
             noisy_data = noisy_data.cpu().numpy()
-        
+
         # CRITICAL: Unload immediately after converting to numpy to prevent OOM
         # Main process doesn't need cached tensors while process pool works
         gt_img.unload_image()
@@ -257,7 +266,7 @@ class CropProducerStage(PostDownloadWorker):
             is_bayer,
             noisy_img.metadata,  # Pass full metadata for PRGB pipeline
             self.stride,
-            self.use_systematic_tiling
+            self.use_systematic_tiling,
         )
 
         return crop_metadata
@@ -281,7 +290,7 @@ class CropProducerStage(PostDownloadWorker):
         is_bayer: bool,
         metadata: Optional[Dict[str, Any]] = None,
         stride: int = 128,
-        use_systematic_tiling: bool = True
+        use_systematic_tiling: bool = True,
     ) -> List[Dict[str, Any]]:
         """
         Extract and save crops (runs in process pool).
@@ -309,6 +318,7 @@ class CropProducerStage(PostDownloadWorker):
         import numpy as np
         from PIL import Image
         import sys
+
         sys.path.append(str(Path(__file__).parent.parent.parent))
         from rawnind.libs import rawproc
 
@@ -326,19 +336,25 @@ class CropProducerStage(PostDownloadWorker):
             # No disk I/O needed here - data comes from memory
 
             # DEBUG: Log input shapes
-            logger.info(f"SHAPE DEBUG _extract_and_save_crops ENTRY: scene={scene_name}, crop_size={crop_size}")
-            logger.info(f"SHAPE DEBUG: gt_data.shape={gt_data.shape}, gt_data.dtype={gt_data.dtype}")
-            logger.info(f"SHAPE DEBUG: noisy_data.shape={noisy_data.shape}, noisy_data.dtype={noisy_data.dtype}")
+            logger.info(
+                f"SHAPE DEBUG _extract_and_save_crops ENTRY: scene={scene_name}, crop_size={crop_size}"
+            )
+            logger.info(
+                f"SHAPE DEBUG: gt_data.shape={gt_data.shape}, gt_data.dtype={gt_data.dtype}"
+            )
+            logger.info(
+                f"SHAPE DEBUG: noisy_data.shape={noisy_data.shape}, noisy_data.dtype={noisy_data.dtype}"
+            )
 
             # Snap alignment offsets to CFA block boundaries
             y_offset, x_offset = alignment
-            if cfa_type == "bayer":
+            if cfa_type == CFA_TYPE_BAYER:
                 y_offset = (y_offset // 2) * 2
                 x_offset = (x_offset // 2) * 2
-            elif cfa_type == "x-trans":
+            elif cfa_type == CFA_TYPE_XTRANS:
                 y_offset = (y_offset // 3) * 3
                 x_offset = (x_offset // 3) * 3
-            
+
             # Apply alignment
             if y_offset != 0 or x_offset != 0:
                 # Crop to aligned region
@@ -351,8 +367,8 @@ class CropProducerStage(PostDownloadWorker):
                 gt_data = gt_data[..., y_start:y_end, x_start:x_end]
                 noisy_data = noisy_data[
                     ...,
-                    y_start - y_offset:y_end - y_offset,
-                    x_start - x_offset:x_end - x_offset
+                    y_start - y_offset : y_end - y_offset,
+                    x_start - x_offset : x_end - x_offset,
                 ]
 
             # Apply gain correction
@@ -365,59 +381,83 @@ class CropProducerStage(PostDownloadWorker):
             if gt_data.ndim == 2:
                 # 2D RAW format (H, W) - bayer or X-Trans
                 import torch
-                
-                if cfa_type == "bayer":
+
+                if cfa_type == CFA_TYPE_BAYER:
                     # bayer: convert to 4D RGGB for channel-aware mask computation
                     # Strided slicing is cheap (no copy), extracts 4 color channels
                     if isinstance(gt_data, torch.Tensor):
-                        gt_rggb = torch.stack([
-                            gt_data[0::2, 0::2],  # R
-                            gt_data[0::2, 1::2],  # G1
-                            gt_data[1::2, 0::2],  # G2
-                            gt_data[1::2, 1::2],  # B
-                        ])
-                        noisy_rggb = torch.stack([
-                            noisy_data[0::2, 0::2],
-                            noisy_data[0::2, 1::2],
-                            noisy_data[1::2, 0::2],
-                            noisy_data[1::2, 1::2],
-                        ])
+                        gt_rggb = torch.stack(
+                            [
+                                gt_data[0::2, 0::2],  # R
+                                gt_data[0::2, 1::2],  # G1
+                                gt_data[1::2, 0::2],  # G2
+                                gt_data[1::2, 1::2],  # B
+                            ]
+                        )
+                        noisy_rggb = torch.stack(
+                            [
+                                noisy_data[0::2, 0::2],
+                                noisy_data[0::2, 1::2],
+                                noisy_data[1::2, 0::2],
+                                noisy_data[1::2, 1::2],
+                            ]
+                        )
                         # Convert to numpy for rawproc functions (they expect numpy)
                         gt_rggb = gt_rggb.cpu().numpy()
                         noisy_rggb = noisy_rggb.cpu().numpy()
                     else:
-                        gt_rggb = np.stack([
-                            gt_data[0::2, 0::2],
-                            gt_data[0::2, 1::2],
-                            gt_data[1::2, 0::2],
-                            gt_data[1::2, 1::2],
-                        ])
-                        noisy_rggb = np.stack([
-                            noisy_data[0::2, 0::2],
-                            noisy_data[0::2, 1::2],
-                            noisy_data[1::2, 0::2],
-                            noisy_data[1::2, 1::2],
-                        ])
-                    
+                        gt_rggb = np.stack(
+                            [
+                                gt_data[0::2, 0::2],
+                                gt_data[0::2, 1::2],
+                                gt_data[1::2, 0::2],
+                                gt_data[1::2, 1::2],
+                            ]
+                        )
+                        noisy_rggb = np.stack(
+                            [
+                                noisy_data[0::2, 0::2],
+                                noisy_data[0::2, 1::2],
+                                noisy_data[1::2, 0::2],
+                                noisy_data[1::2, 1::2],
+                            ]
+                        )
+
                     # Use MS-SSIM + L1 combo (standard for perceptual losses)
-                    loss_mask_rggb = rawproc.make_loss_mask_msssim_bayer(gt_rggb, noisy_rggb)
+                    loss_mask_rggb = rawproc.make_loss_mask_msssim_bayer(
+                        gt_rggb, noisy_rggb
+                    )
                     # Upsample loss_mask from RGGB resolution (H/2, W/2) back to full (H, W)
-                    loss_mask = np.repeat(np.repeat(loss_mask_rggb, 2, axis=0), 2, axis=1)
-                    
+                    loss_mask = np.repeat(
+                        np.repeat(loss_mask_rggb, 2, axis=0), 2, axis=1
+                    )
+
                     # Overexposure mask works on 2D directly
                     overexposure_mask = rawproc.make_overexposure_mask_bayer(
-                        gt_data.cpu().numpy() if isinstance(gt_data, torch.Tensor) else gt_data,
-                        overexposure_lb
+                        (
+                            gt_data.cpu().numpy()
+                            if isinstance(gt_data, torch.Tensor)
+                            else gt_data
+                        ),
+                        overexposure_lb,
                     )
-                elif cfa_type == "x-trans":
+                elif cfa_type == CFA_TYPE_XTRANS:
                     # X-Trans: 6x6 pattern, can't easily separate into channels
                     # Use simple 2D masks (conservative but functional)
-                    gt_np = gt_data.cpu().numpy() if isinstance(gt_data, torch.Tensor) else gt_data
-                    noisy_np = noisy_data.cpu().numpy() if isinstance(noisy_data, torch.Tensor) else noisy_data
-                    
+                    gt_np = (
+                        gt_data.cpu().numpy()
+                        if isinstance(gt_data, torch.Tensor)
+                        else gt_data
+                    )
+                    noisy_np = (
+                        noisy_data.cpu().numpy()
+                        if isinstance(noisy_data, torch.Tensor)
+                        else noisy_data
+                    )
+
                     # Simple L1-based loss mask (no channel separation)
                     loss_mask = (np.abs(gt_np - noisy_np) < 0.3).astype(np.float32)
-                    
+
                     # Overexposure mask on 2D
                     overexposure_mask = (gt_np < overexposure_lb).astype(np.float32)
                 else:
@@ -428,8 +468,10 @@ class CropProducerStage(PostDownloadWorker):
                     loss_mask = rawproc.make_loss_mask_bayer(gt_data, noisy_data)
                 else:
                     loss_mask = rawproc.make_loss_mask(gt_data, noisy_data)
-                
-                overexposure_mask = rawproc.make_overexposure_mask(gt_data, overexposure_lb)
+
+                overexposure_mask = rawproc.make_overexposure_mask(
+                    gt_data, overexposure_lb
+                )
             else:
                 raise ValueError(f"Unexpected data format: {gt_data.shape}")
 
@@ -470,14 +512,18 @@ class CropProducerStage(PostDownloadWorker):
             else:
                 # Random sampling (legacy behavior)
                 num_candidates = num_crops * 20
-                candidates_y = np.random.randint(0, h - crop_size + 1, size=num_candidates)
-                candidates_x = np.random.randint(0, w - crop_size + 1, size=num_candidates)
+                candidates_y = np.random.randint(
+                    0, h - crop_size + 1, size=num_candidates
+                )
+                candidates_x = np.random.randint(
+                    0, w - crop_size + 1, size=num_candidates
+                )
 
             # Snap to CFA boundaries (vectorized)
-            if cfa_type == "Bayer":
+            if cfa_type == CFA_TYPE_BAYER:
                 candidates_y = (candidates_y // 2) * 2
                 candidates_x = (candidates_x // 2) * 2
-            elif cfa_type == "X-Trans":
+            elif cfa_type == CFA_TYPE_XTRANS:
                 candidates_y = (candidates_y // 3) * 3
                 candidates_x = (candidates_x // 3) * 3
 
@@ -485,14 +531,18 @@ class CropProducerStage(PostDownloadWorker):
             valid_mask = np.zeros(num_candidates, dtype=bool)
             for idx in range(num_candidates):
                 y, x = candidates_y[idx], candidates_x[idx]
-                mask_crop = final_mask[y:y + crop_size, x:x + crop_size]
-                valid_mask[idx] = (mask_crop.sum() / (crop_size ** 2)) >= MAX_MASKED
+                mask_crop = final_mask[y : y + crop_size, x : x + crop_size]
+                valid_mask[idx] = (mask_crop.sum() / (crop_size**2)) >= MAX_MASKED
 
             valid_indices = np.where(valid_mask)[0]
 
             # For systematic tiling, use all valid crops; for random, sample num_crops
-            num_to_sample = len(valid_indices) if use_systematic_tiling else min(num_crops, len(valid_indices))
-            
+            num_to_sample = (
+                len(valid_indices)
+                if use_systematic_tiling
+                else min(num_crops, len(valid_indices))
+            )
+
             if len(valid_indices) < num_to_sample and not use_systematic_tiling:
                 logger.warning(
                     f"Only found {len(valid_indices)} valid crops out of {num_to_sample} needed "
@@ -505,7 +555,9 @@ class CropProducerStage(PostDownloadWorker):
                 selected_indices = valid_indices
             else:
                 # Random sample from valid positions
-                selected_indices = np.random.choice(valid_indices, size=num_to_sample, replace=False)
+                selected_indices = np.random.choice(
+                    valid_indices, size=num_to_sample, replace=False
+                )
 
             # Extract and save crops at selected positions
             for i, idx in enumerate(selected_indices):
@@ -513,8 +565,8 @@ class CropProducerStage(PostDownloadWorker):
                 y = candidates_y[idx]
                 x = candidates_x[idx]
 
-                gt_crop = gt_data[..., y:y + crop_size, x:x + crop_size]
-                noisy_crop = noisy_data[..., y:y + crop_size, x:x + crop_size]
+                gt_crop = gt_data[..., y : y + crop_size, x : x + crop_size]
+                noisy_crop = noisy_data[..., y : y + crop_size, x : x + crop_size]
 
                 # Save crops
                 crop_id = f"{scene_name}_{i:03d}_{gt_sha1[:8]}_{noisy_sha1[:8]}"
@@ -526,13 +578,17 @@ class CropProducerStage(PostDownloadWorker):
                     if crop_type == "prgb":
                         # PRGB: RAW → demosaic → camera RGB → lin_rec2020 → EXR
                         if metadata is None:
-                            raise ValueError("metadata required for PRGB crops (bayer_pattern, rgb_xyz_matrix)")
+                            raise ValueError(
+                                "metadata required for PRGB crops (bayer_pattern, rgb_xyz_matrix)"
+                            )
 
                         from rawnind.libs import raw
                         import torch
 
                         # DEBUG: Trace shapes
-                        logger.info(f"SHAPE DEBUG: gt_data.shape={gt_data.shape}, gt_crop.shape={gt_crop.shape}, crop_size={crop_size}")
+                        logger.info(
+                            f"SHAPE DEBUG: gt_data.shape={gt_data.shape}, gt_crop.shape={gt_crop.shape}, crop_size={crop_size}"
+                        )
 
                         # Demosaic to camera RGB using OIIO (supports both bayer and X-Trans)
                         # demosaic() infers pattern type from metadata (is_bayer flag)
@@ -547,22 +603,36 @@ class CropProducerStage(PostDownloadWorker):
 
                         # Convert to numpy first, then to tensor (avoids nested list warning)
                         rgb_xyz_array = np.asarray(rgb_xyz_matrix, dtype=np.float32)
-                        rgb_xyz_tensor = torch.from_numpy(rgb_xyz_array).unsqueeze(0)  # Add batch dim
-                        gt_camrgb_tensor = torch.from_numpy(gt_camrgb).unsqueeze(0).float()
-                        noisy_camrgb_tensor = torch.from_numpy(noisy_camrgb).unsqueeze(0).float()
+                        rgb_xyz_tensor = torch.from_numpy(rgb_xyz_array).unsqueeze(
+                            0
+                        )  # Add batch dim
+                        gt_camrgb_tensor = (
+                            torch.from_numpy(gt_camrgb).unsqueeze(0).float()
+                        )
+                        noisy_camrgb_tensor = (
+                            torch.from_numpy(noisy_camrgb).unsqueeze(0).float()
+                        )
 
-                        gt_lin_rec2020 = rawproc.camRGB_to_lin_rec2020_images(gt_camrgb_tensor, rgb_xyz_tensor)[0]
-                        noisy_lin_rec2020 = rawproc.camRGB_to_lin_rec2020_images(noisy_camrgb_tensor, rgb_xyz_tensor)[0]
+                        gt_lin_rec2020 = rawproc.camRGB_to_lin_rec2020_images(
+                            gt_camrgb_tensor, rgb_xyz_tensor
+                        )[0]
+                        noisy_lin_rec2020 = rawproc.camRGB_to_lin_rec2020_images(
+                            noisy_camrgb_tensor, rgb_xyz_tensor
+                        )[0]
 
                         # Save as EXR
                         gt_path = crop_dir / f"{crop_id}_gt.exr"
                         noisy_path = crop_dir / f"{crop_id}_noisy.exr"
 
                         raw.hdr_nparray_to_file(
-                            gt_lin_rec2020.cpu().numpy(), str(gt_path), color_profile="lin_rec2020"
+                            gt_lin_rec2020.cpu().numpy(),
+                            str(gt_path),
+                            color_profile="lin_rec2020",
                         )
                         raw.hdr_nparray_to_file(
-                            noisy_lin_rec2020.cpu().numpy(), str(noisy_path), color_profile="lin_rec2020"
+                            noisy_lin_rec2020.cpu().numpy(),
+                            str(noisy_path),
+                            color_profile="lin_rec2020",
                         )
                     else:
                         # bayer crops: save as NPY
@@ -575,14 +645,16 @@ class CropProducerStage(PostDownloadWorker):
                             # TIF format - not implemented in this example
                             logger.warning("TIF format not implemented")
 
-                crop_metadata.append({
-                    "crop_id": crop_id,
-                    "coordinates": [y, x],
-                    "size": crop_size,
-                    "gt_linrec2020_fpath": str(gt_path),
-                    "f_bayer_fpath": str(noisy_path),
-                    "mask_fpath": str(mask_path)
-                })
+                crop_metadata.append(
+                    {
+                        "crop_id": crop_id,
+                        "coordinates": [y, x],
+                        "size": crop_size,
+                        "gt_linrec2020_fpath": str(gt_path),
+                        "f_bayer_fpath": str(noisy_path),
+                        "mask_fpath": str(mask_path),
+                    }
+                )
 
         except Exception as e:
             logger.error(f"Failed to extract crops: {e}")

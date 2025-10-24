@@ -38,6 +38,7 @@ import trio
 import yaml
 import numpy as np
 
+from common.libs.libimganalysis import CFA_TYPE_BAYER, CFA_TYPE_XTRANS
 from .SceneInfo import SceneInfo
 
 # Configure module logger
@@ -191,7 +192,7 @@ class AsyncPipelineBridge:
         # Input validation
         if max_scenes is not None and max_scenes <= 0:
             raise ValueError(f"max_scenes must be positive, got {max_scenes}")
-        if cfa_filter and cfa_filter not in ["bayer", "x-trans", "quad_bayer"]:
+        if cfa_filter and cfa_filter not in [CFA_TYPE_BAYER, CFA_TYPE_XTRANS, "quad_bayer"]:
             logger.warning(f"Unusual CFA filter type: {cfa_filter}")
 
         # Core configuration
@@ -327,7 +328,7 @@ class AsyncPipelineBridge:
                 from .SceneInfo import ImageInfo
                 
                 scene_name = f"mock_scene_{i:03d}"
-                cfa_type = "bayer" if i % 2 == 0 else "x-trans"
+                cfa_type = CFA_TYPE_BAYER if i % 2 == 0 else CFA_TYPE_XTRANS
                 
                 clean_img = ImageInfo(
                     filename=f"clean_{i:03d}.exr",

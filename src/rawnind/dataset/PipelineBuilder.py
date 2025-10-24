@@ -4,21 +4,54 @@ from typing import Optional, List, Dict, Any
 
 import trio
 
-from .DataIngestor import DataIngestor
-from .SceneIndexer import SceneIndexer
-from .FileScanner import FileScanner
-from .Downloader import Downloader
-from .Verifier import Verifier
-from .MetadataEnricher import AsyncAligner
-from .PostDownloadWorker import PostDownloadWorker
-from .crop_producer_stage import CropProducerStage
 from .Aligner import MetadataArtificer
+from .DataIngestor import DataIngestor
+from .Downloader import Downloader
+from .FileScanner import FileScanner
+from .MetadataArtificer import MetadataArtificer
+from .PostDownloadWorker import PostDownloadWorker
+from .SceneIndexer import SceneIndexer
+from .Verifier import Verifier
+from .CropProducerStage import CropProducerStage
 
 logger = logging.getLogger(__name__)
 
 
 class PipelineBuilder:
-    """Orchestrates the dataset pipeline."""
+    """Pipeline builder that orchestrates dataset ingestion, downloading, verification,
+    indexing, optional enrichment, and optional post‑processing.
+
+    The `PipelineBuilder` class creates a set of components that together
+    form an end‑to‑end pipeline for preparing a dataset.  The pipeline can
+    operate in several modes:
+
+    1. **With enrichment** – after downloading and verifying images,
+       metadata is enriched by aligning scenes and optionally adding
+       crop information.
+    2. **Without enrichment** – the pipeline simply downloads and verifies
+       images and then indexes them.
+    3. **With post‑processing** – additional stages such as crop
+       generation or metadata artifact creation are executed after the
+       core pipeline completes.
+
+    The builder exposes the core components as attributes so they can be
+    inspected or replaced in tests.  All components are started and run
+    concurrently inside an asynchronous Trio nursery.
+
+    Attributes:
+        dataset_root (Path): Root directory for dataset files.
+        enable_enrichment (bool): Whether to run the enrichment stage.
+        postprocessor_config (Dict[str, Any]): Configuration for post‑processors.
+        postprocessors (List[PostDownloadWorker]): List of post‑processing stages.
+        ingestor (DataIngestor): Component that produces scenes from dataset
+            metadata.
+        scanner (FileScanner): Component that watches for new files in the
+            dataset root.
+        downloader (Downloader): Component that downloads missing files.
+        verifier (Verifier): Component that verifies downloaded files.
+        indexer (SceneIndexer): Component that indexes verified images.
+        enricher (MetadataArtificer): Component that enriches scenes with
+            alignment and crop data."""
 
     def __init__(
         self,
@@ -54,7 +87,7 @@ class PipelineBuilder:
         self.downloader = Downloader(max_concurrent=max_concurrent_downloads)
         self.verifier = Verifier(max_retries=3)
         self.indexer = SceneIndexer(dataset_root)
-        self.enricher = AsyncAligner(
+        self.enricher = MetadataArtificer(
             dataset_root=dataset_root,
             max_concurrent=max_concurrent_enrichment,
             enable_crops_enrichment=enable_crops_enrichment,
@@ -106,6 +139,7 @@ class PipelineBuilder:
         """Merge two receive channels into one send channel."""
         async with recv1, recv2, send:
             async with trio.open_nursery() as nursery:
+
                 async def forward(recv):
                     async with recv:
                         async for item in recv:
@@ -127,13 +161,32 @@ class PipelineBuilder:
 
             merged_send, merged_recv = trio.open_memory_channel(100)
 
-            nursery.start_soon(self._merge_channels, new_file_recv, downloaded_recv, merged_send)
+            nursery.start_soon(
+                self._merge_channels, new_file_recv, downloaded_recv, merged_send
+            )
             nursery.start_soon(self.ingestor.produce_scenes, scene_send)
-            nursery.start_soon(self.scanner.consume_new_items, scene_recv, new_file_send, missing_send)
-            nursery.start_soon(self.downloader.consume_missing, missing_recv, downloaded_send)
-            nursery.start_soon(self.verifier.consume_new_files, merged_recv, verified_send, missing_send)
-            nursery.start_soon(self.indexer.consume_images_produce_scenes, verified_recv, complete_scene_send)
-            nursery.start_soon(self.enricher.consume_scenes_produce_enriched, complete_scene_recv, enriched_send)
+            nursery.start_soon(
+                self.scanner.consume_new_items, scene_recv, new_file_send, missing_send
+            )
+            nursery.start_soon(
+                self.downloader.consume_missing, missing_recv, downloaded_send
+            )
+            nursery.start_soon(
+                self.verifier.consume_new_files,
+                merged_recv,
+                verified_send,
+                missing_send,
+            )
+            nursery.start_soon(
+                self.indexer.consume_images_produce_scenes,
+                verified_recv,
+                complete_scene_send,
+            )
+            nursery.start_soon(
+                self.enricher.consume_scenes_produce_enriched,
+                complete_scene_recv,
+                enriched_send,
+            )
             nursery.start_soon(self._final_consumer, enriched_recv)
 
     async def _run_without_enrichment(self):
@@ -148,12 +201,27 @@ class PipelineBuilder:
 
             merged_send, merged_recv = trio.open_memory_channel(100)
 
-            nursery.start_soon(self._merge_channels, new_file_recv, downloaded_recv, merged_send)
+            nursery.start_soon(
+                self._merge_channels, new_file_recv, downloaded_recv, merged_send
+            )
             nursery.start_soon(self.ingestor.produce_scenes, scene_send)
-            nursery.start_soon(self.scanner.consume_new_items, scene_recv, new_file_send, missing_send)
-            nursery.start_soon(self.downloader.consume_missing, missing_recv, downloaded_send)
-            nursery.start_soon(self.verifier.consume_new_files, merged_recv, verified_send, missing_send)
-            nursery.start_soon(self.indexer.consume_images_produce_scenes, verified_recv, complete_scene_send)
+            nursery.start_soon(
+                self.scanner.consume_new_items, scene_recv, new_file_send, missing_send
+            )
+            nursery.start_soon(
+                self.downloader.consume_missing, missing_recv, downloaded_send
+            )
+            nursery.start_soon(
+                self.verifier.consume_new_files,
+                merged_recv,
+                verified_send,
+                missing_send,
+            )
+            nursery.start_soon(
+                self.indexer.consume_images_produce_scenes,
+                verified_recv,
+                complete_scene_send,
+            )
             nursery.start_soon(self._final_consumer, complete_scene_recv)
 
     async def _final_consumer(self, recv_channel: trio.MemoryReceiveChannel):
@@ -179,7 +247,9 @@ class PipelineBuilder:
 
             merged_send, merged_recv = trio.open_memory_channel(100)
 
-            nursery.start_soon(self._merge_channels, new_file_recv, downloaded_recv, merged_send)
+            nursery.start_soon(
+                self._merge_channels, new_file_recv, downloaded_recv, merged_send
+            )
             nursery.start_soon(self.ingestor.produce_scenes, scene_send)
             nursery.start_soon(
                 self.scanner.consume_new_items, scene_recv, new_file_send, missing_send

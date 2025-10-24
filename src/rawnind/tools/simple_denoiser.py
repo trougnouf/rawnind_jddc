@@ -12,7 +12,7 @@ from rawnind.libs import rawproc
 
 MODEL_FPATH = os.path.join(
     os.path.abspath(os.path.curdir),
-    "src/rawnind/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-11-22-bayer_ms-ssim_mgout_notrans_valeither_noowwnpics_mgdef_-1/saved_models/iter_1245000.pt",
+    "DocScan/rawnind/models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4ch_2024-11-22-bayer_ms-ssim_mgout_notrans_valeither_noowwnpics_mgdef_-1/saved_models/iter_1245000.pt",
 )
 
 if __name__ == "__main__":

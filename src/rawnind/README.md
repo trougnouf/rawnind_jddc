@@ -142,7 +142,7 @@ cd ../../datasets/extraraw
 rmlint . -S l
 ./rmlint.sh sh:remove  # add -d or user input will be required
 rm rmlint.*  # rm the rmlint files too
-cd ../../src/rawnind/
+cd ../../DocScan/rawnind/
 ```
 
 Process all of the ground-truth images into linear rec.2020 profile (ground-truth):

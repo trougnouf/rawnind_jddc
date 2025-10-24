@@ -10,8 +10,8 @@ import time
 import sys
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Add DocScan to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "DocScan"))
 
 from common.libs.msssim_numpy import compute_msssim_numpy, compute_ssim_numpy
 from pytorch_msssim import ms_ssim as torch_ms_ssim, ssim as torch_ssim

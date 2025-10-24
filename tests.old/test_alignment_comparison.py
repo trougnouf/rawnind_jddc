@@ -5,7 +5,7 @@ import argparse
 from pathlib import Path
 import numpy as np
 
-sys.path.insert(0, "src")
+sys.path.insert(0, "DocScan")
 from rawnind.libs import raw, alignment_backends
 
 
@@ -83,7 +83,7 @@ def discover_test_cases(cfa_filter="all"):
     Returns:
         List of test case dictionaries
     """
-    dataset_root = Path("src/rawnind/datasets/RawNIND/src")
+    dataset_root = Path("DocScan/rawnind/datasets/RawNIND/DocScan")
     test_cases = []
 
     # Determine which CFA types to scan
@@ -168,13 +168,13 @@ def test_alignment_comparison(test_cases=None, num_images=None):
         test_cases = [
             {
                 "name": "Bark ISO65535 (bayer)",
-                "gt": "src/rawnind/datasets/RawNIND/src/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
-                "noisy": "src/rawnind/datasets/RawNIND/src/bayer/Bark/Bayer_Bark_ISO65535_sha1=6ba8ed5f7fff42c4c900812c02701649f4f2d49e.cr2",
+                "gt": "DocScan/rawnind/datasets/RawNIND/DocScan/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
+                "noisy": "DocScan/rawnind/datasets/RawNIND/DocScan/bayer/Bark/Bayer_Bark_ISO65535_sha1=6ba8ed5f7fff42c4c900812c02701649f4f2d49e.cr2",
             },
             {
                 "name": "Bark ISO800 (bayer)",
-                "gt": "src/rawnind/datasets/RawNIND/src/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
-                "noisy": "src/rawnind/datasets/RawNIND/src/bayer/Bark/Bayer_Bark_ISO800_sha1=ba86f1da64a4bb534d9216e96c1c72177ed1e625.cr2",
+                "gt": "DocScan/rawnind/datasets/RawNIND/DocScan/bayer/Bark/gt/Bayer_Bark_GT_ISO100_sha1=f15da1140d949ee30c15ce7b251839a7b7a41de7.cr2",
+                "noisy": "DocScan/rawnind/datasets/RawNIND/DocScan/bayer/Bark/Bayer_Bark_ISO800_sha1=ba86f1da64a4bb534d9216e96c1c72177ed1e625.cr2",
             },
         ]
 
@@ -266,7 +266,7 @@ def test_alignment_comparison(test_cases=None, num_images=None):
         if shift_fft == shift_bruteforce:
             print(f"\n  ✅ SHIFTS MATCH: {shift_fft}")
         else:
-            print(f"\n  ⚠️  SHIFTS DIFFER:")
+            print("\n  ⚠️  SHIFTS DIFFER:")
             print(f"      FFT-CFA:       {shift_fft}")
             print(f"      Bruteforce-RGB: {shift_bruteforce}")
             print(

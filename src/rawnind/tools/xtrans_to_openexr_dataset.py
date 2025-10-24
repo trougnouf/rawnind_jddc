@@ -13,7 +13,7 @@ from rawnind.libs.rawproc import DS_BASE_DPATH
 
 XTRANS_EXT: Literal["raf"] = "raf"
 OPENEXR_EXT: Literal["exr"] = "exr"
-XTRANS_DPATH: str = os.path.join(DS_BASE_DPATH, "src", "x-trans")
+XTRANS_DPATH: str = os.path.join(DS_BASE_DPATH, "DocScan", "x-trans")
 OPENEXR_DPATH: str = os.path.join(DS_BASE_DPATH, "proc", "lin_rec2020")
 if __name__ == "__main__":
     for set_name in tqdm.tqdm(os.listdir(XTRANS_DPATH)):

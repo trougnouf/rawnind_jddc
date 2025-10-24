@@ -29,6 +29,7 @@ Example Usage:
     >>> print(f"Hit rate: {metrics.hit_rate():.2%}")
 """
 
+import concurrent.futures
 import hashlib
 import json
 import logging
@@ -36,11 +37,10 @@ import pickle
 import threading
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List, Any, Set, Tuple
-import concurrent.futures
-from dataclasses import dataclass, field
 
 from rawnind.dataset.SceneInfo import SceneInfo
 from rawnind.dataset.cache_interfaces import (
@@ -63,7 +63,35 @@ logger.setLevel(logging.INFO)
 
 @dataclass
 class CacheConfig:
-    """Extended cache configuration with production features."""
+    """Brief summary of the cache configuration options.
+
+    This dataclass encapsulates all configurable parameters for the caching
+    system. It defines defaults and optional settings that control where cache
+    data is stored, how much space it may occupy, the policies governing
+    eviction, concurrency behavior, and additional features such as compression
+    and integrity verification. The attributes are intended to be used by the
+    cache implementation to tailor its behavior to the needs of the application.
+
+    Attributes:
+        cache_dir: Directory where cache files are persisted.
+        max_size_mb: Optional upper limit for total cache size in megabytes.
+        eviction_policy: Strategy used to remove entries when the cache exceeds
+            its size limit.
+        thread_safe: Enables safe access to the cache from multiple threads.
+        track_metrics: Collects usage statistics for cache operations.
+        verify_checksums: Checks data integrity using checksums on reads and
+            writes.
+        auto_repair: Attempts automatic correction of corrupted cache entries.
+        compression: Stores cache entries in a compressed format to reduce
+            storage usage.
+        max_workers: Number of worker threads allocated for asynchronous cache
+            tasks.
+        batch_size: Number of items processed together in batch operations.
+        retry_count: Number of attempts to retry transient cache errors.
+        retry_delay_seconds: Pause duration between retry attempts, expressed in
+            seconds.
+    """
+
     cache_dir: Path
     max_size_mb: Optional[int] = None
     eviction_policy: str = DEFAULT_CACHE_EVICTION_POLICY
@@ -123,19 +151,7 @@ class ConnectionPool:
 
 
 class DiskCacheManager(CacheManager[SceneInfo]):
-    """
-    Production-ready disk-based cache for SceneInfo objects.
-
-    Features:
-        - Thread-safe operations with fine-grained locking
-        - Multiple eviction policies with pluggable architecture
-        - Automatic size management and cleanup
-        - Corruption detection and recovery
-        - Performance monitoring and metrics
-        - Batch operations for improved throughput
-        - Compression support for space efficiency
-        - Retry logic for transient failures
-    """
+    """ """
 
     def __init__(
         self,
@@ -147,10 +163,10 @@ class DiskCacheManager(CacheManager[SceneInfo]):
         verify_checksums: bool = False,
         compression: bool = False,
         auto_repair: bool = False,
-        max_workers: int = 4
+        max_workers: int = 4,
     ):
         """
-        Initialize production disk cache manager.
+        Initialize disk cache manager.
 
         Args:
             cache_dir: Directory for cache files
@@ -239,7 +255,9 @@ class DiskCacheManager(CacheManager[SceneInfo]):
         policy_class = policies.get(policy_name.lower())
         if not policy_class:
             available = ", ".join(policies.keys())
-            raise ValueError(f"Unknown eviction policy: {policy_name}. Available: {available}")
+            raise ValueError(
+                f"Unknown eviction policy: {policy_name}. Available: {available}"
+            )
         return policy_class()
 
     def set(self, key: str, value: SceneInfo, retry_count: int = 3) -> None:
@@ -275,8 +293,8 @@ class DiskCacheManager(CacheManager[SceneInfo]):
                 data = self._serialize(value)
 
                 # Write to disk atomically
-                temp_file = cache_file.with_suffix('.tmp')
-                with open(temp_file, 'wb') as f:
+                temp_file = cache_file.with_suffix(".tmp")
+                with open(temp_file, "wb") as f:
                     f.write(data)
 
                 # Atomic rename
@@ -293,7 +311,7 @@ class DiskCacheManager(CacheManager[SceneInfo]):
                         last_access_time=current_time,
                         creation_time=current_time,
                         access_count=1,
-                        checksum=checksum
+                        checksum=checksum,
                     )
 
                 # Track access for eviction policy
@@ -304,10 +322,14 @@ class DiskCacheManager(CacheManager[SceneInfo]):
 
             except Exception as e:
                 if attempt < retry_count - 1:
-                    logger.warning(f"Cache write attempt {attempt + 1} failed for {key}: {e}")
-                    time.sleep(0.1 * (2 ** attempt))  # Exponential backoff
+                    logger.warning(
+                        f"Cache write attempt {attempt + 1} failed for {key}: {e}"
+                    )
+                    time.sleep(0.1 * (2**attempt))  # Exponential backoff
                 else:
-                    logger.error(f"Failed to cache {key} after {retry_count} attempts: {e}")
+                    logger.error(
+                        f"Failed to cache {key} after {retry_count} attempts: {e}"
+                    )
                     if self.track_metrics:
                         self.metrics.corruptions_detected += 1
                     raise RuntimeError(f"Cache write failed for {key}: {e}")
@@ -336,7 +358,7 @@ class DiskCacheManager(CacheManager[SceneInfo]):
 
         try:
             # Load and deserialize
-            with open(cache_file, 'rb') as f:
+            with open(cache_file, "rb") as f:
                 data = f.read()
 
             value = self._deserialize(data)
@@ -375,8 +397,8 @@ class DiskCacheManager(CacheManager[SceneInfo]):
 
             if self.auto_repair:
                 logger.info(f"Attempting auto-repair for {key}")
-                # In production, this could trigger re-fetch from pipeline
-                pass
+                # this could trigger re-fetch from pipeline
+                raise NotImplementedError
 
             if self.track_metrics:
                 latency_ms = (time.time() - start_time) * 1000
@@ -400,7 +422,9 @@ class DiskCacheManager(CacheManager[SceneInfo]):
         results = {}
 
         # Use thread pool for parallel retrieval
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.max_workers
+        ) as executor:
             future_to_key = {executor.submit(self.get, key): key for key in keys}
 
             for future in concurrent.futures.as_completed(future_to_key):
@@ -429,7 +453,9 @@ class DiskCacheManager(CacheManager[SceneInfo]):
         results = {}
 
         # Use thread pool for parallel writes
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.max_workers
+        ) as executor:
             future_to_key = {
                 executor.submit(self._set_with_result, key, value): key
                 for key, value in items.items()
@@ -540,6 +566,7 @@ class DiskCacheManager(CacheManager[SceneInfo]):
 
         if self.compression:
             import gzip
+
             data = gzip.compress(data, compresslevel=1)  # Fast compression
 
         return data
@@ -556,6 +583,7 @@ class DiskCacheManager(CacheManager[SceneInfo]):
         """
         if self.compression:
             import gzip
+
             try:
                 data = gzip.decompress(data)
             except Exception:
@@ -598,7 +626,9 @@ class DiskCacheManager(CacheManager[SceneInfo]):
         if current_size_mb <= self.max_size_mb:
             return
 
-        logger.info(f"Cache size {current_size_mb:.1f}MB exceeds limit {self.max_size_mb}MB")
+        logger.info(
+            f"Cache size {current_size_mb:.1f}MB exceeds limit {self.max_size_mb}MB"
+        )
 
         # Calculate space to free
         bytes_to_free = int((current_size_mb - self.max_size_mb * 0.9) * BYTES_PER_MB)
@@ -630,7 +660,7 @@ class DiskCacheManager(CacheManager[SceneInfo]):
                         size_bytes=stat.st_size,
                         last_access_time=stat.st_mtime,
                         creation_time=stat.st_ctime,
-                        access_count=0
+                        access_count=0,
                     )
                     entries.append(entry)
                 except Exception:
@@ -662,18 +692,18 @@ class DiskCacheManager(CacheManager[SceneInfo]):
 
         if metadata_file.exists():
             try:
-                with open(metadata_file, 'r') as f:
+                with open(metadata_file, "r") as f:
                     metadata = json.load(f)
 
                 # Reconstruct entries
                 for key, data in metadata.items():
                     self._entries[key] = CacheEntry(
                         key=key,
-                        size_bytes=data.get('size_bytes', 0),
-                        last_access_time=data.get('last_access_time', 0),
-                        creation_time=data.get('creation_time', 0),
-                        access_count=data.get('access_count', 0),
-                        checksum=data.get('checksum')
+                        size_bytes=data.get("size_bytes", 0),
+                        last_access_time=data.get("last_access_time", 0),
+                        creation_time=data.get("creation_time", 0),
+                        access_count=data.get("access_count", 0),
+                        checksum=data.get("checksum"),
                     )
 
                 logger.info(f"Loaded metadata for {len(self._entries)} cache entries")
@@ -689,14 +719,14 @@ class DiskCacheManager(CacheManager[SceneInfo]):
                 metadata = {}
                 for key, entry in self._entries.items():
                     metadata[key] = {
-                        'size_bytes': entry.size_bytes,
-                        'last_access_time': entry.last_access_time,
-                        'creation_time': entry.creation_time,
-                        'access_count': entry.access_count,
-                        'checksum': entry.checksum
+                        "size_bytes": entry.size_bytes,
+                        "last_access_time": entry.last_access_time,
+                        "creation_time": entry.creation_time,
+                        "access_count": entry.access_count,
+                        "checksum": entry.checksum,
                     }
 
-            with open(metadata_file, 'w') as f:
+            with open(metadata_file, "w") as f:
                 json.dump(metadata, f, indent=2)
 
             logger.debug(f"Saved metadata for {len(metadata)} cache entries")
@@ -718,7 +748,7 @@ class DiskCacheManager(CacheManager[SceneInfo]):
             "entry_count": len(self._entries),
             "file_count": len(list(self.cache_dir.glob(f"*{CACHE_FILE_EXTENSION}"))),
             "compression": self.compression,
-            "thread_safe": self.thread_safe
+            "thread_safe": self.thread_safe,
         }
 
         # Check for orphaned files
@@ -737,11 +767,11 @@ class DiskCacheManager(CacheManager[SceneInfo]):
         """Cleanup on deletion."""
         try:
             # Save metadata before shutdown
-            if hasattr(self, '_entries') and self._entries:
+            if hasattr(self, "_entries") and self._entries:
                 self.save_metadata()
 
             # Shutdown executor
-            if hasattr(self, '_executor'):
+            if hasattr(self, "_executor"):
                 self._executor.shutdown(wait=False)
         except Exception:
             pass
@@ -763,7 +793,7 @@ class SelfHealingCache(DiskCacheManager):
         cache_dir: Path,
         auto_repair: bool = True,
         redundancy_level: int = 1,
-        background_checks: bool = True
+        background_checks: bool = True,
     ):
         """
         Initialize self-healing cache.
@@ -774,11 +804,7 @@ class SelfHealingCache(DiskCacheManager):
             redundancy_level: Number of backup copies (0-2)
             background_checks: Enable background integrity checks
         """
-        super().__init__(
-            cache_dir,
-            verify_checksums=True,
-            auto_repair=auto_repair
-        )
+        super().__init__(cache_dir, verify_checksums=True, auto_repair=auto_repair)
         self.redundancy_level = min(max(redundancy_level, 0), 2)
         self.background_checks = background_checks
         self._repair_count = 0
@@ -803,7 +829,9 @@ class SelfHealingCache(DiskCacheManager):
             result = self._recover_from_backup(key)
             if result:
                 self._repair_count += 1
-                logger.info(f"Recovered {key} from backup (repair #{self._repair_count})")
+                logger.info(
+                    f"Recovered {key} from backup (repair #{self._repair_count})"
+                )
                 # Re-cache the recovered data
                 try:
                     self.set(key, result)
@@ -828,7 +856,7 @@ class SelfHealingCache(DiskCacheManager):
 
             if backup_file.exists():
                 try:
-                    with open(backup_file, 'rb') as f:
+                    with open(backup_file, "rb") as f:
                         data = f.read()
                     value = self._deserialize(data)
                     if isinstance(value, SceneInfo):
@@ -855,7 +883,7 @@ class SelfHealingCache(DiskCacheManager):
             backup_file = backup_dir / f"{key}{CACHE_FILE_EXTENSION}"
 
             try:
-                with open(backup_file, 'wb') as f:
+                with open(backup_file, "wb") as f:
                     f.write(data)
             except Exception as e:
                 logger.warning(f"Failed to store backup {i} for {key}: {e}")

@@ -2,16 +2,16 @@
 Input:
   - method: "bayer input"
     images:
-      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/LucieB_bw_drawing1/gt/darktable_exported/IMG_7692.png"
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/DocScan/faux_Bayer/LucieB_bw_drawing1/gt/darktable_exported/IMG_7692.png"
         parameters: "s.s.: 1 s, ISO100"
         msssim: 1.00
-      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/LucieB_bw_drawing1/darktable_exported/IMG_7688.png"
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/DocScan/faux_Bayer/LucieB_bw_drawing1/darktable_exported/IMG_7688.png"
         parameters: "s.s.: 1/10 s, ISO800"
         msssim: 0.739
-      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/LucieB_bw_drawing1/darktable_exported/IMG_7689.png"
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/DocScan/faux_Bayer/LucieB_bw_drawing1/darktable_exported/IMG_7689.png"
         parameters: "s.s.: 1/50 s, ISO4000"
         msssim: 0.560
-      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/src/faux_Bayer/LucieB_bw_drawing1/darktable_exported/IMG_7691.png"
+      - src_fpath: "/orb/benoit_phd/datasets/RawNIND/DocScan/faux_Bayer/LucieB_bw_drawing1/darktable_exported/IMG_7691.png"
         parameters: "s.s.: 1/320 s, ISO25600"
         msssim: 0.330
   # - method: "Linear RGB input"
