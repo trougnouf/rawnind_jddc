@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any
 
 import trio
 
-from .Aligner import MetadataArtificer
+from .Aligner import Aligner
 from .DataIngestor import DataIngestor
 from .Downloader import Downloader
 from .FileScanner import FileScanner
@@ -113,7 +113,7 @@ class PipelineBuilder:
 
         if self.postprocessor_config.get("enable_alignment_artifacts", True):
             self.postprocessors.append(
-                MetadataArtificer(
+                Aligner(
                     output_dir=artifacts_dir / "alignment",
                     write_masks=True,
                     write_metadata=True,

@@ -8,7 +8,7 @@ import trio.testing as tt
 from pathlib import Path
 
 from rawnind.dataset.SceneInfo import SceneInfo, ImageInfo
-from rawnind.dataset.Aligner import MetadataArtificer
+from rawnind.dataset.Aligner import Aligner
 
 # ... existing code ...
 
@@ -57,7 +57,7 @@ async def test_compute_alignments_stores_artifact_and_scene_view(tmp_path: Path)
         noisy_images=[noisy_img],
     )
 
-    aligner = MetadataArtificer(output_dir=tmp_path / "alignment_artifacts")
+    aligner = Aligner(output_dir=tmp_path / "alignment_artifacts")
 
     # Act: compute artifacts only (no disk writes)
     artifact = await aligner._compute_alignments(scene, gt_img, noisy_img)
@@ -114,7 +114,7 @@ async def test_process_scene_calls_compute_then_write(tmp_path: Path, monkeypatc
         noisy_images=[noisy_img],
     )
 
-    aligner = MetadataArtificer(output_dir=tmp_path / "alignment_artifacts")
+    aligner = Aligner(output_dir=tmp_path / "alignment_artifacts")
 
     # Patch compute to store artifact and write to augment with file paths
     async def fake_compute(self, sc, gt, nz):

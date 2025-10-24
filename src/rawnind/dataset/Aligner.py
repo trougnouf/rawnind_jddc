@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 ALIGNMENT_TOLERANCE = 0.035
 
-class MetadataArtificer(PostDownloadWorker):
+class Aligner(PostDownloadWorker):
     """Writes alignment masks and metadata to disk."""
 
     def __init__(
