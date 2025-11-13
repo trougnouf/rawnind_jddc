@@ -925,11 +925,11 @@ class ImageToImageNNTraining(ImageToImageNN):
                         )
                         breakpoint()
                     losses[lossn].append(lossv)
-                    print(f"DBG: {lossn=}, {lossv=}")
+                    logging.debug(f"DBG: {lossn=}, {lossv=}")
                     individual_results[image_key][lossn] = lossv
 
                 if bpp is not None:
-                    print(f"DBG: {bpp=}")
+                    logging.debug(f"DBG: {bpp=}")
                     if "bpp" not in losses:
                         losses["bpp"] = []
                         losses["combined"] = []
