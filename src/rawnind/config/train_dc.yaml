@@ -2,13 +2,14 @@ init_lr: 0.0001
 tot_steps: 6000000
 val_interval: 15000
 test_interval: 1500000
-loss: mse
+loss: msssim_loss
 metrics:
   - msssim_loss
   - mse
 patience: 100000
 lr_multiplier: 0.85
-transfer_function_valtest: pq
+transfer_function: None
+transfer_function_valtest: None
 clean_dataset_yamlfpaths:
   - ../../datasets/extraraw/trougnouf/crops_metadata.yaml
 #  - ../../datasets/extraraw/SID/crops_metadata.yaml  # could be useful in testing

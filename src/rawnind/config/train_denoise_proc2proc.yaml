@@ -5,8 +5,6 @@ num_crops_per_image: 2
 batch_size_clean: 1
 batch_size_noisy: 4
 arch: unet
-transfer_function: None
-transfer_function_valtest: None
 arbitrary_proc_method: opencv
 match_gain: input
 debug_options:

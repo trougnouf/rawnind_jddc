@@ -2,7 +2,6 @@ crop_size: 256
 val_crop_size: 1024
 test_crop_size: 1024
 num_crops_per_image: 4
-batch_size_clean: 1
-batch_size_noisy: 4
-arch_enc: Balle
-arch_dec: BayerPS
+batch_size_clean: 0
+batch_size_noisy: 5
+arch: unet

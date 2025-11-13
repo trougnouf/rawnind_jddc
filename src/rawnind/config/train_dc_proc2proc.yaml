@@ -6,8 +6,6 @@ batch_size_clean: 1
 batch_size_noisy: 4
 arch_enc: Balle
 arch_dec: Balle
-transfer_function: None
-transfer_function_valtest: None
 arbitrary_proc_method: opencv
 match_gain: input
 debug_options:
