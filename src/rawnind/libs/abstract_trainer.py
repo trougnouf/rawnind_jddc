@@ -481,10 +481,27 @@ class ImageToImageNNTraining(ImageToImageNN):
         # reset the logging basicConfig in case it's been called before
 
         self.init_optimizer()
+        # setup AMP scaler if requested and CUDA is available
+        self.scaler = None
+        if getattr(self, "use_amp", False) and "cuda" in str(self.device):
+            self.scaler = torch.cuda.amp.GradScaler()
         if self.load_path and (
             self.init_step > 0 or not self.reset_optimizer_on_fallback_load_path
         ):
             self.load_model(self.optimizer, self.load_path + ".opt", device=self.device)
+            # try loading scaler state if available
+            if self.scaler is not None:
+                scaler_path = self.load_path + ".scaler"
+                if os.path.isfile(scaler_path):
+                    try:
+                        self.scaler.load_state_dict(
+                            torch.load(scaler_path, map_location=self.device)
+                        )
+                        logging.info(f"Loaded AMP scaler state from {scaler_path}")
+                    except Exception:
+                        logging.warning(
+                            f"Unable to load scaler state from {scaler_path}"
+                        )
         if self.reset_lr or (self.fallback_load_path and self.init_step == 0):
             self.reset_learning_rate()
         res_fpath: str = os.path.join(self.save_dpath, "trainres.yaml")
@@ -548,6 +565,12 @@ class ImageToImageNNTraining(ImageToImageNN):
             "--disable_retry_wait",
             action="store_true",
             help="Disable 5-second wait after repeated file load failures (for faster debugging)",
+        )
+
+        parser.add_argument(
+            "--use_amp",
+            action="store_true",
+            help="Use PyTorch AMP mixed-precision training (autocast + GradScaler)",
         )
 
         parser.add_argument(
@@ -925,7 +948,8 @@ class ImageToImageNNTraining(ImageToImageNN):
                         )
                         breakpoint()
                     losses[lossn].append(lossv)
-                    logging.debug(f"DBG: {lossn=}, {lossv=}")
+                    if "spam" in self.debug_options:
+                        logging.debug(f"DBG: {lossn=}, {lossv=}")
                     individual_results[image_key][lossn] = lossv
 
                 if bpp is not None:
@@ -1215,6 +1239,12 @@ class ImageToImageNNTraining(ImageToImageNN):
         fpath = os.path.join(self.save_dpath, "saved_models", f"iter_{step}.pt")
         torch.save(self.model.state_dict(), fpath)
         torch.save(self.optimizer.state_dict(), fpath + ".opt")
+        # save AMP scaler state if present
+        if getattr(self, "scaler", None) is not None:
+            try:
+                torch.save(self.scaler.state_dict(), fpath + ".scaler")
+            except Exception:
+                logging.warning(f"Unable to save AMP scaler state to {fpath}.scaler")
 
     def cleanup_models(self):
         keepers: list[str] = [
@@ -1438,20 +1468,58 @@ class PRGBImageToImageNNTraining(ImageToImageNNTraining):
             logging.error(e)
         # print(f"repacking time: {time.time()-last_time}")
         # last_time = time.time()
-        model_output = self.model(batch["y_crops"])
+        # Use AMP autocast + GradScaler if configured
+        if getattr(self, "scaler", None) is not None:
+            with torch.cuda.amp.autocast():
+                model_output = self.model(batch["y_crops"])
 
-        if isinstance(self, DenoiseCompressTraining):
-            if "spam" in self.debug_options and random.random() < 0.01:
-                logging.debug(
-                    f"DBG: {model_output['used_dists']=}, {model_output['num_forced_dists']=}"
+                if isinstance(self, DenoiseCompressTraining):
+                    if "spam" in self.debug_options and random.random() < 0.01:
+                        logging.debug(
+                            f"DBG: {model_output['used_dists']=}, {model_output['num_forced_dists']=}"
+                        )
+                    reconstructed_image, bpp = (
+                        model_output["reconstructed_image"],
+                        model_output["bpp"],
+                    )
+                else:
+                    reconstructed_image = model_output
+                    bpp = 0
+                if self.match_gain == "output":
+                    reconstructed_image = rawproc.match_gain(
+                        batch["x_crops"], reconstructed_image
+                    )
+                reconstructed_image = self.transfer(reconstructed_image)
+                gt = self.transfer(batch["x_crops"])
+                loss = self.compute_train_loss(
+                    batch["mask_crops"], reconstructed_image, gt, bpp
                 )
-            reconstructed_image, bpp = (
-                model_output["reconstructed_image"],
-                model_output["bpp"],
-            )
+
+            optimizer.zero_grad()
+            # scale, backward, unscale for clipping if needed, and step via scaler
+            self.scaler.scale(loss).backward()
+            if isinstance(self, DenoiseCompressTraining):
+                # Unscale before clipping
+                self.scaler.unscale_(optimizer)
+                DenoiseCompressTraining.clip_gradient(optimizer, 5)
+            self.scaler.step(optimizer)
+            self.scaler.update()
+            return loss.item()
         else:
-            reconstructed_image = model_output
-            bpp = 0
+            model_output = self.model(batch["y_crops"])
+
+            if isinstance(self, DenoiseCompressTraining):
+                if "spam" in self.debug_options and random.random() < 0.01:
+                    logging.debug(
+                        f"DBG: {model_output['used_dists']=}, {model_output['num_forced_dists']=}"
+                    )
+                reconstructed_image, bpp = (
+                    model_output["reconstructed_image"],
+                    model_output["bpp"],
+                )
+            else:
+                reconstructed_image = model_output
+                bpp = 0
         # if self.exposure_diff_penalty > 0:
         #     approx_exposure_diff = self.compute_approx_exposure_diff(
         #         batch["x_crops"],
@@ -1468,13 +1536,6 @@ class PRGBImageToImageNNTraining(ImageToImageNNTraining):
         #     processed_output = self.transfer(reconstructed_image)
         #     processed_gt = self.transfer(batch["x_crops"])
         # else:
-
-        if self.match_gain == "output":
-            reconstructed_image = rawproc.match_gain(
-                batch["x_crops"], reconstructed_image
-            )
-        else:
-            reconstructed_image = reconstructed_image
 
         if (
             output_train_images
