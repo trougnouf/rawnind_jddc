@@ -23,7 +23,8 @@ import psutil
 import torch
 import tqdm
 import yaml
-from torch.cuda.amp import GradScaler, autocast
+from torch.cuda.amp import GradScaler
+from torch.amp import autocast
 
 # sys.path.append("..")
 from common.libs import json_saver
@@ -864,7 +865,7 @@ class ImageToImageNNTraining(ImageToImageNN):
                 mask_crops = batch["mask_crops"].to(self.device)
                 # print(batch["y_crops"].shape)
                 try:
-                    with autocast(enabled=self.fp16):
+                    with autocast(device_type=self.device.type, enabled=self.fp16):
                         model_output = self.model(y_crops)
                         if isinstance(model_output, dict):
                             reconstructed_image, bpp = (
@@ -1454,7 +1455,7 @@ class PRGBImageToImageNNTraining(ImageToImageNNTraining):
 
         optimizer.zero_grad()
 
-        with autocast(enabled=self.fp16):
+        with autocast(device_type=self.device.type, enabled=self.fp16):
             model_output = self.model(batch["y_crops"])
 
             if isinstance(self, DenoiseCompressTraining):
@@ -1703,7 +1704,7 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
 
         optimizer.zero_grad()
 
-        with autocast(enabled=self.fp16):
+        with autocast(device_type=self.device.type, enabled=self.fp16):
             model_output = self.model(batch["y_crops"])
             if isinstance(self, DenoiseCompressTraining):
                 reconstructed_image, bpp = (
