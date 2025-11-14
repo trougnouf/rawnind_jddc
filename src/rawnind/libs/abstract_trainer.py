@@ -928,7 +928,8 @@ class ImageToImageNNTraining(ImageToImageNN):
                                 )
                                 breakpoint()
                             losses[lossn].append(lossv)
-                            logging.debug(f"DBG: {lossn=}, {lossv=}")
+                            if "spam" in self.debug_options:
+                                logging.debug(f"DBG: {lossn=}, {lossv=}")
                             individual_results[image_key][lossn] = lossv
 
                         if bpp is not None:
