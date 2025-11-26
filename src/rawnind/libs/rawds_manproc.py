@@ -325,7 +325,7 @@ def prep_manproc_dataset(
         # Partially done; remove the existing files and start over
         if os.path.isfile(image["gt_manproc_fpath"]):
             os.remove(image["gt_manproc_fpath"])
-        if os.path.isfile("f_manproc_fpath"):
+        if os.path.isfile(image["f_manproc_fpath"]):
             os.remove(image["f_manproc_fpath"])
         ### Generate the manually processed image
         # load the images

@@ -75,7 +75,7 @@ def find_cached_result(ds_dpath, image_set, gt_file_endpath, f_endpath, cached_r
 
 
 def fetch_crops_list(image_set, gt_fpath, f_fpath, is_bayer, ds_base_dpath):
-    def get_coordinates(fn: str) -> list[int, int]:
+    def get_coordinates(fn: str) -> list[int]:
         return [int(c) for c in fn.split(".")[-2].split("_")]
 
     crops = []
