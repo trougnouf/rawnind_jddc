@@ -20,6 +20,8 @@ curl -s "https://dataverse.uclouvain.be/api/datasets/:persistentId/?persistentId
 
 Pre-trained models are available through the following link: https://drive.google.com/drive/folders/12Uc5sT4OWx02sviUS_boDk1zDSDRVorw?usp=sharing
 
+The weights are dual licensed GPL3 + CC-BY-4.0
+
 ### Citation
 
 You can cite the "Learning Joint Denoising, Demosaicing, and Compression from the Raw Natural Image Noise Dataset" paper as follows:
